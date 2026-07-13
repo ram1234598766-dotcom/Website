@@ -6,3 +6,12 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# Decentralized Compute Node Credentials & Encryption Keys
+*.pem
+*.key
+*.fhe_keys
+.openlayer_mesh_auth
+.mesh_node_identity
+*.o
+*.so

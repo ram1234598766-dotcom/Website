@@ -1,8 +1,19 @@
 import { Server, Cpu, HardDrive, Network, Zap, CheckCircle2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { aiTrainerStore } from '../utils/aiTrainerWorker';
 
 export default function CloudInfrastructure() {
+  const [stats, setStats] = useState(aiTrainerStore.getStats());
+
+  useEffect(() => {
+    const unsubscribe = aiTrainerStore.subscribe((newStats) => {
+      setStats(newStats);
+    });
+    return unsubscribe;
+  }, []);
+
   return (
-    <div className="flex flex-col gap-10 w-full max-w-5xl mx-auto animate-in fade-in duration-500">
+    <div className="flex flex-col gap-10 w-full max-w-5xl mx-auto animate-in fade-in duration-500 pb-16">
       <div className="text-center space-y-4 pt-4">
         <div className="inline-flex items-center gap-2 px-3 py-1 bg-emerald-50 border border-emerald-100 rounded-full mb-2">
           <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
@@ -16,10 +27,10 @@ export default function CloudInfrastructure() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { title: 'Compute', value: '2 vCPU', sub: 'Burstable up to 4x', icon: <Cpu className="w-5 h-5 text-indigo-500" /> },
-          { title: 'Memory', value: '8 GB RAM', sub: 'High-speed DDR5', icon: <HardDrive className="w-5 h-5 text-indigo-500" /> },
-          { title: 'Accelerator', value: '1x T4 GPU', sub: 'Time-sliced sharing', icon: <Zap className="w-5 h-5 text-amber-500" /> },
-          { title: 'Bandwidth', value: '100 GB/mo', sub: 'Global CDN edges', icon: <Network className="w-5 h-5 text-emerald-500" /> },
+          { title: 'Compute', value: '100 GB RAM', sub: 'Burstable DDR5', icon: <Cpu className="w-5 h-5 text-indigo-500" /> },
+          { title: 'Storage', value: '50 TB', sub: 'NVMe Gen5', icon: <HardDrive className="w-5 h-5 text-indigo-500" /> },
+          { title: 'Accelerator', value: 'Premium GPU', sub: 'Dedicated Node', icon: <Zap className="w-5 h-5 text-amber-500" /> },
+          { title: 'Bandwidth', value: 'Unlimited', sub: 'Global CDN edges', icon: <Network className="w-5 h-5 text-emerald-500" /> },
         ].map((spec, i) => (
           <div key={i} className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col items-start gap-3">
             <div className="p-2 bg-slate-50 rounded-lg">{spec.icon}</div>
@@ -64,12 +75,57 @@ export default function CloudInfrastructure() {
               <p className="text-slate-500">&gt; Analyzing model architecture...</p>
               <p className="text-slate-500">&gt; Optimizing for T4 GPU...</p>
               <p className="text-slate-500">&gt; Provisioning container...</p>
-              <p className="text-emerald-400 mt-4 font-bold">✓ Deployed successfully in 4.2s</p>
-              <p className="text-indigo-300 mt-2 hover:underline cursor-pointer">https://api.openlayer.cloud/v1/m/my-model</p>
+              <p className="text-emerald-400 mt-4 font-bold mb-2">✓ Deployed successfully in 4.2s</p>
+              <div className="flex items-center gap-2 mt-2 bg-slate-900/50 p-2 rounded-lg border border-slate-700/50">
+                <a href="/deployed/my-model" target="_blank" rel="noopener noreferrer" className="text-indigo-300 hover:text-indigo-200 hover:underline cursor-pointer flex-1 truncate text-xs sm:text-sm">
+                  {window.location.origin}/deployed/my-model
+                </a>
+                <button 
+                  onClick={() => navigator.clipboard.writeText(`${window.location.origin}/deployed/my-model`)}
+                  className="p-1.5 hover:bg-slate-700 rounded-md text-slate-400 hover:text-slate-200 transition-colors"
+                  title="Copy to clipboard"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+                </button>
+              </div>
             </div>
           </div>
         </div>
         <div className="absolute top-0 right-0 w-[800px] h-[800px] bg-indigo-600/20 rounded-full blur-[100px] translate-x-1/3 -translate-y-1/3 pointer-events-none"></div>
+      </div>
+
+      <div className="bg-[#161B22] rounded-3xl p-8 md:p-12 text-white border border-slate-800 shadow-xl overflow-hidden relative">
+        <div className="relative z-10 flex flex-col items-center">
+          <div className="inline-flex items-center gap-2 px-3 py-1 bg-rose-500/10 border border-rose-500/20 rounded-full mb-4">
+            <span className="flex h-2 w-2 rounded-full bg-rose-500 animate-pulse"></span>
+            <span className="text-[10px] uppercase tracking-widest font-bold text-rose-400">Live Background Engine</span>
+          </div>
+          <h3 className="text-3xl font-extrabold mb-6 text-center text-slate-100">AI Model Trainer</h3>
+          <p className="text-slate-400 max-w-2xl text-center mb-10 text-sm leading-relaxed">
+            A background mechanism is actively scraping real-life data, processing network payloads, and continuously fine-tuning the foundational OpenLayer models in real-time. This ensures that every node connected to the mesh benefits from up-to-the-second knowledge adaptation.
+          </p>
+          
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full max-w-4xl">
+            <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl">
+              <div className="text-xs text-slate-500 uppercase font-bold tracking-widest mb-1">Live Datapoints Scraped</div>
+              <div className="text-2xl font-black text-emerald-400 font-mono flex items-center gap-2">
+                <span className="animate-pulse">●</span> {stats.datapoints.toLocaleString()}
+              </div>
+            </div>
+            <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl">
+              <div className="text-xs text-slate-500 uppercase font-bold tracking-widest mb-1">Model Parameters Adjusted</div>
+              <div className="text-2xl font-black text-indigo-400 font-mono">
+                +{stats.parameters}/sec
+              </div>
+            </div>
+            <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl">
+              <div className="text-xs text-slate-500 uppercase font-bold tracking-widest mb-1">Mesh Synchronization</div>
+              <div className="text-2xl font-black text-amber-400 font-mono">
+                {stats.latency.toFixed(1)}ms Latency
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );

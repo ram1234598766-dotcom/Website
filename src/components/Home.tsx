@@ -11,7 +11,7 @@ export default function Home({ setCurrentView }: HomeProps) {
       <section className="text-center max-w-3xl mx-auto space-y-6 mt-4 sm:mt-8 mb-4">
         <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-indigo-50 border border-indigo-100 rounded-full">
           <span className="flex h-2 w-2 rounded-full bg-indigo-500 animate-pulse"></span>
-          <span className="text-[10px] sm:text-xs uppercase tracking-widest font-bold text-indigo-700">Public Beta v1.0 &bull; Global Accessibility</span>
+          <span className="text-[10px] sm:text-xs uppercase tracking-widest font-bold text-indigo-700">OpenLayer V2.0 &bull; Global Accessibility</span>
         </div>
         <h1 className="text-4xl sm:text-5xl md:text-6xl font-extrabold tracking-tight text-slate-900 leading-tight">
           The world's first <span className="text-indigo-600">open AI stack</span>.

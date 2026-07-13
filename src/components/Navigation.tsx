@@ -1,24 +1,53 @@
 import { ViewState } from '../types';
-import { Layers, MessageSquare, Box, BookOpen, Server, Users, Briefcase, Menu, X, TerminalSquare } from 'lucide-react';
-import { useState } from 'react';
+import { Layers, MessageSquare, Box, BookOpen, Server, Users, Briefcase, Menu, X, TerminalSquare, Shield, ShieldAlert, FileText, BrainCircuit, Activity } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { aiTrainerStore } from '../utils/aiTrainerWorker';
 
 interface NavigationProps {
   currentView: ViewState;
   setCurrentView: (view: ViewState) => void;
+  userEmail?: string;
 }
 
-export default function Navigation({ currentView, setCurrentView }: NavigationProps) {
+export default function Navigation({ currentView, setCurrentView, userEmail }: NavigationProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  
+  const [livePulse, setLivePulse] = useState(aiTrainerStore.getStats().datapoints);
+  
+  useEffect(() => {
+    const unsubscribe = aiTrainerStore.subscribe((stats) => {
+      setLivePulse(stats.datapoints);
+    });
+    return unsubscribe;
+  }, []);
 
-  const navItems: { view: ViewState; label: string; icon: React.ReactNode }[] = [
+  useEffect(() => {
+    if (mobileMenuOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [mobileMenuOpen]);
+
+  const navItems: { view: ViewState; label: string | React.ReactNode; icon: React.ReactNode }[] = [
     { view: 'lion-suite', label: 'Lion Suite', icon: <TerminalSquare className="w-4 h-4" /> },
+    { view: 'omni-ai', label: 'Omni-AI', icon: <BrainCircuit className="w-4 h-4" /> },
+    { view: 'ai-training', label: <span className="flex items-center gap-2">AI Training <span className="text-[10px] font-mono bg-emerald-500/10 text-emerald-600 px-1.5 py-0.5 rounded-full animate-pulse">{livePulse.toLocaleString()}</span></span>, icon: <Activity className="w-4 h-4" /> },
+    { view: 'fortress', label: 'Fortress Mode', icon: <Shield className="w-4 h-4" /> },
+    { view: 'mesh', label: 'Global Mesh', icon: <Briefcase className="w-4 h-4" /> },
     { view: 'forum', label: 'Community', icon: <MessageSquare className="w-4 h-4" /> },
     { view: 'showcase', label: 'Models', icon: <Box className="w-4 h-4" /> },
     { view: 'learn', label: 'Learn', icon: <BookOpen className="w-4 h-4" /> },
-    { view: 'cloud', label: 'Free Cloud', icon: <Server className="w-4 h-4" /> },
     { view: 'governance', label: 'Governance', icon: <Users className="w-4 h-4" /> },
-    { view: 'enterprise', label: 'Enterprise', icon: <Briefcase className="w-4 h-4" /> },
+    { view: 'privacy', label: 'Privacy', icon: <FileText className="w-4 h-4" /> },
   ];
+
+  if (userEmail === 'ram1234598766@gmail.com') {
+    navItems.push({ view: 'admin', label: 'Admin Panel', icon: <ShieldAlert className="w-4 h-4" /> });
+  }
 
   return (
     <nav className="h-16 border-b border-slate-200 bg-white/80 backdrop-blur-md px-4 sm:px-8 flex items-center justify-between z-50 sticky top-0 shrink-0">
@@ -34,12 +63,12 @@ export default function Navigation({ currentView, setCurrentView }: NavigationPr
         </div>
         
         {/* Desktop Nav */}
-        <div className="hidden lg:flex gap-1 items-center">
+        <div className="hidden lg:flex gap-1 items-center overflow-x-auto overflow-y-auto whitespace-nowrap scroll-smooth max-w-[50vw] px-2" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none', scrollBehavior: 'smooth' }}>
           {navItems.map((item) => (
             <button
               key={item.view}
               onClick={() => setCurrentView(item.view)}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors shrink-0 ${
                 currentView === item.view 
                   ? 'bg-indigo-50 text-indigo-700' 
                   : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
@@ -71,7 +100,7 @@ export default function Navigation({ currentView, setCurrentView }: NavigationPr
 
       {/* Mobile Nav Dropdown */}
       {mobileMenuOpen && (
-        <div className="absolute top-16 left-0 right-0 bg-white border-b border-slate-200 shadow-lg lg:hidden flex flex-col p-4 gap-2">
+        <div className="absolute top-16 left-0 right-0 bg-white border-b border-slate-200 shadow-lg lg:hidden flex flex-col p-4 gap-2 max-h-[calc(100vh-4rem)] overflow-y-auto overscroll-contain scroll-smooth z-50" style={{ scrollBehavior: 'smooth' }}>
           {navItems.map((item) => (
             <button
               key={item.view}

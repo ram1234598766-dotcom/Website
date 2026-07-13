@@ -9,7 +9,15 @@ export default function Governance() {
           <p className="text-lg text-slate-600 leading-relaxed">
             OpenLayer is governed by its users. We believe that foundational AI infrastructure should be guided by a decentralized, transparent, and inclusive community, not a closed boardroom.
           </p>
-          <div className="pt-4 grid grid-cols-2 gap-4">
+          <div className="pt-2 pb-4">
+            <h3 className="text-lg font-bold text-slate-800 mb-2">How It Works:</h3>
+            <ul className="list-disc list-inside space-y-2 text-slate-600">
+              <li><strong>Propose Features:</strong> Any active community member can draft an OpenLayer Improvement Proposal (OIP) outlining a new feature or architectural change.</li>
+              <li><strong>Vote on Priorities:</strong> Tokenized voting weights ensure that both beginners and advanced contributors have a voice in prioritizing the roadmap.</li>
+              <li><strong>Contribute Directly:</strong> Approved OIPs are immediately added to the public Lion repository where anyone can contribute code.</li>
+            </ul>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
             <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-sm">
               <div className="text-3xl font-black text-indigo-600 mb-1">24.5k</div>
               <div className="text-xs font-bold text-slate-400 uppercase tracking-wider">Active Voters</div>

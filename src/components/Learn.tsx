@@ -1,68 +1,181 @@
-import { Tutorial } from '../types';
-import { BookOpen, PlayCircle, FileText, ChevronRight, Search } from 'lucide-react';
+import { BookOpen, PlayCircle, FileText, ChevronRight, Search, Terminal, Code, Cpu, Copy, Check } from 'lucide-react';
+import React, { useState } from 'react';
 
-const mockTutorials: Tutorial[] = [
-  { id: '1', title: 'Introduction to Lion Syntax', level: 'Beginner', category: 'Language', readTime: '5 min' },
-  { id: '2', title: 'Building your first Neural Network', level: 'Beginner', category: 'Tutorial', readTime: '12 min' },
-  { id: '3', title: 'Optimizing inference on Free Cloud', level: 'Intermediate', category: 'Deployment', readTime: '8 min' },
-  { id: '4', title: 'Custom CUDA kernels in Lion', level: 'Advanced', category: 'Language', readTime: '20 min' },
+const LION_SNIPPETS = [
+  {
+    title: "Example 1: Hello World Server",
+    code: `Server.init(Protocol: "HTTP")\nServer.route(Path: "/", Response: "Hello World")\nServer.listen(Port: 3000)`
+  },
+  {
+    title: "Example 2: Neural Net Instantiation",
+    code: `Net.create(Layers: [128, 64, 10], Activation: "ReLU")\nNet.compile(Loss: "CrossEntropy", Optimizer: "Adam")`
+  },
+  {
+    title: "Example 3: Decentralized Mesh Join",
+    code: `Mesh.connect(Network: "OpenLayer-Global")\nMesh.broadcast(Message: "Node Online", Signed: 1)`
+  },
+  {
+    title: "Example 4: Secure Data Vault",
+    code: `Vault.open(Name: "User_Secrets")\nVault.store(Key: "API_KEY", Value: "xxx", Encryption: "AES-256")`
+  },
+  {
+    title: "Example 5: Homomorphic Addition",
+    code: `Math.FHE_Add(CipherA: 10482, CipherB: 99312)\nMath.decrypt(Result: "CipherSum")`
+  },
+  {
+    title: "Example 6: API Fetcher",
+    code: `Http.get(URL: "https://api.github.com/users", Timeout: 5000)\nData.parse(Format: "JSON")`
+  },
+  {
+    title: "Example 7: File System I/O",
+    code: `File.write(Path: "config.json", Content: "{\\"env\\": \\"prod\\"}")\nFile.setPermissions(Path: "config.json", Mode: "Read-Only")`
+  },
+  {
+    title: "Example 8: Watchdog Policy",
+    code: `ThreatWatchdog.definePolicy(Type: "XSS", Action: "Block")\nThreatWatchdog.definePolicy(Type: "SQLi", Action: "Block")\nThreatWatchdog.enable(Status: "Active")`
+  },
+  {
+    title: "Example 9: UI Component Build",
+    code: `UI.createComponent(Name: "Button", Type: "Primary")\nUI.style(Component: "Button", Color: "Emerald", Rounded: "Full")`
+  },
+  {
+    title: "Example 10: Omni-Database Sync",
+    code: `DB.connect(Driver: "Postgres", URI: "env.DATABASE_URL")\nDB.syncSchema(Force: 0)\nDB.watch(Table: "users", Callback: "onUserChange")`
+  },
+  {
+    title: "Example 11: Real-Time WebSocket Channel",
+    code: `Socket.open(Channel: "MarketData")\nSocket.onEvent(Event: "TICK", Callback: "updateTicker")\nSocket.broadcast(Payload: "Ready")`
+  },
+  {
+    title: "Example 12: Machine Learning K-Means Clustering",
+    code: `ML.cluster(Algorithm: "KMeans", Clusters: 5)\nML.fit(Dataset: "CustomerProfiles")\nML.exportModel(Format: "ONNX")`
+  },
+  {
+    title: "Example 13: Quantum Circuit Simulator",
+    code: `Quantum.initQubits(Count: 4)\nQuantum.applyGate(Gate: "Hadamard", Qubit: 0)\nQuantum.measureAll(Output: "BinaryVector")`
+  },
+  {
+    title: "Example 14: Data Visualization (D3)",
+    code: `Chart.create(Type: "ScatterPlot", Theme: "Midnight")\nChart.bindData(Source: "Sales2025")\nChart.render(Target: "DashboardRoot")`
+  },
+  {
+    title: "Example 15: Blockchain Node Initialization",
+    code: `Chain.initNode(Protocol: "Ethereum_L2")\nChain.syncLedger(GenesisBlock: "0x0000000000")\nChain.startMiner(Threads: 8)`
+  }
 ];
+
+const SnippetBlock: React.FC<{ title: string, code: string }> = ({ title, code }) => {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(code);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div className="border border-slate-200 rounded-lg overflow-hidden group">
+      <div className="bg-slate-50 px-4 py-2 border-b border-slate-200 flex justify-between items-center">
+        <div className="text-sm font-bold text-slate-700">{title}</div>
+        <button 
+          onClick={handleCopy}
+          className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-md transition-colors"
+          title="Copy to clipboard"
+        >
+          {copied ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
+        </button>
+      </div>
+      <pre className="p-4 bg-slate-900 text-indigo-300 font-mono text-sm overflow-x-auto whitespace-pre-wrap">
+        {code}
+      </pre>
+    </div>
+  );
+}
 
 export default function Learn() {
   return (
-    <div className="flex flex-col gap-8 w-full max-w-5xl mx-auto animate-in fade-in duration-500">
+    <div className="flex flex-col gap-8 w-full max-w-5xl mx-auto animate-in fade-in duration-500 pb-16">
       <div className="text-center space-y-4 py-8">
-        <h2 className="text-4xl font-extrabold tracking-tight text-slate-900">Educational Hub</h2>
-        <p className="text-lg text-slate-600 max-w-2xl mx-auto">Master the Lion programming language, explore open-source model architectures, and learn how to deploy on the Free Cloud.</p>
-        <div className="max-w-xl mx-auto mt-6 relative">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-          <input 
-            type="text" 
-            placeholder="Search documentation, tutorials, and examples..." 
-            className="w-full pl-12 pr-4 py-3.5 bg-white border border-slate-200 rounded-xl shadow-md focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-base"
-          />
-        </div>
+        <h2 className="text-4xl font-extrabold tracking-tight text-slate-900">Lion Language Guide</h2>
+        <p className="text-lg text-slate-600 max-w-2xl mx-auto">Master the Lion programming language, the universal omni-language for AI mesh networking and full-stack development.</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        {[
-          { title: 'Documentation', icon: <FileText className="w-6 h-6 text-indigo-600" />, desc: 'Comprehensive API references for Lion and the OpenLayer stack.' },
-          { title: 'Interactive Tutorials', icon: <PlayCircle className="w-6 h-6 text-emerald-600" />, desc: 'Step-by-step guides to building and deploying models.' },
-          { title: 'Example Projects', icon: <BookOpen className="w-6 h-6 text-amber-600" />, desc: 'Open-source reference implementations and use cases.' }
-        ].map((item, i) => (
-          <div key={i} className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow cursor-pointer group">
-            <div className="w-12 h-12 bg-slate-50 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-              {item.icon}
-            </div>
-            <h3 className="font-bold text-slate-900 text-lg mb-2">{item.title}</h3>
-            <p className="text-sm text-slate-600">{item.desc}</p>
-          </div>
-        ))}
-      </div>
-
-      <div>
-        <div className="flex items-center justify-between mb-6">
-          <h3 className="text-2xl font-bold text-slate-900">Featured Tutorials</h3>
-          <button className="text-sm font-semibold text-indigo-600 hover:text-indigo-700">View All</button>
+      {/* Guide Content */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="border-b border-slate-200 bg-slate-50 p-6">
+          <h3 className="text-2xl font-bold text-slate-900 flex items-center gap-3">
+            <BookOpen className="w-6 h-6 text-indigo-600" /> Comprehensive Lion Specification
+          </h3>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {mockTutorials.map(tutorial => (
-            <div key={tutorial.id} className="flex items-center p-4 bg-white border border-slate-200 rounded-xl hover:border-indigo-300 hover:shadow-md transition-all cursor-pointer group">
-              <div className="flex-1">
-                <div className="flex items-center gap-2 mb-1.5">
-                  <span className={`text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded ${
-                    tutorial.level === 'Beginner' ? 'bg-emerald-50 text-emerald-700' :
-                    tutorial.level === 'Intermediate' ? 'bg-amber-50 text-amber-700' : 'bg-red-50 text-red-700'
-                  }`}>
-                    {tutorial.level}
-                  </span>
-                  <span className="text-xs font-medium text-slate-400">{tutorial.readTime} read</span>
-                </div>
-                <h4 className="font-semibold text-slate-900 group-hover:text-indigo-600 transition-colors">{tutorial.title}</h4>
+        
+        <div className="p-6 md:p-10 space-y-12">
+          
+          <section className="space-y-4">
+            <h4 className="text-xl font-bold text-slate-800 border-b border-slate-100 pb-2">1. Core Philosophy</h4>
+            <p className="text-slate-600 leading-relaxed">
+              Lion is an <strong>omni-language</strong> designed to compile natively into any major programming language (Python, Rust, JavaScript, TypeScript, Go). It operates on a universal Abstract Syntax Tree (AST) model and prioritizes clarity, extreme modularity, and security via deep integration with Fully Homomorphic Encryption (FHE).
+            </p>
+          </section>
+
+          <section className="space-y-4">
+            <h4 className="text-xl font-bold text-slate-800 border-b border-slate-100 pb-2">2. Syntax Rules & Structure</h4>
+            <ul className="list-disc list-inside text-slate-600 space-y-2 leading-relaxed">
+              <li><strong>Dot-Method Chaining:</strong> All commands follow a strict `Object.method()` or `Object.method(Param: Value)` structure.</li>
+              <li><strong>Named Parameters:</strong> Parameters must always be named with a colon (`:`). Unnamed parameters are not permitted in core API calls.</li>
+              <li><strong>Blocks:</strong> Nested logic uses curly braces `{}`.</li>
+              <li><strong>No Semicolons:</strong> Statements are separated by newlines.</li>
+            </ul>
+          </section>
+
+          <section className="space-y-4">
+            <h4 className="text-xl font-bold text-slate-800 border-b border-slate-100 pb-2">3. Cheat Sheet & Quick Reference</h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="bg-slate-900 p-4 rounded-xl border border-slate-800">
+                <div className="text-xs text-slate-500 uppercase font-bold tracking-wider mb-2">Basic Initialization</div>
+                <pre className="text-emerald-400 font-mono text-sm leading-relaxed">
+                  App.build(UI: "Sleek", Theme: "Dark")<br/>
+                  Server.start(Port: 8080)<br/>
+                </pre>
               </div>
-              <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-indigo-500 transition-colors" />
+              <div className="bg-slate-900 p-4 rounded-xl border border-slate-800">
+                <div className="text-xs text-slate-500 uppercase font-bold tracking-wider mb-2">Model Training</div>
+                <pre className="text-emerald-400 font-mono text-sm leading-relaxed">
+                  Model.train(<br/>
+                  &nbsp;&nbsp;Data: "Corpus_1",<br/>
+                  &nbsp;&nbsp;Architecture: "LLM"<br/>
+                  )
+                </pre>
+              </div>
+              <div className="bg-slate-900 p-4 rounded-xl border border-slate-800">
+                <div className="text-xs text-slate-500 uppercase font-bold tracking-wider mb-2">FHE Security</div>
+                <pre className="text-emerald-400 font-mono text-sm leading-relaxed">
+                  Data.encrypt(Algorithm: "FHE", KeySize: 4096)<br/>
+                  ThreatWatchdog.enable(Status: "Active")
+                </pre>
+              </div>
+              <div className="bg-slate-900 p-4 rounded-xl border border-slate-800">
+                <div className="text-xs text-slate-500 uppercase font-bold tracking-wider mb-2">CLI Commands</div>
+                <pre className="text-emerald-400 font-mono text-sm leading-relaxed">
+                  lion run main.lion<br/>
+                  lion compile --target=Rust main.lion<br/>
+                  lion install numpy_sim<br/>
+                  lion secure --fhe
+                </pre>
+              </div>
             </div>
-          ))}
+          </section>
+
+          <section className="space-y-6">
+            <h4 className="text-xl font-bold text-slate-800 border-b border-slate-100 pb-2">4. Top 15 Copy-Paste Examples</h4>
+            
+            <div className="space-y-4">
+              {LION_SNIPPETS.map((snippet, idx) => (
+                <SnippetBlock key={idx} title={snippet.title} code={snippet.code} />
+              ))}
+
+            </div>
+          </section>
+
         </div>
       </div>
     </div>
