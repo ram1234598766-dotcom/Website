@@ -14,7 +14,7 @@ export default function DecentralizedMesh() {
         </h1>
         
         <p className="text-xl text-slate-300 max-w-3xl leading-relaxed">
-          OpenLayer is powered by a Peer-to-Peer (P2P) distributed network. Share idle GPU/CPU power in a secure mesh to host and train models for free. <span className="text-emerald-400 font-bold">100% Free, forever. Zero paywalls.</span>
+          Novalith is powered by a Peer-to-Peer (P2P) distributed network. Share idle GPU/CPU power in a secure mesh to host and train models for free. <span className="text-emerald-400 font-bold">100% Free, forever. Zero paywalls.</span>
         </p>
       </div>
 

@@ -125,9 +125,47 @@ export default function AdminPanel() {
               <Server className="w-6 h-6 text-amber-500" />
             </div>
             <div>
-              <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">Model Downloads</div>
-              <div className="text-sm font-mono text-slate-400 mt-1">Not tracked yet</div>
+              <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">Auth Diagnostics</div>
+              <div className="text-sm font-mono text-slate-400 mt-1">Providers status</div>
             </div>
+          </div>
+          <div className="mt-2 space-y-2">
+             <div className="flex items-center justify-between p-2 bg-[#161B22] rounded-lg border border-slate-800">
+                <span className="text-sm font-medium text-slate-300 flex items-center gap-2">
+                  <Globe2 className="w-4 h-4 text-slate-400" /> GitHub OAuth
+                </span>
+                <button 
+                  onClick={async () => {
+                     try {
+                        const { error } = await supabase.auth.signInWithOAuth({ provider: 'github' });
+                        if (error) alert(`Test failed: ${error.message}`);
+                     } catch (err: any) {
+                        alert(`Test error: ${err.message}`);
+                     }
+                  }}
+                  className="px-2 py-1 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 rounded transition-colors"
+                >
+                  Test Connection
+                </button>
+             </div>
+             <div className="flex items-center justify-between p-2 bg-[#161B22] rounded-lg border border-slate-800">
+                <span className="text-sm font-medium text-slate-300 flex items-center gap-2">
+                  <Globe2 className="w-4 h-4 text-slate-400" /> Google OAuth
+                </span>
+                <button 
+                  onClick={async () => {
+                     try {
+                        const { error } = await supabase.auth.signInWithOAuth({ provider: 'google' });
+                        if (error) alert(`Test failed: ${error.message}`);
+                     } catch (err: any) {
+                        alert(`Test error: ${err.message}`);
+                     }
+                  }}
+                  className="px-2 py-1 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 rounded transition-colors"
+                >
+                  Test Connection
+                </button>
+             </div>
           </div>
         </div>
 
@@ -152,9 +190,25 @@ export default function AdminPanel() {
             <Lock className="w-4 h-4 text-emerald-500" />
             AI Threat Watchdog Logs
           </h3>
-          <div className="flex items-center gap-2">
-            <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
-            <span className="text-[10px] text-emerald-500 uppercase tracking-wider font-mono font-bold">Watchdog Active</span>
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => {
+                const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({ logs, metrics }, null, 2));
+                const downloadAnchorNode = document.createElement('a');
+                downloadAnchorNode.setAttribute("href", dataStr);
+                downloadAnchorNode.setAttribute("download", "novalith-system-logs.json");
+                document.body.appendChild(downloadAnchorNode);
+                downloadAnchorNode.click();
+                downloadAnchorNode.remove();
+              }}
+              className="text-xs font-bold uppercase tracking-wider px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition-colors border border-slate-700"
+            >
+              Export JSON
+            </button>
+            <div className="flex items-center gap-2">
+              <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
+              <span className="text-[10px] text-emerald-500 uppercase tracking-wider font-mono font-bold">Watchdog Active</span>
+            </div>
           </div>
         </div>
         

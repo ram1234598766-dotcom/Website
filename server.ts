@@ -22,7 +22,7 @@ async function fetchWithRetry(url: string, options: any, maxRetries = 3) {
 
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+  const PORT = parseInt(process.env.PORT || '3000', 10);
   app.use(express.json());
 
   // API Routes
@@ -67,10 +67,10 @@ async function startServer() {
           <div class="text-center space-y-4">
             <div class="inline-flex items-center gap-2 px-3 py-1 bg-emerald-950 border border-emerald-800 rounded-full text-emerald-400 text-xs font-bold tracking-widest uppercase">
               <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-              Live: OpenLayer Global Mesh
+              Live: Novalith Global Mesh
             </div>
             <h1 class="text-5xl font-bold tracking-tight text-white">Model: <span class="text-indigo-400">my-model</span></h1>
-            <p class="text-slate-400 text-lg max-w-2xl mx-auto">This neural inference endpoint is securely deployed on OpenLayer's free, distributed edge architecture.</p>
+            <p class="text-slate-400 text-lg max-w-2xl mx-auto">This neural inference endpoint is securely deployed on Novalith's free, distributed edge architecture.</p>
           </div>
 
           <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -113,11 +113,58 @@ async function startServer() {
     `);
   });
 
+  app.post("/api/run", async (req, res) => {
+    try {
+      const { language, code, stdin } = req.body;
+      let compiler = "gcc-head";
+      
+      const COMPILER_MAP: Record<string, string> = {
+        javascript: "nodejs-20.17.0",
+        python: "cpython-3.14.0",
+        cpp: "gcc-head",
+        java: "openjdk-jdk-22+36",
+        php: "php-8.3.12",
+        sql: "sqlite-3.46.1",
+        rust: "rust-head"
+      };
+
+      compiler = COMPILER_MAP[language] || "gcc-head";
+
+      if (language === 'html' || language === 'css') {
+        return res.json({
+          status: "0",
+          program_output: "HTML/CSS executed successfully in virtual browser container.",
+          program_error: ""
+        });
+      }
+
+      const response = await fetch("https://wandbox.org/api/compile.json", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          compiler: compiler,
+          code: code,
+          stdin: stdin || ""
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Execution error: ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      res.json(data);
+    } catch (err: any) {
+      console.error("Code execution error:", err);
+      res.status(500).json({ program_error: err.message || "Unknown execution error" });
+    }
+  });
+
   app.post("/api/chat", async (req, res) => {
     try {
       const { messages, model } = req.body;
       
-      const systemInstruction = `You are the Omni-AI for OpenLayer. You are 100% free and unlimited. 
+      const systemInstruction = `You are the Omni-AI for Novalith. You are 100% free and unlimited. 
 You have access to live data and the internet.
 If the user asks for weather, reply EXACTLY with 'TOOL:WEATHER:<city>'.
 If they ask for astrology/horoscope, reply EXACTLY with 'TOOL:ASTROLOGY:<sign>'.
@@ -215,18 +262,11 @@ Just reply with the tool format and you will receive the data to formulate your 
         text = await response.text();
       }
 
-      res.setHeader("Content-Type", "text/event-stream");
-      res.setHeader("Cache-Control", "no-cache");
-      res.setHeader("Connection", "keep-alive");
-
       // Clean up the text response
       let cleanText = text.replace(/TOOL:(SEARCH|WEATHER|ASTROLOGY):[^\n]+\n?/g, '');
       cleanText = cleanText.split("\n\n\n\n---\n\n**Support Pollinations.AI:**")[0];
 
-      // Send the entire text as a single SSE chunk for simplicity
-      const data = JSON.stringify({ text: cleanText });
-      res.write(`data: ${data}\n\n`);
-      res.end();
+      res.json({ text: cleanText });
 
     } catch (err: any) {
       console.error(err);

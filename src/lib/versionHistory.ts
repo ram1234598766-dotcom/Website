@@ -10,7 +10,7 @@ export interface VersionRecord {
   diffFromPrev: diff.Change[];
 }
 
-const VERSION_HISTORY_KEY = 'lion_script_versions';
+const VERSION_HISTORY_KEY = 'script_versions';
 
 async function generateHash(message: string): Promise<string> {
   const msgUint8 = new TextEncoder().encode(message);

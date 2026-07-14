@@ -11,7 +11,7 @@ coverage/
 *.pem
 *.key
 *.fhe_keys
-.openlayer_mesh_auth
+.nexara_mesh_auth
 .mesh_node_identity
 *.o
 *.so

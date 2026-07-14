@@ -7,7 +7,7 @@ export default function PrivacyPolicy() {
       <div className="flex flex-col items-center text-center gap-6 py-12 border-b border-slate-200">
         <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-indigo-500/10 border border-indigo-500/30 rounded-full shadow-sm">
           <Shield className="w-4 h-4 text-indigo-600" />
-          <span className="text-xs uppercase tracking-widest font-bold text-indigo-700">OpenLayer Trust Center</span>
+          <span className="text-xs uppercase tracking-widest font-bold text-indigo-700">Novalith Trust Center</span>
         </div>
         
         <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight text-slate-900 drop-shadow-sm">
@@ -15,7 +15,7 @@ export default function PrivacyPolicy() {
         </h1>
         
         <p className="text-xl text-slate-600 max-w-2xl leading-relaxed">
-          At OpenLayer, we believe your data belongs to <span className="text-indigo-600 font-bold">you</span>. Our architecture ensures absolute data sovereignty, transparent model training, and zero-trust execution.
+          At Novalith, we believe your data belongs to <span className="text-indigo-600 font-bold">you</span>. Our architecture ensures absolute data sovereignty, transparent model training, and zero-trust execution.
         </p>
       </div>
 
@@ -26,7 +26,7 @@ export default function PrivacyPolicy() {
             1. Absolute Data Sovereignty
           </h2>
           <p className="mb-4">
-            You retain 100% ownership of your weights, datasets, and runtime code. When you utilize the Decentralized Compute Mesh or train models using the Lion Language, your data never leaves your client context unencrypted. We utilize Fully Homomorphic Encryption (FHE) to guarantee that operations are performed on mathematically encrypted state space tensors.
+            You retain 100% ownership of your weights, datasets, and runtime code. When you utilize the Decentralized Compute Mesh or train models using the Novalith Platform, your data never leaves your client context unencrypted. We utilize Fully Homomorphic Encryption (FHE) to guarantee that operations are performed on mathematically encrypted state space tensors.
           </p>
           <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 font-mono text-sm text-slate-600">
             <span className="block text-xs text-slate-400 mb-2">// Mathematical Guarantee of Privacy</span>
@@ -40,7 +40,7 @@ export default function PrivacyPolicy() {
             2. Transparent Model Training
           </h2>
           <p>
-            We enforce full transparency in all data-handling processes. When your models are trained on the OpenLayer cloud or P2P mesh:
+            We enforce full transparency in all data-handling processes. When your models are trained on the Novalith cloud or P2P mesh:
           </p>
           <ul className="list-disc list-inside mt-4 space-y-2 text-slate-600 ml-4">
             <li>No proprietary data is ever used to fine-tune our global AI assistants without explicit opt-in.</li>
@@ -55,7 +55,7 @@ export default function PrivacyPolicy() {
             3. Zero-Cost, Zero-Tracking
           </h2>
           <p>
-            The OpenLayer ecosystem operates under a strict $0 cost mandate. Because we do not rely on paywalls, commercial tiers, or data brokering, there are no hidden tracking scripts, no advertising SDKs, and no telemetry data sold to third parties. Our Autonomous Threat Neutralization Watchdog protects your node without logging your personal IP data.
+            The Novalith ecosystem operates under a strict $0 cost mandate. Because we do not rely on paywalls, commercial tiers, or data brokering, there are no hidden tracking scripts, no advertising SDKs, and no telemetry data sold to third parties. Our Autonomous Threat Neutralization Watchdog protects your node without logging your personal IP data.
           </p>
         </section>
       </div>

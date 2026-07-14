@@ -5,6 +5,8 @@ import { Thread, Profile, Reply } from '../types';
 import { MessageSquare, ArrowUp, Plus, Search, Filter, LogOut, Loader2, ArrowLeft } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 
+import AuthForm from './AuthForm';
+
 export default function Forum() {
   const [session, setSession] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -27,7 +29,7 @@ export default function Forum() {
   
   const [replyContent, setReplyContent] = useState('');
 
-  const categories = ['All Discussions', 'Announcements', 'Lion Language', 'Infrastructure', 'Tutorials', 'Feature Requests', 'General'];
+  const categories = ['All Discussions', 'Announcements', 'Platform API', 'Infrastructure', 'Tutorials', 'Feature Requests', 'General'];
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -111,6 +113,12 @@ export default function Forum() {
   async function handleAuth(e: React.FormEvent) {
     e.preventDefault();
     setAuthError('');
+    
+    if (!import.meta.env.VITE_SUPABASE_URL || import.meta.env.VITE_SUPABASE_URL.includes('placeholder')) {
+      setAuthError('Supabase is not configured. Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your AI Studio secrets.');
+      return;
+    }
+
     try {
       if (isSignUp) {
         if (!username) {
@@ -256,46 +264,7 @@ export default function Forum() {
       </div>
 
       {!session && !activeThread ? (
-        <div className="max-w-md mx-auto w-full bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-          <h3 className="text-xl font-bold text-slate-900 mb-4">{isSignUp ? 'Create an Account' : 'Sign In'}</h3>
-          {authError && <div className="p-3 mb-4 text-sm text-rose-600 bg-rose-50 rounded-lg">{authError}</div>}
-          <form onSubmit={handleAuth} className="flex flex-col gap-4">
-            {isSignUp && (
-              <input
-                type="text"
-                placeholder="Username"
-                value={username}
-                onChange={e => setUsername(e.target.value)}
-                className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-500"
-              />
-            )}
-            <input
-              type="email"
-              placeholder="Email"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-500"
-              required
-            />
-            <input
-              type="password"
-              placeholder="Password"
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-500"
-              required
-            />
-            <button type="submit" className="w-full py-2 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 transition-colors">
-              {isSignUp ? 'Sign Up' : 'Sign In'}
-            </button>
-          </form>
-          <button 
-            onClick={() => setIsSignUp(!isSignUp)}
-            className="w-full mt-4 text-sm text-indigo-600 hover:underline"
-          >
-            {isSignUp ? 'Already have an account? Sign In' : 'Need an account? Sign Up'}
-          </button>
-        </div>
+        <AuthForm />
       ) : isComposing ? (
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden p-6">
           <div className="flex justify-between items-center mb-6">

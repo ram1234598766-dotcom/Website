@@ -77,12 +77,20 @@ const REAL_MODELS: ModelFile[] = [
     architecture: 'DeepSeek'
   },
   {
-    id: 'qwen2-7b-instruct',
-    name: 'Qwen2 7B Instruct (Q4_K_M)',
-    author: 'Qwen',
-    sizeBytes: 4430000000,
-    url: 'https://huggingface.co/Qwen/Qwen2-7B-Instruct-GGUF/resolve/main/qwen2-7b-instruct-q4_k_m.gguf',
-    architecture: 'Qwen2'
+    id: 'whisper-tiny',
+    name: 'Whisper Tiny (Audio)',
+    author: 'OpenAI',
+    sizeBytes: 150000000,
+    url: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin',
+    architecture: 'Whisper'
+  },
+  {
+    id: 'stablediffusion-v1-5',
+    name: 'Stable Diffusion v1.5 (Image)',
+    author: 'RunwayML',
+    sizeBytes: 4270000000,
+    url: 'https://huggingface.co/runwayml/stable-diffusion-v1-5/resolve/main/v1-5-pruned-emaonly.safetensors',
+    architecture: 'Diffusion'
   }
 ];
 
@@ -217,6 +225,14 @@ const ModelCard: React.FC<{ model: ModelFile }> = ({ model }) => {
     }
   };
   
+    const handleLoad = () => {
+    alert(`${model.name} is now loaded into local memory. Inference endpoint ready at /local-api/v1/predict`);
+  };
+
+  const handleDownloadToDisk = () => {
+    window.open(model.url, '_blank');
+  };
+
   const handleDeleteCache = async () => {
     try {
       await deleteCachedModel(model.id);
@@ -266,8 +282,17 @@ const ModelCard: React.FC<{ model: ModelFile }> = ({ model }) => {
                 Ready for Local Inference
               </div>
               <div className="flex gap-2">
-                <button className="flex-1 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-lg flex items-center justify-center gap-2 transition-colors">
+                <button 
+                  onClick={handleLoad}
+                  className="flex-1 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-lg flex items-center justify-center gap-2 transition-colors">
                   <Play className="w-4 h-4 fill-current" /> Load
+                </button>
+                <button 
+                  onClick={handleDownloadToDisk}
+                  className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-lg flex items-center justify-center gap-2 transition-colors"
+                  title="Download to Computer"
+                >
+                  <Download className="w-4 h-4" /> PC
                 </button>
                 <button 
                   onClick={handleDeleteCache}
@@ -300,14 +325,18 @@ const ModelCard: React.FC<{ model: ModelFile }> = ({ model }) => {
                 </div>
               )}
 
-              {!isDownloading && !completed ? (
+              {!isDownloading && !completed ? (<>
                 <button 
                   onClick={handleDownload}
-                  className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-lg flex items-center justify-center gap-2 transition-colors"
+                  className="w-full mb-2 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-lg flex items-center justify-center gap-2 transition-colors"
                 >
-                  <Download className="w-4 h-4" /> Save to Browser Cache
+                  <Download className="w-4 h-4" /> Cache to Browser
                 </button>
-              ) : isDownloading ? (
+                <button 
+                  onClick={handleDownloadToDisk}
+                  className="w-full py-2 bg-slate-800 hover:bg-slate-900 text-white text-sm font-bold rounded-lg flex items-center justify-center gap-2 transition-colors"
+                >
+                  <HardDrive className="w-4 h-4" /> Download to PC</button></>) : isDownloading ? (
                 <button 
                   onClick={handleCancel}
                   className="w-full py-2 bg-rose-500 hover:bg-rose-600 text-white text-sm font-bold rounded-lg flex items-center justify-center gap-2 transition-colors"

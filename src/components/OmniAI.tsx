@@ -43,91 +43,31 @@ export default function OmniAI() {
     set(HISTORY_KEY, newMessages);
 
     try {
-      const response = await fetch('/api/chat', {
+      const systemInstruction = "You are the Omni-AI for Novalith. You are 100% free and unlimited.";
+      const formattedMessages = [
+        { role: "system", content: systemInstruction },
+        ...newMessages
+      ];
+
+      const response = await fetch('https://text.pollinations.ai/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          messages: newMessages,
-          model: modelType === 'deep' ? 'openai' : 'mistral'
+          messages: formattedMessages,
+          model: modelType === 'deep' ? 'openai' : 'mistral',
+          jsonMode: false
         })
       });
 
       if (!response.ok) {
-        let errorMsg = 'Failed to connect to Omni-AI mesh';
-        try {
-          const errorData = await response.json();
-          if (errorData.error) {
-             errorMsg = typeof errorData.error === 'string' ? errorData.error : JSON.stringify(errorData.error);
-             
-             // One more un-nesting attempt just in case
-             try {
-                const parsed = JSON.parse(errorMsg);
-                if (parsed.error && parsed.error.message) {
-                    errorMsg = parsed.error.message;
-                }
-             } catch(e) {}
-          }
-        } catch (e) {}
-        throw new Error(errorMsg);
+        throw new Error(`Failed to connect to Omni-AI mesh: ${response.statusText}`);
       }
 
-      const reader = response.body?.getReader();
-      const decoder = new TextDecoder();
-      let assistantResponse = '';
+      const assistantResponse = await response.text();
       
-      const assistantMessageIndex = newMessages.length;
-      const updatedMessages = [...newMessages, { role: 'assistant' as const, content: '' }];
-      setMessages(updatedMessages);
-
-      if (reader) {
-        let buffer = '';
-        while (true) {
-          const { done, value } = await reader.read();
-          
-          if (value) {
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split('\n');
-            buffer = lines.pop() || '';
-            
-            for (const line of lines) {
-              if (line.startsWith('data: ')) {
-                try {
-                  const data = JSON.parse(line.slice(6));
-                  assistantResponse = data.text;
-                  
-                  setMessages((prev) => {
-                    const current = [...prev];
-                    current[assistantMessageIndex] = { role: 'assistant', content: assistantResponse };
-                    return current;
-                  });
-                } catch (err) {
-                  console.error("Failed to parse SSE data chunk:", line);
-                }
-              }
-            }
-          }
-          
-          if (done) {
-            // Process any remaining buffer if it looks like a valid data chunk
-            if (buffer.startsWith('data: ')) {
-              try {
-                const data = JSON.parse(buffer.slice(6));
-                assistantResponse = data.text;
-                setMessages((prev) => {
-                  const current = [...prev];
-                  current[assistantMessageIndex] = { role: 'assistant', content: assistantResponse };
-                  return current;
-                });
-              } catch (err) {}
-            }
-            break;
-          }
-        }
-      }
-
       const finalMessages = [...newMessages, { role: 'assistant' as const, content: assistantResponse }];
+      setMessages(finalMessages);
       set(HISTORY_KEY, finalMessages);
-
     } catch (err: any) {
       console.error(err);
       setMessages((prev) => [...prev, { role: 'assistant', content: `[MESH ERROR]: ${err.message}` }]);
