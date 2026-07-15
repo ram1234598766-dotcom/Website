@@ -1,16 +1,29 @@
 import { ViewState } from '../types';
-import { motion } from 'motion/react';
-import ActivityLogFeed from './ActivityLogFeed';
+import { motion, useScroll, useTransform } from 'motion/react';
+import { useRef } from 'react';
+import FiveDShapeAnimation from './FiveDShapeAnimation';
 
 interface HomeProps {
   setCurrentView: (view: ViewState) => void;
 }
 
 export default function Home({ setCurrentView }: HomeProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const { scrollYProgress } = useScroll({
+    target: containerRef,
+    offset: ["start start", "end start"]
+  });
+  
+  const yHero = useTransform(scrollYProgress, [0, 1], [0, 200]);
+  const yShape = useTransform(scrollYProgress, [0, 1], [0, 150]);
+  const yCards = useTransform(scrollYProgress, [0, 1], [0, -50]);
+  const opacityFade = useTransform(scrollYProgress, [0, 0.5], [1, 0]);
+
   return (
-    <>
+    <div ref={containerRef} className="relative min-h-screen">
       {/* Hero & Value Prop Section */}
       <motion.section 
+        style={{ y: yHero, opacity: opacityFade }}
         initial="hidden"
         animate="visible"
         variants={{
@@ -28,7 +41,7 @@ export default function Home({ setCurrentView }: HomeProps) {
         <motion.div variants={{ hidden: { opacity: 0, y: 20 }, visible: { opacity: 1, y: 0, transition: { duration: 0.8, ease: "easeOut" } } }}>
           <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-indigo-50 border border-indigo-100 rounded-full">
             <span className="flex h-2 w-2 rounded-full bg-indigo-500 animate-pulse"></span>
-            <span className="text-[10px] sm:text-xs uppercase tracking-widest font-bold text-indigo-700">Novalith V2.0 &bull; Global Accessibility</span>
+            <span className="text-[10px] sm:text-xs uppercase tracking-widest font-bold text-indigo-700">Thessvar V2.0 &bull; Global Accessibility</span>
           </div>
         </motion.div>
         
@@ -37,84 +50,52 @@ export default function Home({ setCurrentView }: HomeProps) {
         </motion.h1>
         
         <motion.p variants={{ hidden: { opacity: 0, y: 20 }, visible: { opacity: 1, y: 0, transition: { duration: 0.8, ease: "easeOut" } } }} className="text-base sm:text-lg text-slate-600 max-w-2xl mx-auto leading-relaxed">
-          Build powerful neural network architectures intuitively. 
-          Deploy on our <b>Free Tier Cloud</b>. Own 100% of your weights and data.
+          At Thessvar, we believe your data belongs to you. Our architecture ensures absolute data sovereignty, transparent model training, and zero-trust execution.
         </motion.p>
       </motion.section>
 
-      {/* Interactive Workspace Mockup */}
+      {/* Animation Section */}
       <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-6 sm:gap-8 min-h-0">
-        {/* Code Editor */}
         <motion.div 
-          initial={{ opacity: 0, x: -50 }} 
+          style={{ y: yShape }}
+          initial={{ opacity: 0, x: -50 }}
           animate={{ opacity: 1, x: 0 }} 
           transition={{ duration: 0.8, delay: 0.2 }} 
-          className="lg:col-span-7 bg-slate-900 rounded-2xl shadow-xl shadow-slate-200/50 flex flex-col border border-slate-800 overflow-hidden min-h-[350px]"
+          className="lg:col-span-7 flex flex-col"
         >
-          <div className="h-12 flex items-center justify-between px-4 bg-slate-800/80 border-b border-slate-700/50 backdrop-blur-sm">
-            <div className="flex gap-2">
-              <div className="w-3 h-3 rounded-full bg-red-500/80 hover:bg-red-400 transition-colors cursor-pointer"></div>
-              <div className="w-3 h-3 rounded-full bg-amber-500/80 hover:bg-amber-400 transition-colors cursor-pointer"></div>
-              <div className="w-3 h-3 rounded-full bg-emerald-500/80 hover:bg-emerald-400 transition-colors cursor-pointer"></div>
-            </div>
-            <span className="text-xs uppercase font-mono tracking-wider text-slate-400 font-medium">omni-compiler // example.ts</span>
-            <div className="w-16"></div>
-          </div>
-          <div className="flex-1 p-4 sm:p-6 font-mono text-sm leading-loose overflow-x-auto selection:bg-indigo-500/30">
-            <div className="flex gap-4 sm:gap-6 hover:bg-white/5 px-2 -mx-2 rounded transition-colors">
-              <span className="text-slate-600 w-4 text-right select-none shrink-0">1</span>
-              <span className="text-emerald-400">Mesh<span className="text-slate-400">.</span><span className="text-indigo-400">connect</span><span className="text-slate-300">(</span><span className="text-slate-400">Network: </span><span className="text-rose-400">"Novalith-Global"</span><span className="text-slate-300">)</span></span>
-            </div>
-            <div className="flex gap-4 sm:gap-6 hover:bg-white/5 px-2 -mx-2 rounded transition-colors">
-              <span className="text-slate-600 w-4 text-right select-none shrink-0">2</span>
-              <span className="text-slate-400"></span>
-            </div>
-            <div className="flex gap-4 sm:gap-6 hover:bg-white/5 px-2 -mx-2 rounded transition-colors">
-              <span className="text-slate-600 w-4 text-right select-none shrink-0">3</span>
-              <span className="text-slate-500 italic">// Initialize a 3-layer Transformer Block</span>
-            </div>
-            <div className="flex gap-4 sm:gap-6 hover:bg-white/5 px-2 -mx-2 rounded transition-colors">
-              <span className="text-slate-600 w-4 text-right select-none shrink-0">4</span>
-              <span className="text-emerald-400">Model<span className="text-slate-400">.</span><span className="text-indigo-400">create</span><span className="text-slate-300">(</span><span className="text-slate-400">Architecture: </span><span className="text-rose-400">"Transformer"</span><span className="text-slate-300">, </span><span className="text-slate-400">Layers: </span><span className="text-amber-400">3</span><span className="text-slate-300">)</span></span>
-            </div>
-            <div className="flex gap-4 sm:gap-6 hover:bg-white/5 px-2 -mx-2 rounded transition-colors">
-              <span className="text-slate-600 w-4 text-right select-none shrink-0">5</span>
-              <span className="text-emerald-400">Model<span className="text-slate-400">.</span><span className="text-indigo-400">train</span><span className="text-slate-300">(</span><span className="text-slate-400">Data: </span><span className="text-rose-400">"Encrypted_Set"</span><span className="text-slate-300">, </span><span className="text-slate-400">FHE: </span><span className="text-rose-400">"Active"</span><span className="text-slate-300">)</span></span>
-            </div>
-          </div>
-          <div className="border-t border-slate-800 bg-[#0d1117] p-3 flex justify-between items-center px-4">
-            <span className="text-[10px] text-emerald-400/80 font-mono flex items-center gap-2"><span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span> Node Synced</span>
-            <button onClick={() => setCurrentView('omni-ai')} className="text-xs bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-1.5 rounded uppercase font-bold tracking-widest transition-colors font-sans">
-              Launch Omni-AI
-            </button>
-          </div>
+          <FiveDShapeAnimation />
         </motion.div>
 
         {/* Feature Cards */}
         <motion.div 
-          initial={{ opacity: 0, x: 50 }} 
+          style={{ y: yCards }}
+          initial={{ opacity: 0, x: 50 }}
           animate={{ opacity: 1, x: 0 }} 
           transition={{ duration: 0.8, delay: 0.4 }} 
           className="lg:col-span-5 flex flex-col gap-6 sm:gap-8 min-h-0"
-        >
-          {/* AI Mesh Stats */}
+        >          {/* CloudOS IDE */}
           <div 
-            onClick={() => setCurrentView('ai-training')}
-            className="bg-white rounded-2xl p-6 border border-slate-200 flex-1 shadow-sm hover:shadow-lg hover:border-indigo-200 transition-all group cursor-pointer flex flex-col justify-between"
+            onClick={() => setCurrentView('ide')}
+            className="bg-white rounded-2xl p-6 border border-slate-200 flex-1 shadow-sm hover:shadow-lg hover:border-indigo-200 transition-all group cursor-pointer flex flex-col justify-between relative"
           >
             <div>
               <div className="flex items-center gap-2 mb-3">
-                <svg className="w-5 h-5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
-                <h3 className="font-bold text-slate-800 text-lg">Decentralized Mesh</h3>
+                <svg className="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path></svg>
+                <h3 className="font-bold text-slate-800 text-lg">CloudOS Web IDE</h3>
               </div>
-              <p className="text-sm text-slate-500 leading-relaxed">Tap into idle GPUs worldwide. No centralized AWS bills. Deploy inferences completely free.</p>
+              <p className="text-sm text-slate-500 leading-relaxed">Full-stack browser development environment. Real-time compilation, multi-language support, and cloud persistence.</p>
             </div>
             <div className="mt-6 flex items-end justify-between">
               <div>
-                <div className="text-3xl font-black text-slate-900 tracking-tighter">142M+</div>
-                <div className="text-xs font-bold text-slate-400 uppercase tracking-widest">Active Nodes</div>
+                <div className="text-3xl font-black text-slate-900 tracking-tighter">0ms</div>
+                <div className="text-xs font-bold text-slate-400 uppercase tracking-widest">Setup Time</div>
               </div>
-              <div className="text-emerald-500 bg-emerald-50 px-2 py-1 rounded text-xs font-bold font-mono">100% Uptime</div>
+              <div className="text-indigo-500 bg-indigo-50 px-2 py-1 rounded text-xs font-bold font-mono">Zero Config</div>
+            </div>
+            {/* Tooltip */}
+            <div className="absolute -top-12 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-800 text-white text-xs px-3 py-2 rounded shadow-lg pointer-events-none whitespace-nowrap z-50">
+              Access the CloudOS IDE with 25+ language plugins
+              <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-slate-800 rotate-45"></div>
             </div>
           </div>
 
@@ -124,9 +105,9 @@ export default function Home({ setCurrentView }: HomeProps) {
             className="bg-indigo-600 rounded-2xl p-6 text-white relative overflow-hidden flex-1 shadow-lg shadow-indigo-600/20 group cursor-pointer"
           >
             <div className="relative z-10 h-full flex flex-col justify-center">
-              <h3 className="font-bold text-lg mb-3 group-hover:text-indigo-100 transition-colors">Data Privacy Promise</h3>
+              <h3 className="font-bold text-lg mb-3 group-hover:text-indigo-100 transition-colors">Absolute Data Sovereignty</h3>
               <p className="text-sm text-indigo-100/90 leading-relaxed max-w-sm">
-                Your training data never leaves your private vault. Novalith cannot access your model weights without explicit cryptographical keys.
+                You retain 100% ownership of your weights, datasets, and runtime code. We utilize Fully Homomorphic Encryption (FHE).
               </p>
               <div className="mt-6 inline-flex items-center gap-3 w-fit">
                 <div className="p-2.5 bg-white/10 backdrop-blur-sm rounded-lg border border-white/20 group-hover:bg-white/20 transition-colors">
@@ -137,9 +118,14 @@ export default function Home({ setCurrentView }: HomeProps) {
             </div>
             <div className="absolute -right-8 -bottom-8 w-40 h-40 bg-white/10 rounded-full blur-3xl transition-transform duration-700 group-hover:scale-150"></div>
             <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/50 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
+            {/* Tooltip */}
+            <div className="absolute -top-12 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-800 text-white text-xs px-3 py-2 rounded shadow-lg pointer-events-none whitespace-nowrap z-50">
+              Zero-trust architecture with end-to-end encryption
+              <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-slate-800 rotate-45"></div>
+            </div>
           </div>
           
-          <ActivityLogFeed />
+          
         </motion.div>
       </div>
 
@@ -147,7 +133,7 @@ export default function Home({ setCurrentView }: HomeProps) {
         initial={{ opacity: 0, y: 50 }} 
         animate={{ opacity: 1, y: 0 }} 
         transition={{ duration: 0.8, delay: 0.6 }} 
-        className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mt-6"
+        className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-6"
       >
         <div onClick={() => setCurrentView('omni-ai')} className="bg-slate-900 border border-slate-800 p-6 rounded-2xl cursor-pointer hover:border-emerald-500/50 transition-colors group">
           <div className="w-10 h-10 bg-emerald-500/10 rounded-lg flex items-center justify-center mb-4 group-hover:bg-emerald-500/20 transition-colors">
@@ -163,14 +149,6 @@ export default function Home({ setCurrentView }: HomeProps) {
           </div>
           <h4 className="text-white font-bold mb-2">Model Hub</h4>
           <p className="text-slate-400 text-sm">Directly download and load local inference for Llama, Mistral, and more.</p>
-        </div>
-
-        <div onClick={() => setCurrentView('fortress')} className="bg-slate-900 border border-slate-800 p-6 rounded-2xl cursor-pointer hover:border-rose-500/50 transition-colors group">
-          <div className="w-10 h-10 bg-rose-500/10 rounded-lg flex items-center justify-center mb-4 group-hover:bg-rose-500/20 transition-colors">
-            <svg className="w-5 h-5 text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
-          </div>
-          <h4 className="text-white font-bold mb-2">Fortress Mode</h4>
-          <p className="text-slate-400 text-sm">Mathematically encrypted processing with Fully Homomorphic Encryption.</p>
         </div>
 
         <div onClick={() => setCurrentView('foundation')} className="bg-slate-900 border border-slate-800 p-6 rounded-2xl cursor-pointer hover:border-amber-500/50 transition-colors group">
@@ -203,6 +181,6 @@ export default function Home({ setCurrentView }: HomeProps) {
           Global Nodes: <span className="text-indigo-600 font-bold ml-1">4,281</span>
         </div>
       </footer>
-    </>
+    </div>
   );
 }

@@ -3,21 +3,23 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { useState, useEffect } from 'react';
+import { ShieldCheck, ShieldAlert, Loader2 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { startAiTrainerWorker } from './utils/aiTrainerWorker';
 import { ViewState } from './types';
 import Navigation from './components/Navigation';
+import CommandPalette from './components/CommandPalette';
 import Home from './components/Home';
 import Forum from './components/Forum';
 import Showcase from './components/Showcase';
-import DecentralizedMesh from './components/DecentralizedMesh';
-import FortressMode from './components/FortressMode';
 import AdminPanel from './components/AdminPanel';
 import PrivacyPolicy from './components/PrivacyPolicy';
 import OmniAI from './components/OmniAI';
 import FoundationModel from './components/FoundationModel';
 import CloudOS from './components/CloudOS';
+import OllamaLocal from './components/OllamaLocal';
 import GlobalHelperBot from './components/GlobalHelperBot';
+import AuthModal from './components/AuthModal';
 import { supabase, checkSupabaseConfig } from './lib/supabase';
 import { Session } from '@supabase/supabase-js';
 
@@ -29,7 +31,38 @@ export default function App() {
   const [resetSent, setResetSent] = useState(false);
   const [authError, setAuthError] = useState('');
   const [sessionWarning, setSessionWarning] = useState(false);
-  const userEmail = "ram1234598766@gmail.com";
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin');
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
+  const [pluginSearchQuery, setPluginSearchQuery] = useState('');
+  const [securityStatus, setSecurityStatus] = useState<'checking' | 'secure' | 'threat'>('checking');
+  
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) {
+        e.preventDefault();
+        setIsCommandPaletteOpen(prev => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+  }, []);
+
+  useEffect(() => {
+    const checkSecurity = () => {
+      setSecurityStatus('checking');
+      fetch('/api/security/scan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ payload: 'ping' })
+      }).then(res => res.json()).then(data => {
+        setSecurityStatus(data.threatsFound ? 'threat' : 'secure');
+      }).catch(() => setSecurityStatus('threat'));
+    };
+    checkSecurity();
+    const interval = setInterval(checkSecurity, 15000);
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     startAiTrainerWorker();
@@ -101,34 +134,60 @@ export default function App() {
                 Your session is about to expire. <button onClick={() => supabase.auth.refreshSession()} className="underline font-bold">Click here to refresh</button>
              </div>
           )}
-          <Navigation currentView={currentView} setCurrentView={setCurrentView} userEmail={session?.user?.email || userEmail} isSynced={!!session} />
+          <Navigation currentView={currentView} setCurrentView={setCurrentView} userEmail={session?.user?.email} isSynced={!!session} onSignIn={() => { setAuthMode('signin'); setShowAuthModal(true); }} onSignUp={() => { setAuthMode('signup'); setShowAuthModal(true); }} />
           
-          <main className="flex-1 flex flex-col max-w-7xl mx-auto w-full p-4 sm:p-8">
-            {currentView === 'home' && <Home setCurrentView={setCurrentView} />}
-            {currentView === 'forum' && <Forum />}
-            {currentView === 'showcase' && <Showcase />}
-            {currentView === 'mesh' && <DecentralizedMesh />}
-            {currentView === 'fortress' && <FortressMode />}
-            {currentView === 'admin' && <AdminPanel />}
-            {currentView === 'privacy' && <PrivacyPolicy />}
-            {currentView === 'omni-ai' && <OmniAI />}
-            {currentView === 'foundation' && <FoundationModel />}
-            {currentView === 'ide' && <CloudOS />}
+          <main className="flex-1 flex flex-col max-w-7xl mx-auto w-full p-4 sm:p-8 relative">
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={currentView}
+                initial={{ opacity: 0, y: 10, filter: 'blur(4px)' }}
+                animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+                exit={{ opacity: 0, y: -10, filter: 'blur(4px)' }}
+                transition={{ duration: 0.3 }}
+                className="w-full flex-1 flex flex-col"
+              >
+                {currentView === 'home' && <Home setCurrentView={setCurrentView} />}
+                {currentView === 'forum' && <Forum />}
+                {currentView === 'showcase' && <Showcase />}
+                {currentView === 'admin' && <AdminPanel />}
+                {currentView === 'privacy' && <PrivacyPolicy />}
+                {currentView === 'omni-ai' && <OmniAI />}
+                {currentView === 'foundation' && <FoundationModel />}
+                {currentView === 'ide' && <CloudOS initialPluginSearch={pluginSearchQuery} />}
+                {currentView === 'ollama' && <OllamaLocal />}
+              </motion.div>
+            </AnimatePresence>
           </main>
-          <footer className="w-full bg-white border-t border-slate-200 py-6 mt-auto">
+          <footer className="w-full bg-white border-t border-slate-200 py-6 mt-auto relative z-10">
             <div className="max-w-7xl mx-auto px-4 sm:px-8 flex flex-col md:flex-row items-center justify-between gap-4">
               <div className="text-sm text-slate-500">
-                Novalith ecosystem architected by <span className="font-bold text-slate-800">Mrityunjay K</span>
+                Thessvar ecosystem architected by <span className="font-bold text-slate-800">Mrityunjay K</span>
               </div>
               <div className="text-sm text-slate-500 flex items-center gap-3">
-                <span>Contact: <a href="mailto:ram1234598766@gmail.com" className="text-indigo-600 hover:text-indigo-700 font-medium transition-colors">ram1234598766@gmail.com</a></span>
-                <span className="text-slate-300">|</span>
-                <span>Phone: <a href="tel:7981344431" className="text-indigo-600 hover:text-indigo-700 font-medium transition-colors">7981344431</a></span>
+                <motion.div 
+                animate={ securityStatus === 'secure' ? { backgroundColor: '#dcfce7', color: '#166534', scale: [1, 1.05, 1] } : securityStatus === 'threat' ? { backgroundColor: '#fee2e2', color: '#991b1b', scale: [1, 1.1, 1] } : { backgroundColor: '#f1f5f9', color: '#475569' } }
+                transition={{ duration: 2, repeat: Infinity, repeatType: 'reverse' }}
+                className="px-3 py-1 rounded-full flex items-center gap-2 font-medium border border-transparent"
+              >
+                {securityStatus === 'checking' && <Loader2 className="w-4 h-4 animate-spin" />}
+                {securityStatus === 'secure' && <ShieldCheck className="w-4 h-4" />}
+                {securityStatus === 'threat' && <ShieldAlert className="w-4 h-4" />}
+                <span>{securityStatus === 'checking' ? 'Checking Security...' : securityStatus === 'secure' ? 'Secure Runtime' : 'Threat Detected'}</span>
+              </motion.div>
+              <button onClick={() => setCurrentView('privacy')} className="text-slate-600 hover:text-indigo-600 transition-colors">Data Privacy & Ownership</button>
               </div>
             </div>
           </footer>
 
           <GlobalHelperBot />
+          <CommandPalette 
+            isOpen={isCommandPaletteOpen} 
+            onClose={() => setIsCommandPaletteOpen(false)} 
+            setCurrentView={setCurrentView}
+            onSearchPlugins={(q) => setPluginSearchQuery(q)}
+          />
+          
+          <AuthModal isOpen={showAuthModal} onClose={() => setShowAuthModal(false)} initialMode={authMode} />
         </motion.div>
     </AnimatePresence>
   );

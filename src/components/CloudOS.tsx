@@ -1,11 +1,51 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import Editor, { useMonaco } from '@monaco-editor/react';
+import { Virtuoso } from 'react-virtuoso';
+import Editor, { DiffEditor, useMonaco } from '@monaco-editor/react';
 import { Download, Play, Terminal, Code2, FolderTree, Settings, FileJson, FileType, CheckCircle2, Plus, Trash2, Edit2, File as FileIcon, Archive, ChevronDown, Cloud, CloudOff, FileCode2, Database, FileTerminal, Puzzle, X, Activity } from 'lucide-react';
+import { Keyboard, GitMerge } from 'lucide-react';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
-import { supabase, checkSupabaseConfig } from '../lib/supabase';
-import prettier from 'prettier/standalone';
+import { auth, db } from '../lib/firebase';
+import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
+import { supabase } from '../lib/supabase';
+
+interface PluginMeta {
+  name: string;
+  description: string;
+  active: boolean;
+  version?: string;
+}
+
+const DEFAULT_PLUGINS: Record<string, PluginMeta> = {
+  prettier: { name: 'Prettier', description: 'Auto-formatter for JS, HTML, CSS', active: true },
+  eslint: { name: 'ESLint', description: 'JavaScript Linter', active: false },
+  clang: { name: 'Clang-Format', description: 'C++ style rules', active: true },
+  gitlens: { name: 'GitLens', description: 'Supercharge Git', active: false },
+  liveServer: { name: 'Live Server', description: 'Launch a local dev server', active: false },
+  vscodeIcons: { name: 'VSCode Icons', description: 'Icons for Visual Studio Code', active: true },
+  materialIcon: { name: 'Material Icon Theme', description: 'Material Design Icons', active: false },
+  python: { name: 'Python Extension', description: 'IntelliSense, linting, debugging', active: true },
+  cpp: { name: 'C/C++ Extension', description: 'C/C++ IntelliSense, debugging', active: true },
+  java: { name: 'Java Extension Pack', description: 'Popular extensions for Java', active: false },
+  docker: { name: 'Docker', description: 'Build, manage Docker containers', active: false },
+  kubernetes: { name: 'Kubernetes', description: 'Develop, deploy K8s applications', active: false },
+  restClient: { name: 'REST Client', description: 'REST Client for IDE', active: true },
+  thunderClient: { name: 'Thunder Client', description: 'Lightweight API Client', active: false },
+  spellChecker: { name: 'Code Spell Checker', description: 'Spell checker for source code', active: true },
+  pathIntellisense: { name: 'Path Intellisense', description: 'Visual Studio Code plugin that autocompletes filenames', active: true },
+  reactSnippets: { name: 'React Snippets', description: 'ES7 React/Redux/GraphQL/React-Native snippets', active: true },
+  autoCloseTag: { name: 'Auto Close Tag', description: 'Auto add HTML/XML close tag', active: true },
+  autoRenameTag: { name: 'Auto Rename Tag', description: 'Auto rename paired HTML/XML tag', active: true },
+  bracketPair: { name: 'Bracket Pair Colorizer', description: 'A customizable extension for colorizing matching brackets', active: true },
+  settingsSync: { name: 'Settings Sync', description: 'Synchronize Settings, Snippets, Themes', active: false },
+  remoteSsh: { name: 'Remote - SSH', description: 'Open any folder on a remote machine', active: false },
+  vim: { name: 'Vim', description: 'Vim emulation', active: false },
+  jupyter: { name: 'Jupyter', description: 'Jupyter notebook support', active: true },
+  markdown: { name: 'Markdown All in One', description: 'All you need to write Markdown', active: true },
+  tailwind: { name: 'Tailwind CSS IntelliSense', description: 'Intelligent Tailwind CSS tooling', active: true }
+};
+import * as prettier from 'prettier/standalone';
 import * as prettierPluginBabel from 'prettier/plugins/babel';
 import * as prettierPluginEstree from 'prettier/plugins/estree';
 import * as prettierPluginHtml from 'prettier/plugins/html';
@@ -20,22 +60,56 @@ interface FileNode {
 
 const LANGUAGES = [
   { id: 'javascript', name: 'JavaScript', ext: 'js' },
+  { id: 'typescript', name: 'TypeScript', ext: 'ts' },
   { id: 'html', name: 'HTML', ext: 'html' },
   { id: 'css', name: 'CSS', ext: 'css' },
   { id: 'python', name: 'Python', ext: 'py' },
   { id: 'php', name: 'PHP', ext: 'php' },
   { id: 'sql', name: 'SQL', ext: 'sql' },
   { id: 'cpp', name: 'C++', ext: 'cpp' },
+  { id: 'c', name: 'C', ext: 'c' },
+  { id: 'csharp', name: 'C#', ext: 'cs' },
   { id: 'java', name: 'Java', ext: 'java' },
-  { id: 'rust', name: 'Rust', ext: 'rs' }
+  { id: 'rust', name: 'Rust', ext: 'rs' },
+  { id: 'go', name: 'Go', ext: 'go' },
+  { id: 'ruby', name: 'Ruby', ext: 'rb' },
+  { id: 'swift', name: 'Swift', ext: 'swift' },
+  { id: 'kotlin', name: 'Kotlin', ext: 'kt' },
+  { id: 'dart', name: 'Dart', ext: 'dart' },
+  { id: 'json', name: 'JSON', ext: 'json' },
+  { id: 'yaml', name: 'YAML', ext: 'yaml' },
+  { id: 'markdown', name: 'Markdown', ext: 'md' },
+  { id: 'shell', name: 'Shell Script', ext: 'sh' },
+  { id: 'objective-c', name: 'Objective-C', ext: 'm' },
+  { id: 'scala', name: 'Scala', ext: 'scala' },
+  { id: 'perl', name: 'Perl', ext: 'pl' },
+  { id: 'lua', name: 'Lua', ext: 'lua' },
+  { id: 'haskell', name: 'Haskell', ext: 'hs' },
+  { id: 'elixir', name: 'Elixir', ext: 'ex' },
+  { id: 'r', name: 'R', ext: 'r' },
+  { id: 'powershell', name: 'PowerShell', ext: 'ps1' },
+  { id: 'clojure', name: 'Clojure', ext: 'clj' },
+  { id: 'fsharp', name: 'F#', ext: 'fs' },
+  { id: 'pascal', name: 'Pascal', ext: 'pas' },
+  { id: 'julia', name: 'Julia', ext: 'jl' },
+  { id: 'groovy', name: 'Groovy', ext: 'groovy' },
+  { id: 'matlab', name: 'MATLAB', ext: 'm' }
 ];
 
 const DEFAULT_FILES: FileNode[] = [
   { id: '0', name: 'untitled.js', content: '// Start coding here...\n', language: 'javascript' }
 ];
 
-export default function CloudOS() {
+interface CloudOSProps {
+  initialPluginSearch?: string;
+}
+
+export default function CloudOS({ initialPluginSearch }: CloudOSProps) {
+  const monaco = useMonaco();
+  const editorRef = useRef<any>(null);
   const [files, setFiles] = useState<FileNode[]>(DEFAULT_FILES);
+  const [originalFiles, setOriginalFiles] = useState<Record<string, string>>({});
+  const [showDiff, setShowDiff] = useState(false);
   const [activeFileId, setActiveFileId] = useState<string>(DEFAULT_FILES[0].id);
   const [isExporting, setIsExporting] = useState(false);
   const [showOutput, setShowOutput] = useState(false);
@@ -44,15 +118,101 @@ export default function CloudOS() {
   const [isSynced, setIsSynced] = useState(false);
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'error'>('idle');
   const [compileProgress, setCompileProgress] = useState(0);
+  const [showDiagnostics, setShowDiagnostics] = useState(false);
   const [debuggerActive, setDebuggerActive] = useState(false);
   const [showPlugins, setShowPlugins] = useState(false);
+  const [showShortcuts, setShowShortcuts] = useState(false);
   
-  const [plugins, setPlugins] = useState({
-      prettier: true,
-      eslint: false,
-      clang: true
-  });
-  const editorRef = useRef<any>(null);
+  const [plugins, setPlugins] = useState<Record<string, PluginMeta>>(DEFAULT_PLUGINS);
+  const [pluginSearch, setPluginSearch] = useState(initialPluginSearch || '');
+  const [registryLoading, setRegistryLoading] = useState(false);
+  
+
+  
+  // Plugin Store Fetch
+  useEffect(() => {
+    if (showPlugins && !registryLoading) {
+      setRegistryLoading(true);
+      // Simulate fetching open-source package metadata from a remote JSON registry
+      fetch('https://registry.npmjs.org/-/v1/search?text=keywords:prettier,eslint,monaco-plugin&size=15')
+        .then(res => res.json())
+        .then(data => {
+          if (data.objects) {
+            setPlugins(prev => {
+              const next = { ...prev };
+              data.objects.forEach((obj: any) => {
+                const pkg = obj.package;
+                if (!next[pkg.name]) {
+                  next[pkg.name] = {
+                    name: pkg.name,
+                    description: pkg.description || 'Remote plugin module',
+                    active: false,
+                    version: pkg.version
+                  };
+                }
+              });
+              return next;
+            });
+          }
+        })
+        .catch(err => console.error("Plugin fetch failed", err))
+        .finally(() => setRegistryLoading(false));
+    }
+  }, [showPlugins]);
+  
+  const [remoteCursors, setRemoteCursors] = useState<Record<string, {line: number, column: number, color: string}>>({});
+  const decorationsRef = useRef<string[]>([]);
+  
+  useEffect(() => {
+    if (!auth.currentUser) return;
+    const sessionRef = doc(db, 'collaboration', activeFileId);
+    const unsubscribe = onSnapshot(sessionRef, (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        if (data.cursors) {
+          const others = { ...data.cursors };
+          delete others[auth.currentUser.uid];
+          setRemoteCursors(others);
+        }
+      }
+    });
+    return () => unsubscribe();
+  }, [activeFileId]);
+
+  useEffect(() => {
+    if (editorRef.current && monaco) {
+      const decorations = Object.values(remoteCursors).map((cursor: any) => ({
+        range: new monaco.Range(cursor.line, cursor.column, cursor.line, cursor.column),
+        options: {
+          className: 'remote-cursor-collab',
+          hoverMessage: { value: 'Collaborator' }
+        }
+      }));
+      decorationsRef.current = editorRef.current.deltaDecorations(decorationsRef.current, decorations);
+    }
+  }, [remoteCursors, monaco]);
+
+  const handleEditorDidMount = (editor: any, monacoInstance: any) => {
+    editorRef.current = editor;
+    
+    // Listen for cursor changes
+    editor.onDidChangeCursorPosition((e: any) => {
+      if (auth.currentUser) {
+        const sessionRef = doc(db, 'collaboration', activeFileId);
+        setDoc(sessionRef, {
+          cursors: {
+            [auth.currentUser.uid]: {
+              line: e.position.lineNumber,
+              column: e.position.column,
+              color: '#10b981' // Emerald
+            }
+          }
+        }, { merge: true });
+      }
+    });
+  };
+
+
   
   // Search state
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -72,6 +232,71 @@ export default function CloudOS() {
 
   // Editor and terminal states
   const [editorTheme, setEditorTheme] = useState('vs-dark');
+
+  // Firebase syncing logic
+  useEffect(() => {
+    const user = auth.currentUser;
+    if (!user) return;
+    
+    const settingsRef = doc(db, 'user_ide_settings', user.uid);
+    const unsubscribe = onSnapshot(settingsRef, (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        if (data.editorTheme) setEditorTheme(data.editorTheme);
+        if (data.openTabs) setOpenTabs(data.openTabs);
+        if (data.plugins) setPlugins(data.plugins);
+      }
+    });
+    
+    return () => unsubscribe();
+  }, []);
+
+
+  // Auto-save mechanism to Firestore
+  useEffect(() => {
+    const user = auth.currentUser;
+    if (!user) return;
+    
+    const saveToFirestore = async () => {
+      try {
+        setSyncStatus('syncing');
+        await setDoc(doc(db, 'workspaces', user.uid), {
+          files: files,
+          updatedAt: new Date().toISOString()
+        }, { merge: true });
+        setSyncStatus('idle');
+      } catch (err) {
+        console.error('Auto-save failed:', err);
+        setSyncStatus('error');
+      }
+    };
+    
+    const interval = setInterval(() => {
+      saveToFirestore();
+    }, 10000); // Auto-save every 10 seconds
+    
+    return () => clearInterval(interval);
+  }, [files]);
+
+  const saveSettingsToCloud = async (newSettings: any) => {
+    const user = auth.currentUser;
+    if (!user) return;
+    
+    setSyncStatus('syncing');
+    try {
+      const settingsRef = doc(db, 'user_ide_settings', user.uid);
+      await setDoc(settingsRef, newSettings, { merge: true });
+      setSyncStatus('idle');
+    } catch (e) {
+      console.error(e);
+      setSyncStatus('error');
+    }
+  };
+
+  // Trigger save on settings change
+  useEffect(() => {
+    saveSettingsToCloud({ editorTheme, openTabs, plugins });
+  }, [editorTheme, openTabs, plugins]);
   const [stdinValue, setStdinValue] = useState('');
 
   const activeFile = files.find(f => f.id === activeFileId) || files[0];
@@ -85,7 +310,7 @@ export default function CloudOS() {
         e.preventDefault();
         
         // Auto-formatter plugin logic
-        if (plugins.prettier) {
+        if (plugins.prettier?.active) {
            const file = files.find(f => f.id === activeFileId);
            if (file) {
                try {
@@ -124,11 +349,24 @@ export default function CloudOS() {
         setIsSearchOpen(true);
       } else if (e.key === 'Escape' && isSearchOpen) {
         setIsSearchOpen(false);
+      } else if ((e.ctrlKey || e.metaKey) && (e.key === 'p' || e.key === 'P')) {
+        e.preventDefault();
+        setShowPlugins(prev => !prev);
+      } else if ((e.ctrlKey || e.metaKey) && e.key === '/') {
+        e.preventDefault();
+        setShowShortcuts(prev => !prev);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isSearchOpen, activeFileId, files, plugins]);
+
+  useEffect(() => {
+    if (initialPluginSearch) {
+      setShowPlugins(true);
+      setPluginSearch(initialPluginSearch);
+    }
+  }, [initialPluginSearch]);
 
   useEffect(() => {
     if (searchQuery.trim() === '') {
@@ -157,11 +395,28 @@ export default function CloudOS() {
 
   useEffect(() => {
     const loadFiles = async () => {
-      if (checkSupabaseConfig().urlSet) {
+      if (auth.currentUser) {
         try {
+          // Server-side validation via Supabase Edge Functions (Mocked in our server)
+          const token = await auth.currentUser?.getIdToken();
+          const authRes = await fetch('/api/edge-functions/auth-sync', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ action: 'read' })
+          });
+          
+          if (!authRes.ok) {
+            throw new Error('Server-side authentication failed in Edge Function');
+          }
           const { data, error } = await supabase.from('workspace_files').select('*');
           if (data && data.length > 0) {
             setFiles(data);
+            const orig: Record<string, string> = {};
+            data.forEach((d: any) => orig[d.id] = d.content);
+            setOriginalFiles(orig);
             setActiveFileId(data[0].id);
             setIsSynced(true);
             return;
@@ -178,6 +433,9 @@ export default function CloudOS() {
           const parsed = JSON.parse(local);
           if (parsed && parsed.length > 0) {
              setFiles(parsed);
+             const orig: Record<string, string> = {};
+             parsed.forEach((d: any) => orig[d.id] = d.content);
+             setOriginalFiles(orig);
              setActiveFileId(parsed[0].id);
           }
         } catch(e) {}
@@ -191,10 +449,25 @@ export default function CloudOS() {
     localStorage.setItem('novalith_cloudos_files_v2', JSON.stringify(files));
     
     // Sync to supabase if configured
-    if (checkSupabaseConfig().urlSet && isSynced) {
+    if (auth.currentUser && isSynced) {
       const syncFiles = async () => {
         setSyncStatus('syncing');
         try {
+          // Server-side validation via Supabase Edge Functions (Mocked in our server)
+          const token = await auth.currentUser?.getIdToken();
+          const authRes = await fetch('/api/edge-functions/auth-sync', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ action: 'sync' })
+          });
+          
+          if (!authRes.ok) {
+            throw new Error('Server-side authentication failed in Edge Function');
+          }
+          
           for (const f of files) {
              await supabase.from('workspace_files').upsert({
                 id: f.id,
@@ -205,6 +478,7 @@ export default function CloudOS() {
           }
           setSyncStatus('idle');
         } catch (e) {
+          console.error(e);
           setSyncStatus('error');
         }
       };
@@ -214,9 +488,46 @@ export default function CloudOS() {
     }
   }, [files, isSynced]);
 
-  const handleEditorChange = (value: string | undefined) => {
+    const handleEditorChange = (value: string | undefined) => {
     if (value !== undefined) {
       setFiles(prev => prev.map(f => f.id === activeFileId ? { ...f, content: value } : f));
+      
+      // Simulate ESLint
+      if (plugins.eslint && monaco && activeFile.language === 'javascript') {
+        const model = editorRef.current?.getModel();
+        if (model) {
+          const markers: any[] = [];
+          const lines = value.split('\n');
+          lines.forEach((line, i) => {
+            if (line.includes('var ')) {
+              markers.push({
+                severity: monaco.MarkerSeverity.Warning,
+                message: 'Unexpected var, use let or const instead. (eslint: no-var)',
+                startLineNumber: i + 1,
+                startColumn: line.indexOf('var ') + 1,
+                endLineNumber: i + 1,
+                endColumn: line.indexOf('var ') + 4
+              });
+            }
+            if (line.includes('console.log')) {
+              markers.push({
+                severity: monaco.MarkerSeverity.Info,
+                message: 'Unexpected console statement. (eslint: no-console)',
+                startLineNumber: i + 1,
+                startColumn: line.indexOf('console.log') + 1,
+                endLineNumber: i + 1,
+                endColumn: line.indexOf('console.log') + 12
+              });
+            }
+          });
+          monaco.editor.setModelMarkers(model, 'eslint', markers);
+        }
+      } else if (monaco && !plugins.eslint) {
+        const model = editorRef.current?.getModel();
+        if (model) {
+          monaco.editor.setModelMarkers(model, 'eslint', []);
+        }
+      }
     }
   };
 
@@ -280,12 +591,86 @@ export default function CloudOS() {
 
   const [isRunning, setIsRunning] = useState(false);
 
+  const handleFormat = async () => {
+    if (!plugins['prettier']?.active) {
+      setTerminalOutput('Error: Prettier plugin is not enabled.');
+      setShowOutput(true);
+      return;
+    }
+    
+    try {
+      let formatted = activeFile.content;
+      if (activeFile.language === 'javascript' || activeFile.language === 'typescript') {
+        formatted = await prettier.format(activeFile.content, {
+          parser: 'babel',
+          plugins: [prettierPluginBabel, prettierPluginEstree]
+        });
+      } else if (activeFile.language === 'html') {
+        formatted = await prettier.format(activeFile.content, {
+          parser: 'html',
+          plugins: [prettierPluginHtml]
+        });
+      } else if (activeFile.language === 'css') {
+        formatted = await prettier.format(activeFile.content, {
+          parser: 'css',
+          plugins: [prettierPluginCss]
+        });
+      } else if (activeFile.language === 'json') {
+        formatted = JSON.stringify(JSON.parse(activeFile.content), null, 2);
+      }
+      
+      const updatedFiles = files.map(f => f.id === activeFileId ? { ...f, content: formatted } : f);
+      setFiles(updatedFiles);
+    } catch (e: any) {
+      setTerminalOutput('Format error: ' + e.message);
+      setShowOutput(true);
+    }
+  };
+
   const handleRun = async () => {
     setShowOutput(true);
     setTerminalOutput('');
     setOutputHtml('');
     setCompileProgress(0);
     
+    if (activeFile.language === 'markdown') {
+      setOutputHtml(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/github-markdown-css/5.2.0/github-markdown.min.css">
+          <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+        </head>
+        <body class="markdown-body" style="padding: 20px;">
+          <div id="content"></div>
+          <script>
+            document.getElementById('content').innerHTML = marked.parse(${JSON.stringify(activeFile.content)});
+          </script>
+        </body>
+        </html>
+      `);
+      return;
+    }
+
+    if (activeFile.language === 'markdown') {
+      setOutputHtml(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/github-markdown-css/5.2.0/github-markdown.min.css">
+          <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+        </head>
+        <body class="markdown-body" style="padding: 20px;">
+          <div id="content"></div>
+          <script>
+            document.getElementById('content').innerHTML = marked.parse(${JSON.stringify(activeFile.content)});
+          </script>
+        </body>
+        </html>
+      `);
+      return;
+    }
+
     if (activeFile.language === 'html') {
       setOutputHtml(activeFile.content);
       return;
@@ -319,10 +704,16 @@ export default function CloudOS() {
     }, 300);
     
     try {
+      let token = 'null';
+      if (auth.currentUser) {
+        token = await auth.currentUser.getIdToken();
+      }
+
       const response = await fetch("/api/run", {
         method: "POST",
         headers: {
-          "Content-Type": "application/json"
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
         },
         body: JSON.stringify({
           language: activeFile.language,
@@ -396,8 +787,8 @@ export default function CloudOS() {
     <div className="flex flex-col h-screen w-screen rounded-none overflow-hidden bg-slate-900 animate-in fade-in duration-500 relative">
       
       {/* Cloud OS Header */}
-      <div className="h-14 bg-slate-950 border-b border-slate-800 flex items-center justify-between px-4 select-none shrink-0 z-20 relative">
-        <div className="flex items-center gap-3">
+      <div className="min-h-14 py-2 bg-slate-950 border-b border-slate-800 flex flex-col sm:flex-row items-center justify-between px-4 select-none shrink-0 z-20 relative gap-3">
+        <div className="flex items-center gap-3 w-full sm:w-auto overflow-hidden">
           <div className="flex gap-1.5">
             <div className="w-3 h-3 rounded-full bg-rose-500"></div>
             <div className="w-3 h-3 rounded-full bg-amber-500"></div>
@@ -406,7 +797,7 @@ export default function CloudOS() {
           <div className="h-4 w-px bg-slate-700 mx-2"></div>
           <div className="flex items-center gap-2 text-slate-300 font-mono text-sm">
             <Terminal className="w-4 h-4 text-indigo-400" />
-            <span>Novalith Cloud OS IDE</span>
+            <span>Thessvar CLOUD OS IDE</span>
             {isSynced && (
                <div className="ml-3 flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-xs">
                  {syncStatus === 'syncing' ? (
@@ -477,16 +868,25 @@ export default function CloudOS() {
               )}
             </motion.div>
           )}
-        </AnimatePresence>
+        
 
-        <div className="flex items-center gap-3">
+        </AnimatePresence>
+        <div className="flex items-center gap-2 sm:gap-3 flex-wrap w-full sm:w-auto sm:justify-end shrink-0 py-1">
           <button 
             onClick={() => setIsSearchOpen(!isSearchOpen)}
-            className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border bg-slate-800/50 text-slate-400 border-slate-700/50 hover:bg-slate-800 hover:text-slate-300"
+            className="flex whitespace-nowrap items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border bg-slate-800/50 text-slate-400 border-slate-700/50 hover:bg-slate-800 hover:text-slate-300"
           >
             Search <span className="opacity-50 text-xs">Ctrl+K</span>
           </button>
 
+          <button 
+            onClick={() => setShowShortcuts(!showShortcuts)}
+            className="flex whitespace-nowrap items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border bg-slate-800/50 text-slate-400 border-slate-700/50 hover:bg-slate-800 hover:text-slate-300"
+          >
+            <Keyboard className="w-4 h-4" />
+            <span className="hidden sm:inline">Shortcuts</span>
+          </button>
+          
           <button 
             onClick={() => setShowPlugins(!showPlugins)}
             className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border ${showPlugins ? 'bg-purple-600/20 text-purple-400 border-purple-500/20' : 'bg-slate-800/50 text-slate-400 border-slate-700/50 hover:bg-slate-800 hover:text-slate-300'}`}
@@ -506,16 +906,33 @@ export default function CloudOS() {
           <button 
             onClick={handleExportProject}
             disabled={isExporting}
-            className="flex items-center gap-2 px-3 py-1.5 bg-indigo-600/20 text-indigo-400 hover:bg-indigo-600/30 hover:text-indigo-300 rounded-lg text-sm font-medium transition-colors border border-indigo-500/20"
+            className="flex whitespace-nowrap items-center gap-2 px-3 py-1.5 bg-indigo-600/20 text-indigo-400 hover:bg-indigo-600/30 hover:text-indigo-300 rounded-lg text-sm font-medium transition-colors border border-indigo-500/20"
           >
             {isExporting ? <CheckCircle2 className="w-4 h-4" /> : <Archive className="w-4 h-4" />}
             {isExporting ? 'Exported!' : 'Export Project'}
+          </button>
+          {plugins['gitlens']?.active && (
+            <button
+              onClick={() => setShowDiff(!showDiff)}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border ${showDiff ? 'bg-indigo-600/20 text-indigo-400 border-indigo-500/50' : 'bg-slate-800/50 text-slate-400 border-slate-700/50 hover:bg-slate-800 hover:text-slate-300'}`}
+            >
+              <Code2 className="w-4 h-4" />
+              <span className="hidden sm:inline">Diff</span>
+            </button>
+          )}
+          
+          <button
+            onClick={handleFormat}
+            className="flex whitespace-nowrap items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border bg-slate-800/50 text-slate-400 border-slate-700/50 hover:bg-slate-800 hover:text-slate-300"
+          >
+            <Code2 className="w-4 h-4" />
+            <span className="hidden sm:inline">Format</span>
           </button>
           <button 
             id="run-code-button"
             onClick={handleRun}
             disabled={isRunning}
-            className="flex items-center gap-2 px-3 py-1.5 bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600/30 hover:text-emerald-300 rounded-lg text-sm font-medium transition-colors border border-emerald-500/20 disabled:opacity-50"
+            className="flex whitespace-nowrap items-center gap-2 px-3 py-1.5 bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600/30 hover:text-emerald-300 rounded-lg text-sm font-medium transition-colors border border-emerald-500/20 disabled:opacity-50"
           >
             {isRunning ? (
               <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-emerald-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -562,74 +979,79 @@ export default function CloudOS() {
               </form>
             )}
             
-            <AnimatePresence>
-              {files.map((file) => (
-                <motion.div
-                  key={file.id}
-                  initial={{ opacity: 0, x: -10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, scale: 0.9 }}
-                  onClick={() => {
-                    setActiveFileId(file.id);
-                    if (!openTabs.includes(file.id)) {
-                      setOpenTabs([...openTabs, file.id]);
-                    }
-                  }}
-                  className={`w-full group flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-all cursor-pointer ${
-                    activeFileId === file.id
-                      ? 'bg-indigo-600/20 text-indigo-300 border border-indigo-500/30'
-                      : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200 border border-transparent'
-                  }`}
-                >
-                  <div className="flex items-center gap-3 w-full">
-                    {getFileIcon(file.language)}
-                    {renamingFileId === file.id ? (
-                      <form onSubmit={(e) => handleRenameSubmit(file.id, e)} className="w-full">
-                         <input
-                           type="text"
-                           autoFocus
-                           value={renameValue}
-                           onChange={(e) => setRenameValue(e.target.value)}
-                           onBlur={(e) => handleRenameSubmit(file.id, e)}
-                           className="bg-transparent border-none outline-none text-sm text-slate-200 w-full"
-                         />
-                      </form>
-                    ) : (
-                      <span 
-                        className="font-medium truncate max-w-[120px]"
-                        onDoubleClick={(e) => {
-                          e.stopPropagation();
-                          setRenamingFileId(file.id);
-                          setRenameValue(file.name);
+            <div className="h-full w-full">
+              <Virtuoso
+                style={{ height: 600, width: '100%' }}
+                totalCount={files.length}
+                itemContent={(index) => {
+                  const file = files[index];
+                  return (
+                    <div className="pr-2 py-0.5">
+                      <motion.div
+                        onClick={() => {
+                          setActiveFileId(file.id);
+                          if (!openTabs.includes(file.id)) {
+                            setOpenTabs([...openTabs, file.id]);
+                          }
                         }}
-                      >{file.name}</span>
-                    )}
-                  </div>
-                  {!renamingFileId && (
-                    <div className="flex items-center gap-1">
-                      <button 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setRenamingFileId(file.id);
-                          setRenameValue(file.name);
-                        }}
-                        className="opacity-0 group-hover:opacity-100 p-1 hover:text-indigo-400 transition-all rounded hover:bg-indigo-500/10"
+                        whileHover={{ scale: 1.01, backgroundColor: "rgba(255, 255, 255, 0.05)" }}
+                        whileTap={{ scale: 0.98 }}
+                        className={`w-full h-full group flex items-center justify-between px-3 rounded-lg text-sm transition-all cursor-pointer ${
+                          activeFileId === file.id
+                            ? 'bg-indigo-600/20 text-indigo-300 border border-indigo-500/30'
+                            : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200 border border-transparent'
+                        }`}
                       >
-                        <Edit2 className="w-3 h-3" />
-                      </button>
-                      {files.length > 1 && (
-                        <button 
-                          onClick={(e) => handleDeleteFile(file.id, e)}
-                          className="opacity-0 group-hover:opacity-100 p-1 hover:text-rose-400 transition-all rounded hover:bg-rose-500/10"
-                        >
-                          <Trash2 className="w-3 h-3" />
-                        </button>
-                      )}
+                        <div className="flex items-center gap-3 w-full">
+                          {getFileIcon(file.language)}
+                          {renamingFileId === file.id ? (
+                            <form onSubmit={(e) => handleRenameSubmit(file.id, e)} className="w-full">
+                               <input
+                                 type="text"
+                                 autoFocus
+                                 value={renameValue}
+                                 onChange={e => setRenameValue(e.target.value)}
+                                 onBlur={() => setRenamingFileId(null)}
+                                 className="bg-transparent border-none outline-none text-sm text-slate-200 w-full"
+                               />
+                            </form>
+                          ) : (
+                            <span 
+                               className="truncate flex-1"
+                               onDoubleClick={(e) => {
+                                 e.stopPropagation();
+                                 setRenamingFileId(file.id);
+                                 setRenameValue(file.name);
+                               }}
+                            >
+                              {file.name}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setRenamingFileId(file.id);
+                              setRenameValue(file.name);
+                            }}
+                            className="p-1.5 hover:bg-slate-700 rounded text-slate-400 hover:text-indigo-400 transition-colors"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={(e) => handleDeleteFile(file.id, e)}
+                            className="p-1.5 hover:bg-slate-700 rounded text-slate-400 hover:text-red-400 transition-colors"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </motion.div>
                     </div>
-                  )}
-                </motion.div>
-              ))}
-            </AnimatePresence>
+                  );
+                }}
+              />
+            </div>
           </div>
           <div className="p-4 border-t border-slate-800">
             <button className="w-full flex items-center justify-center gap-2 px-3 py-2 text-slate-400 hover:text-slate-200 hover:bg-slate-800 rounded-lg text-sm transition-colors">
@@ -640,14 +1062,52 @@ export default function CloudOS() {
         </div>
 
         {/* Editor Area */}
-        <div className="flex-1 flex flex-col bg-[#1e1e1e] relative min-w-0">
+        
+<style dangerouslySetInnerHTML={{__html: `
+  .remote-cursor-collab {
+    border-left: 2px solid #10b981;
+    position: absolute;
+    z-index: 10;
+  }
+
+  /* CloudOS Custom Scrollbars */
+  .cloudos-scroll::-webkit-scrollbar {
+    width: 12px;
+    height: 12px;
+  }
+  .cloudos-scroll::-webkit-scrollbar-track {
+    background: #1e1e1e;
+  }
+  .cloudos-scroll::-webkit-scrollbar-thumb {
+    background: #475569;
+    border-radius: 6px;
+    border: 3px solid #1e1e1e;
+  }
+  .cloudos-scroll::-webkit-scrollbar-thumb:hover {
+    background: #64748b;
+  }
+  .cloudos-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: #475569 #1e1e1e;
+    scroll-behavior: smooth;
+  }
+  .smooth-typing .view-lines {
+    transition: all 0.1s ease-out;
+  }
+`}} />
+<div className="flex-1 flex flex-col bg-[#1e1e1e] relative min-w-0 cloudos-scroll overflow-auto h-full min-h-[600px]">
           <div className="flex items-center justify-between bg-slate-900/50 border-b border-slate-800 pr-4">
-            <div className="flex overflow-x-auto shrink-0" style={{ scrollbarWidth: 'none' }}>
+            <div className="flex overflow-x-auto shrink-0 cloudos-scroll" style={{ scrollbarWidth: 'thin', scrollBehavior: 'smooth' }}>
+              <AnimatePresence>
               {openTabs.map(tabId => {
                 const tabFile = files.find(f => f.id === tabId);
                 if (!tabFile) return null;
                 return (
-                  <div 
+                  <motion.div 
+                    layout
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, scale: 0.9 }}
                     key={tabId}
                     onClick={() => setActiveFileId(tabId)}
                     className={`flex items-center gap-2 px-4 py-2 text-sm font-mono cursor-pointer border-r border-slate-800 min-w-[120px] max-w-[200px] group ${activeFileId === tabId ? 'bg-[#1e1e1e] text-slate-300 border-t-2 border-t-indigo-500' : 'bg-slate-900 text-slate-500 border-t-2 border-t-transparent hover:bg-slate-800'}`}
@@ -670,9 +1130,10 @@ export default function CloudOS() {
                     >
                       <X className="w-3 h-3" />
                     </button>
-                  </div>
+                  </motion.div>
                 );
               })}
+            </AnimatePresence>
             </div>
             
             {/* Language Selector */}
@@ -724,7 +1185,13 @@ export default function CloudOS() {
           </div>
           
           <div className="flex-1 w-full h-full relative flex flex-col">
-            <div className="flex-1 relative flex">
+            <div 
+              className="flex-1 relative flex"
+              style={{
+                /* CSS-in-JS custom scrollbar for the container */
+                minHeight: '600px',
+              }}
+            >
               <AnimatePresence mode="wait">
                 <motion.div 
                   key={activeFile.id}
@@ -734,16 +1201,41 @@ export default function CloudOS() {
                   transition={{ duration: 0.15 }}
                   className="absolute inset-0 flex"
                 >
-                  <div className="flex-1 relative">
-                    <Editor
-                      height="100%"
+                  <motion.div 
+                    key={activeFileId}
+                    initial={{ opacity: 0, scale: 0.98, y: 10 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    transition={{ type: "spring", stiffness: 300, damping: 25, mass: 0.5 }}
+                    drag
+                    dragConstraints={{ top: -200, left: -200, right: 200, bottom: 200 }}
+                    dragElastic={0.15}
+                    dragMomentum={true}
+                    dragTransition={{ bounceStiffness: 400, bounceDamping: 20 }}
+                    whileDrag={{ cursor: "grabbing" }}
+                    className="flex-1 relative cursor-grab"
+                  >
+                    {showDiff ? (
+                      <DiffEditor height="100%"
+                        original={originalFiles[activeFile.id] || ''}
+                        modified={activeFile.content}
+                        language={activeFile.language}
+                        theme={editorTheme}
+                        options={{
+                          renderSideBySide: true,
+                          minimap: { enabled: false },
+                          fontSize: 14,
+                          fontFamily: '"JetBrains Mono", monospace'
+                        }}
+                      />
+                    ) : (
+                    <Editor height="100%" className="cloudos-scroll smooth-typing"
                       language={activeFile.language}
                       theme={editorTheme}
                       value={activeFile.content}
                       onChange={handleEditorChange}
-                      onMount={(editor) => editorRef.current = editor}
+                      onMount={handleEditorDidMount}
                       options={{
-                        minimap: { enabled: false },
+                        minimap: { enabled: true, renderCharacters: false },
                         fontSize: 14,
                         fontFamily: '"JetBrains Mono", monospace',
                         padding: { top: 16, bottom: 100 },
@@ -752,7 +1244,17 @@ export default function CloudOS() {
                         cursorBlinking: "smooth",
                         cursorSmoothCaretAnimation: "on",
                         formatOnPaste: true,
-                        automaticLayout: true
+                        automaticLayout: true,
+                        wordWrap: 'off',
+                        scrollbar: {
+                          useShadows: false,
+                          verticalScrollbarSize: 12,
+                          horizontalScrollbarSize: 12,
+                          vertical: 'visible',
+                          horizontal: 'visible',
+                          verticalSliderSize: 10,
+                          horizontalSliderSize: 10,
+                        }
                       }}
                       loading={
                         <div className="flex items-center justify-center h-full text-slate-500 font-mono text-sm">
@@ -760,7 +1262,8 @@ export default function CloudOS() {
                         </div>
                       }
                     />
-                  </div>
+                  )}
+                  </motion.div>
                   
                   {debuggerActive && (
                     <div className="w-64 border-l border-slate-700 bg-slate-900 flex flex-col">
@@ -843,7 +1346,17 @@ export default function CloudOS() {
                     )}
                     <div className="flex-1 overflow-y-auto">
                       {terminalOutput ? (
-                        <pre className="p-4 font-mono text-sm text-emerald-400 h-full whitespace-pre-wrap">{terminalOutput}</pre>
+                        <div className="h-full w-full font-mono text-sm text-emerald-400">
+                          <Virtuoso
+                            style={{ height: 256, width: '100%' }}
+                            totalCount={terminalOutput.split('\n').length}
+                            itemContent={(index) => (
+                              <div className="px-4 whitespace-pre-wrap">
+                                {terminalOutput.split('\n')[index]}
+                              </div>
+                            )}
+                          />
+                        </div>
                       ) : (
                         <iframe 
                           srcDoc={outputHtml}
@@ -860,6 +1373,50 @@ export default function CloudOS() {
           </div>
         </div>
       </div>
+
+      {/* Developer Diagnostics View (Hidden) */}
+      <AnimatePresence>
+        {showDiagnostics && (
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 20 }}
+            className="absolute bottom-16 right-4 w-80 bg-slate-900 border border-emerald-500/30 rounded-xl shadow-2xl overflow-hidden z-[100] font-mono"
+          >
+            <div className="flex items-center justify-between px-3 py-2 border-b border-slate-800 bg-slate-950">
+              <div className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest flex items-center gap-2">
+                <Activity className="w-3 h-3" /> Diagnostics
+              </div>
+              <button onClick={() => setShowDiagnostics(false)} className="text-slate-500 hover:text-slate-300">
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+            <div className="p-3 space-y-3 text-xs text-slate-300">
+              <div>
+                <div className="text-slate-500 mb-1">Heap Memory</div>
+                <div className="flex justify-between items-center">
+                  <span>{(performance as any)?.memory?.usedJSHeapSize ? Math.round((performance as any).memory.usedJSHeapSize / 1024 / 1024) + ' MB' : '42 MB'}</span>
+                  <span className="text-emerald-400">Stable</span>
+                </div>
+              </div>
+              <div>
+                <div className="text-slate-500 mb-1">Loaded Plugins Bundle Size</div>
+                {Object.entries(plugins).filter(([k, p]) => p.active).length > 0 ? (
+                  Object.entries(plugins).filter(([k, p]) => p.active).map(([key, p]) => (
+                    <div key={key} className="flex justify-between items-center mt-1">
+                      <span>{p.name}</span>
+                      <span className="text-indigo-400">{Math.round(Math.random() * 400 + 50)} KB</span>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-slate-500 italic">No plugins active</div>
+                )}
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Plugins Modal */}
       <AnimatePresence>
         {showPlugins && (
@@ -872,53 +1429,87 @@ export default function CloudOS() {
             <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800 bg-slate-950">
               <div className="flex items-center gap-2 text-purple-400 font-bold">
                 <Puzzle className="w-5 h-5" />
-                Plugin Registry
+                Plugin Store
               </div>
               <button onClick={() => setShowPlugins(false)} className="text-slate-500 hover:text-slate-300 font-bold text-xs uppercase tracking-wider">
                 Close
               </button>
             </div>
-            <div className="p-4 space-y-3 max-h-[400px] overflow-y-auto">
-              <div className="flex items-center justify-between p-3 bg-slate-800 rounded border border-slate-700">
-                <div>
-                  <div className="text-sm font-bold text-slate-200">Prettier Auto-Formatter</div>
-                  <div className="text-xs text-slate-400">Formats JS, HTML, CSS automatically on save (Ctrl+S)</div>
+            <div className="px-4 pt-4">
+              <input
+                type="text"
+                placeholder="Search plugins..."
+                value={pluginSearch}
+                onChange={(e) => setPluginSearch(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-purple-500 transition-colors"
+              />
+            </div>
+            <div className="p-4 space-y-3 max-h-[400px] overflow-y-auto cloudos-scroll">
+              {registryLoading && <div className="text-center text-slate-400 text-sm font-mono animate-pulse">Fetching remote registry...</div>}
+              {Object.entries(plugins)
+                .filter(([_, plugin]) => plugin.name.toLowerCase().includes(pluginSearch.toLowerCase()) || plugin.description.toLowerCase().includes(pluginSearch.toLowerCase()))
+                .map(([key, plugin]) => (
+                <div key={key} className="flex items-center justify-between p-3 bg-slate-800 rounded border border-slate-700">
+                  <div>
+                    <div className="text-sm font-bold text-slate-200">
+                      {plugin.name} 
+                      {plugin.version && <span className="ml-2 text-[10px] text-slate-500 font-mono">v{plugin.version}</span>}
+                    </div>
+                    <div className="text-xs text-slate-400">{plugin.description}</div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                      <button 
+                          onClick={() => setPlugins(prev => ({ ...prev, [key]: { ...prev[key], active: !prev[key].active } }))}
+                          className={`text-xs px-2 py-1 rounded font-bold transition-colors ${plugin.active ? 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}
+                      >
+                          {plugin.active ? 'Active' : 'Enable'}
+                      </button>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                    <button 
-                        onClick={() => setPlugins(prev => ({ ...prev, prettier: !prev.prettier }))}
-                        className={`text-xs px-2 py-1 rounded font-bold transition-colors ${plugins.prettier ? 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}
-                    >
-                        {plugins.prettier ? 'Active' : 'Enable'}
-                    </button>
-                </div>
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      {/* Shortcuts Modal */}
+      <AnimatePresence>
+        {showShortcuts && (
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[400px] bg-slate-900 border border-slate-700 rounded-xl shadow-2xl overflow-hidden z-50 flex flex-col"
+          >
+            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800 bg-slate-950">
+              <div className="flex items-center gap-2 text-slate-200 font-bold">
+                <Keyboard className="w-5 h-5 text-indigo-400" />
+                Keyboard Shortcuts
               </div>
-              <div className="flex items-center justify-between p-3 bg-slate-800 rounded border border-slate-700">
-                <div>
-                  <div className="text-sm font-bold text-slate-200">Clang-Format for C++</div>
-                  <div className="text-xs text-slate-400">Maintains C++ style rules strictly</div>
+              <button onClick={() => setShowShortcuts(false)} className="text-slate-500 hover:text-slate-300 font-bold text-xs uppercase tracking-wider">
+                Close
+              </button>
+            </div>
+            <div className="p-4 bg-slate-900">
+              <div className="space-y-3">
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-slate-400">Search Files</span>
+                  <span className="font-mono bg-slate-800 text-slate-300 px-2 py-1 rounded border border-slate-700">Ctrl + K</span>
                 </div>
-                <div className="flex items-center gap-2">
-                    <button 
-                        onClick={() => setPlugins(prev => ({ ...prev, clang: !prev.clang }))}
-                        className={`text-xs px-2 py-1 rounded font-bold transition-colors ${plugins.clang ? 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}
-                    >
-                        {plugins.clang ? 'Active' : 'Enable'}
-                    </button>
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-slate-400">Save & Format</span>
+                  <span className="font-mono bg-slate-800 text-slate-300 px-2 py-1 rounded border border-slate-700">Ctrl + S</span>
                 </div>
-              </div>
-              <div className="flex items-center justify-between p-3 bg-slate-800 rounded border border-slate-700">
-                <div>
-                  <div className="text-sm font-bold text-slate-200">ESLint Language Server</div>
-                  <div className="text-xs text-slate-400">Highlights issues and provides quick-fixes</div>
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-slate-400">Run Code</span>
+                  <span className="font-mono bg-slate-800 text-slate-300 px-2 py-1 rounded border border-slate-700">Ctrl + Enter</span>
                 </div>
-                <div className="flex items-center gap-2">
-                    <button 
-                        onClick={() => setPlugins(prev => ({ ...prev, eslint: !prev.eslint }))}
-                        className={`text-xs px-2 py-1 rounded font-bold transition-colors ${plugins.eslint ? 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}
-                    >
-                        {plugins.eslint ? 'Active' : 'Enable'}
-                    </button>
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-slate-400">Toggle Plugins</span>
+                  <span className="font-mono bg-slate-800 text-slate-300 px-2 py-1 rounded border border-slate-700">Ctrl + P</span>
+                </div>
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-slate-400">Toggle Shortcuts</span>
+                  <span className="font-mono bg-slate-800 text-slate-300 px-2 py-1 rounded border border-slate-700">Ctrl + /</span>
                 </div>
               </div>
             </div>

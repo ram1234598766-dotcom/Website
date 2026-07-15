@@ -225,7 +225,34 @@ export default function Forum() {
   }
 
   if (loading) {
-    return <div className="flex justify-center items-center py-20"><Loader2 className="w-8 h-8 animate-spin text-indigo-500" /></div>;
+    return (
+      <div className="flex flex-col gap-8 w-full max-w-5xl mx-auto p-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+           <div>
+             <div className="h-8 w-48 bg-slate-200 rounded animate-pulse mb-2"></div>
+             <div className="h-4 w-64 bg-slate-200 rounded animate-pulse"></div>
+           </div>
+        </div>
+        <div className="flex flex-col md:flex-row gap-6">
+          <aside className="w-full md:w-64 shrink-0 flex flex-col gap-2">
+            {[1, 2, 3, 4, 5].map(i => <div key={i} className="h-10 w-full bg-slate-200 rounded-md animate-pulse"></div>)}
+          </aside>
+          <div className="flex-1 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden p-4">
+            <div className="divide-y divide-slate-100">
+              {[1, 2, 3, 4].map(i => (
+                <div key={i} className="py-4 flex gap-4">
+                  <div className="w-8 h-8 bg-slate-200 rounded animate-pulse shrink-0"></div>
+                  <div className="flex-1 flex flex-col gap-2">
+                    <div className="h-5 w-3/4 bg-slate-200 rounded animate-pulse"></div>
+                    <div className="h-4 w-1/2 bg-slate-200 rounded animate-pulse"></div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -264,7 +291,9 @@ export default function Forum() {
       </div>
 
       {!session && !activeThread ? (
-        <AuthForm />
+        <div className="flex justify-center items-center py-20 bg-slate-50 border border-slate-200 rounded-xl">
+          <p className="text-slate-600 font-medium">Please sign in from the top navigation to participate in the community.</p>
+        </div>
       ) : isComposing ? (
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden p-6">
           <div className="flex justify-between items-center mb-6">

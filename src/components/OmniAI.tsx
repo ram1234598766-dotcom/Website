@@ -29,9 +29,19 @@ export default function OmniAI() {
     e.preventDefault();
     if (!input.trim() || isGenerating) return;
 
-    if (detectSqlInjection(input)) {
-      alert('Security violation: Potential SQL injection detected in prompt.');
-      return;
+    try {
+      const scanRes = await fetch('/api/security/scan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ payload: input })
+      });
+      const scanData = await scanRes.json();
+      if (scanData.threatsFound) {
+        alert('Security violation: Malicious payload detected and quarantined by Backend Security Software.');
+        return;
+      }
+    } catch (e) {
+      console.warn('Security scan failed', e);
     }
 
     const safeInput = sanitizeInput(input);

@@ -1,5 +1,5 @@
 {
-  "name": "Novalith",
+  "name": "Thessvar",
   "description": "The world's first open AI stack providing free AI tools, a custom neural network language (Lion), and a free cloud server.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
