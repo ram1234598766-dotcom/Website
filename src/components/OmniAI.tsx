@@ -53,7 +53,7 @@ export default function OmniAI() {
     set(HISTORY_KEY, newMessages);
 
     try {
-      const systemInstruction = "You are the Omni-AI for Novalith. You are 100% free and unlimited.";
+      const systemInstruction = "You are the Omni-AI for VantaOS. You are 100% free and unlimited.";
       const formattedMessages = [
         { role: "system", content: systemInstruction },
         ...newMessages

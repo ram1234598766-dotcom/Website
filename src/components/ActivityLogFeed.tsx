@@ -45,11 +45,11 @@ export default function ActivityLogFeed() {
     <motion.div 
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex flex-col flex-1"
+      className="bg-white/5 rounded-2xl border border-white/10 shadow-sm p-6 flex flex-col flex-1"
     >
       <div className="flex items-center gap-2 mb-4">
         <Activity className="w-5 h-5 text-indigo-600" />
-        <h3 className="font-bold text-slate-800 text-lg">Recent Activity</h3>
+        <h3 className="font-bold text-slate-200 text-lg">Recent Activity</h3>
       </div>
       <div className="space-y-4">
         {logs.slice(0, 5).map(log => (
@@ -58,7 +58,7 @@ export default function ActivityLogFeed() {
               {log.type === 'train' ? <Zap className="w-4 h-4" /> : log.type === 'install' ? <Download className="w-4 h-4" /> : <Box className="w-4 h-4" />}
             </div>
             <div>
-              <p className="text-sm font-medium text-slate-800">{log.action}</p>
+              <p className="text-sm font-medium text-slate-200">{log.action}</p>
               <p className="text-xs text-slate-400 mt-0.5">
                 {new Date(log.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'})}
               </p>

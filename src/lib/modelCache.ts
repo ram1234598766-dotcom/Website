@@ -1,4 +1,4 @@
-export const DB_NAME = 'NovalithModelCache';
+export const DB_NAME = 'VantaOSModelCache';
 export const STORE_NAME = 'models';
 
 export function openDB(): Promise<IDBDatabase> {

@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Virtuoso } from 'react-virtuoso';
 import Editor, { DiffEditor, useMonaco } from '@monaco-editor/react';
-import { Download, Play, Terminal, Code2, FolderTree, Settings, FileJson, FileType, CheckCircle2, Plus, Trash2, Edit2, File as FileIcon, Archive, ChevronDown, Cloud, CloudOff, FileCode2, Database, FileTerminal, Puzzle, X, Activity } from 'lucide-react';
+import { Download, Play, Terminal, Code2, FolderTree, Settings, FileJson, FileType, CheckCircle2, Plus, Trash2, Edit2, File as FileIcon, Archive, ChevronDown, ChevronRight, Folder, FolderOpen, ArrowRight, Cloud, CloudOff, FileCode2, Database, FileTerminal, Puzzle, X, Activity } from 'lucide-react';
 import { Keyboard, GitMerge } from 'lucide-react';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
@@ -56,6 +56,9 @@ interface FileNode {
   name: string;
   content: string;
   language: string;
+  isFolder?: boolean;
+  parentId?: string | null;
+  isOpen?: boolean;
 }
 
 const LANGUAGES = [
@@ -97,7 +100,13 @@ const LANGUAGES = [
 ];
 
 const DEFAULT_FILES: FileNode[] = [
-  { id: '0', name: 'untitled.js', content: '// Start coding here...\n', language: 'javascript' }
+  { id: 'f-src', name: 'src', content: '', language: 'folder', isFolder: true, parentId: null, isOpen: true },
+  { id: '0', name: 'main.js', content: '// Start coding here...\nconsole.log("Hello VantaOS!");\n', language: 'javascript', parentId: 'f-src' },
+  { id: 'f-utils', name: 'utils', content: '', language: 'folder', isFolder: true, parentId: 'f-src', isOpen: false },
+  { id: '1', name: 'math.js', content: '// Math utilities\nexport function add(a, b) {\n  return a + b;\n}\n', language: 'javascript', parentId: 'f-utils' },
+  { id: '2', name: 'styles.css', content: '/* Application Styles */\nbody {\n  margin: 0;\n  background: #0f172a;\n}\n', language: 'css', parentId: 'f-src' },
+  { id: '3', name: 'index.html', content: '<!DOCTYPE html>\n<html>\n<head>\n  <link rel="stylesheet" href="src/styles.css">\n</head>\n<body>\n  <script src="src/main.js"></script>\n</body>\n</html>\n', language: 'html', parentId: null },
+  { id: '4', name: 'README.md', content: '# VantaOS Cloud Project\n\nWelcome to your browser-isolated workspace. Build, compile, and execute with absolute sovereignty.\n', language: 'markdown', parentId: null }
 ];
 
 interface CloudOSProps {
@@ -110,7 +119,11 @@ export default function CloudOS({ initialPluginSearch }: CloudOSProps) {
   const [files, setFiles] = useState<FileNode[]>(DEFAULT_FILES);
   const [originalFiles, setOriginalFiles] = useState<Record<string, string>>({});
   const [showDiff, setShowDiff] = useState(false);
-  const [activeFileId, setActiveFileId] = useState<string>(DEFAULT_FILES[0].id);
+  const [activeFileId, setActiveFileId] = useState<string>('0');
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [creatingParentId, setCreatingParentId] = useState<string | null>(null);
+  const [creatingType, setCreatingType] = useState<'file' | 'folder' | null>(null);
+  const [movingFileId, setMovingFileId] = useState<string | null>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [showOutput, setShowOutput] = useState(false);
   const [outputHtml, setOutputHtml] = useState('');
@@ -427,7 +440,7 @@ export default function CloudOS({ initialPluginSearch }: CloudOSProps) {
       }
       
       // Fallback to local storage
-      const local = localStorage.getItem('novalith_cloudos_files_v2');
+      const local = localStorage.getItem('vantaos_cloudos_files_v2') || localStorage.getItem('vantaos_cloudos_files_v2');
       if (local) {
         try {
           const parsed = JSON.parse(local);
@@ -446,7 +459,7 @@ export default function CloudOS({ initialPluginSearch }: CloudOSProps) {
 
   useEffect(() => {
     // Save to local storage
-    localStorage.setItem('novalith_cloudos_files_v2', JSON.stringify(files));
+    localStorage.setItem('vantaos_cloudos_files_v2', JSON.stringify(files));
     
     // Sync to supabase if configured
     if (auth.currentUser && isSynced) {
@@ -537,6 +550,17 @@ export default function CloudOS({ initialPluginSearch }: CloudOSProps) {
     return lang ? lang.id : 'plaintext';
   };
 
+  const getDescendantIds = (folderId: string, allFiles: FileNode[]): string[] => {
+    const children = allFiles.filter(f => (f.parentId || null) === folderId);
+    let ids = children.map(c => c.id);
+    children.forEach(c => {
+      if (c.isFolder) {
+        ids = [...ids, ...getDescendantIds(c.id, allFiles)];
+      }
+    });
+    return ids;
+  };
+
   const handleCreateFile = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newFileName.trim()) return;
@@ -545,25 +569,56 @@ export default function CloudOS({ initialPluginSearch }: CloudOSProps) {
       id: Date.now().toString(),
       name: newFileName,
       content: '// Start coding here\n',
-      language: detectLanguage(newFileName)
+      language: detectLanguage(newFileName),
+      parentId: creatingParentId
     };
     
     setFiles(prev => [...prev, newFile]);
     setActiveFileId(newFile.id);
     setOpenTabs(prev => [...prev, newFile.id]);
     setIsCreating(false);
+    setCreatingParentId(null);
+    setNewFileName('');
+  };
+
+  const handleCreateFolder = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newFileName.trim()) return;
+
+    const newFolder: FileNode = {
+      id: Date.now().toString(),
+      name: newFileName,
+      content: '',
+      language: 'folder',
+      isFolder: true,
+      parentId: creatingParentId,
+      isOpen: true
+    };
+
+    setFiles(prev => [...prev, newFolder]);
+    setIsCreating(false);
+    setCreatingParentId(null);
     setNewFileName('');
   };
 
   const handleDeleteFile = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (files.length <= 1) return; // Don't delete last file
-    
-    setFiles(prev => prev.filter(f => f.id !== id));
+    const item = files.find(f => f.id === id);
+    if (!item) return;
+
+    const idsToDelete = [id];
+    if (item.isFolder) {
+      idsToDelete.push(...getDescendantIds(id, files));
+    }
+
+    const remainingFiles = files.filter(f => !idsToDelete.includes(f.id));
+    if (remainingFiles.length === 0) return; // Don't delete everything
+
+    setFiles(prev => prev.filter(f => !idsToDelete.includes(f.id)));
     setOpenTabs(prev => {
-      const newTabs = prev.filter(tId => tId !== id);
+      const newTabs = prev.filter(tId => !idsToDelete.includes(tId));
       if (newTabs.length === 0) {
-        const remainingFile = files.find(f => f.id !== id);
+        const remainingFile = remainingFiles.find(f => !f.isFolder);
         if (remainingFile) {
           return [remainingFile.id];
         }
@@ -571,8 +626,8 @@ export default function CloudOS({ initialPluginSearch }: CloudOSProps) {
       return newTabs;
     });
     
-    if (activeFileId === id) {
-      const remainingFile = files.find(f => f.id !== id);
+    if (idsToDelete.includes(activeFileId)) {
+      const remainingFile = remainingFiles.find(f => !f.isFolder);
       if (remainingFile) {
         setActiveFileId(remainingFile.id);
       }
@@ -585,8 +640,17 @@ export default function CloudOS({ initialPluginSearch }: CloudOSProps) {
       setRenamingFileId(null);
       return;
     }
-    setFiles(prev => prev.map(f => f.id === id ? { ...f, name: renameValue, language: detectLanguage(renameValue) } : f));
+    setFiles(prev => prev.map(f => f.id === id ? { 
+      ...f, 
+      name: renameValue, 
+      language: f.isFolder ? 'folder' : detectLanguage(renameValue) 
+    } : f));
     setRenamingFileId(null);
+  };
+
+  const handleMoveNode = (nodeId: string, destParentId: string | null) => {
+    setFiles(prev => prev.map(f => f.id === nodeId ? { ...f, parentId: destParentId } : f));
+    setMovingFileId(null);
   };
 
   const [isRunning, setIsRunning] = useState(false);
@@ -696,7 +760,7 @@ export default function CloudOS({ initialPluginSearch }: CloudOSProps) {
     }
     
     setIsRunning(true);
-    setTerminalOutput(`Novalith Cloud Compiler [Version 2.4.1]\nInitiating Edge execution for ${activeFile.language.toUpperCase()}...\nDeploying code to sandbox...`);
+    setTerminalOutput(`VantaOS Cloud Compiler [Version 2.4.1]\nInitiating Edge execution for ${activeFile.language.toUpperCase()}...\nDeploying code to sandbox...`);
     
     // Simulate compilation progress
     const progressInterval = setInterval(() => {
@@ -752,14 +816,28 @@ export default function CloudOS({ initialPluginSearch }: CloudOSProps) {
     setIsExporting(true);
     const zip = new JSZip();
     
-    // Add all files to zip
+    // Recursive path solver
+    const getVirtualPath = (nodeId: string, allNodes: FileNode[]): string => {
+      const node = allNodes.find(n => n.id === nodeId);
+      if (!node) return '';
+      if (node.parentId) {
+        const parentPath = getVirtualPath(node.parentId, allNodes);
+        return parentPath ? parentPath + '/' + node.name : node.name;
+      }
+      return node.name;
+    };
+
+    // Add all files to zip preserving folder structure
     files.forEach(file => {
-      zip.file(file.name, file.content);
+      if (!file.isFolder) {
+        const path = getVirtualPath(file.id, files);
+        zip.file(path, file.content);
+      }
     });
     
     try {
       const content = await zip.generateAsync({ type: 'blob' });
-      saveAs(content, 'novalith-workspace.zip');
+      saveAs(content, 'vantaos-workspace.zip');
     } catch (err) {
       console.error('Error generating zip:', err);
     } finally {
@@ -783,6 +861,46 @@ export default function CloudOS({ initialPluginSearch }: CloudOSProps) {
     }
   };
 
+  const getVisibleNodes = () => {
+    const list: (FileNode & { depth: number; isPlaceholder?: boolean })[] = [];
+    
+    const traverse = (parentId: string | null, depth: number) => {
+      const levelNodes = files.filter(f => (f.parentId || null) === parentId);
+      
+      levelNodes.sort((a, b) => {
+        if (a.isFolder && !b.isFolder) return -1;
+        if (!a.isFolder && b.isFolder) return 1;
+        return a.name.localeCompare(b.name);
+      });
+      
+      // Inject placeholder at the top of children under this parent
+      if (creatingType && (creatingParentId || null) === parentId) {
+        list.push({
+          id: 'placeholder-new-item',
+          name: '',
+          content: '',
+          language: creatingType === 'folder' ? 'folder' : 'plaintext',
+          isFolder: creatingType === 'folder',
+          parentId,
+          depth,
+          isPlaceholder: true
+        });
+      }
+      
+      levelNodes.forEach(node => {
+        list.push({ ...node, depth });
+        if (node.isFolder && node.isOpen) {
+          traverse(node.id, depth + 1);
+        }
+      });
+    };
+    
+    traverse(null, 0);
+    return list;
+  };
+
+  const visibleNodes = getVisibleNodes();
+
   return (
     <div className="flex flex-col h-screen w-screen rounded-none overflow-hidden bg-slate-900 animate-in fade-in duration-500 relative">
       
@@ -795,9 +913,16 @@ export default function CloudOS({ initialPluginSearch }: CloudOSProps) {
             <div className="w-3 h-3 rounded-full bg-emerald-500"></div>
           </div>
           <div className="h-4 w-px bg-slate-700 mx-2"></div>
+          <button 
+            onClick={() => setSidebarOpen(!sidebarOpen)}
+            className="p-1.5 rounded-lg bg-slate-900/50 hover:bg-slate-800 text-slate-400 hover:text-indigo-400 border border-slate-800 transition-colors mr-1 cursor-pointer"
+            title={sidebarOpen ? "Collapse Sidebar" : "Expand Sidebar"}
+          >
+            <FolderTree className="w-4 h-4" />
+          </button>
           <div className="flex items-center gap-2 text-slate-300 font-mono text-sm">
             <Terminal className="w-4 h-4 text-indigo-400" />
-            <span>Thessvar CLOUD OS IDE</span>
+            <span>VantaOS CLOUD OS IDE</span>
             {isSynced && (
                <div className="ml-3 flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-xs">
                  {syncStatus === 'syncing' ? (
@@ -949,117 +1074,251 @@ export default function CloudOS({ initialPluginSearch }: CloudOSProps) {
 
       <div className="flex flex-1 overflow-hidden">
         {/* Sidebar / File Explorer */}
-        <div className="w-64 bg-slate-900 border-r border-slate-800 flex flex-col shrink-0">
-          <div className="p-4 flex items-center justify-between border-b border-slate-800">
-            <div className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
-              <FolderTree className="w-4 h-4" />
-              Workspace
+        {sidebarOpen && (
+          <div className="w-64 bg-slate-900 border-r border-slate-800 flex flex-col shrink-0">
+            <div className="p-4 flex items-center justify-between border-b border-slate-800">
+              <div className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
+                <FolderTree className="w-4 h-4" />
+                Workspace
+              </div>
+              <div className="flex items-center gap-1">
+                <button 
+                  onClick={() => {
+                    setCreatingParentId(null);
+                    setCreatingType('file');
+                    setIsCreating(true);
+                  }}
+                  className="p-1 rounded text-slate-400 hover:text-indigo-400 hover:bg-indigo-500/10 transition-colors cursor-pointer"
+                  title="New File"
+                >
+                  <Plus className="w-4 h-4" />
+                </button>
+                <button 
+                  onClick={() => {
+                    setCreatingParentId(null);
+                    setCreatingType('folder');
+                    setIsCreating(true);
+                  }}
+                  className="p-1 rounded text-slate-400 hover:text-amber-400 hover:bg-amber-500/10 transition-colors cursor-pointer"
+                  title="New Folder"
+                >
+                  <Folder className="w-4 h-4" />
+                </button>
+              </div>
             </div>
-            <button 
-              onClick={() => setIsCreating(true)}
-              className="p-1 rounded text-slate-400 hover:text-indigo-400 hover:bg-indigo-500/10 transition-colors"
-            >
-              <Plus className="w-4 h-4" />
-            </button>
-          </div>
-          
-          <div className="flex-1 overflow-y-auto overflow-x-hidden p-2 space-y-1">
-            {isCreating && (
-              <form onSubmit={handleCreateFile} className="px-2 py-1 flex items-center gap-2 bg-slate-800 rounded border border-indigo-500/50">
-                <FileIcon className="w-3 h-3 text-slate-400" />
-                <input
-                  type="text"
-                  autoFocus
-                  value={newFileName}
-                  onChange={e => setNewFileName(e.target.value)}
-                  onBlur={() => setIsCreating(false)}
-                  placeholder="filename.ext"
-                  className="bg-transparent border-none outline-none text-sm text-slate-200 w-full"
-                />
-              </form>
-            )}
             
-            <div className="h-full w-full">
-              <Virtuoso
-                style={{ height: 600, width: '100%' }}
-                totalCount={files.length}
-                itemContent={(index) => {
-                  const file = files[index];
-                  return (
-                    <div className="pr-2 py-0.5">
-                      <motion.div
-                        onClick={() => {
-                          setActiveFileId(file.id);
-                          if (!openTabs.includes(file.id)) {
-                            setOpenTabs([...openTabs, file.id]);
-                          }
-                        }}
-                        whileHover={{ scale: 1.01, backgroundColor: "rgba(255, 255, 255, 0.05)" }}
-                        whileTap={{ scale: 0.98 }}
-                        className={`w-full h-full group flex items-center justify-between px-3 rounded-lg text-sm transition-all cursor-pointer ${
-                          activeFileId === file.id
-                            ? 'bg-indigo-600/20 text-indigo-300 border border-indigo-500/30'
-                            : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200 border border-transparent'
-                        }`}
-                      >
-                        <div className="flex items-center gap-3 w-full">
-                          {getFileIcon(file.language)}
-                          {renamingFileId === file.id ? (
-                            <form onSubmit={(e) => handleRenameSubmit(file.id, e)} className="w-full">
-                               <input
-                                 type="text"
-                                 autoFocus
-                                 value={renameValue}
-                                 onChange={e => setRenameValue(e.target.value)}
-                                 onBlur={() => setRenamingFileId(null)}
-                                 className="bg-transparent border-none outline-none text-sm text-slate-200 w-full"
-                               />
-                            </form>
-                          ) : (
-                            <span 
-                               className="truncate flex-1"
-                               onDoubleClick={(e) => {
-                                 e.stopPropagation();
-                                 setRenamingFileId(file.id);
-                                 setRenameValue(file.name);
-                               }}
-                            >
-                              {file.name}
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setRenamingFileId(file.id);
-                              setRenameValue(file.name);
+            <div className="flex-1 overflow-y-auto overflow-x-hidden p-2 space-y-1">
+              <div className="h-full w-full">
+                <Virtuoso
+                  style={{ height: 600, width: '100%' }}
+                  totalCount={visibleNodes.length}
+                  itemContent={(index) => {
+                    const node = visibleNodes[index];
+                    if (!node) return null;
+
+                    if (node.isPlaceholder) {
+                      return (
+                        <div className="px-2 py-0.5" style={{ paddingLeft: `${node.depth * 14}px` }}>
+                          <form 
+                            onSubmit={(e) => {
+                              if (node.isFolder) {
+                                handleCreateFolder(e);
+                              } else {
+                                handleCreateFile(e);
+                              }
                             }}
-                            className="p-1.5 hover:bg-slate-700 rounded text-slate-400 hover:text-indigo-400 transition-colors"
+                            className="flex items-center gap-2 bg-slate-800 rounded border border-indigo-500/50 px-2 py-1"
                           >
-                            <Edit2 className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={(e) => handleDeleteFile(file.id, e)}
-                            className="p-1.5 hover:bg-slate-700 rounded text-slate-400 hover:text-red-400 transition-colors"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                            {node.isFolder ? <Folder className="w-3.5 h-3.5 text-amber-500 shrink-0" /> : <FileIcon className="w-3.5 h-3.5 text-slate-400 shrink-0" />}
+                            <input
+                              type="text"
+                              autoFocus
+                              value={newFileName}
+                              onChange={e => setNewFileName(e.target.value)}
+                              onKeyDown={e => {
+                                if (e.key === 'Escape') {
+                                  setIsCreating(false);
+                                  setCreatingType(null);
+                                  setCreatingParentId(null);
+                                  setNewFileName('');
+                                }
+                              }}
+                              placeholder={node.isFolder ? "Folder..." : "file.ext..."}
+                              className="bg-transparent border-none outline-none text-xs text-slate-200 w-full"
+                            />
+                          </form>
                         </div>
-                      </motion.div>
-                    </div>
-                  );
-                }}
-              />
+                      );
+                    }
+
+                    return (
+                      <div className="pr-2 py-0.5" style={{ paddingLeft: `${node.depth * 14}px` }}>
+                        <motion.div
+                          onClick={() => {
+                            if (node.isFolder) {
+                              // Toggle folder
+                              setFiles(prev => prev.map(f => f.id === node.id ? { ...f, isOpen: !f.isOpen } : f));
+                            } else {
+                              // Select active file
+                              setActiveFileId(node.id);
+                              if (!openTabs.includes(node.id)) {
+                                setOpenTabs([...openTabs, node.id]);
+                              }
+                            }
+                          }}
+                          whileHover={{ scale: 1.01, backgroundColor: "rgba(255, 255, 255, 0.03)" }}
+                          whileTap={{ scale: 0.99 }}
+                          className={`w-full group flex items-center justify-between px-2 py-1 rounded-lg text-xs transition-all cursor-pointer relative ${
+                            !node.isFolder && activeFileId === node.id
+                              ? 'bg-indigo-600/20 text-indigo-300 border border-indigo-500/30'
+                              : 'text-slate-400 hover:bg-slate-800/40 hover:text-slate-200 border border-transparent'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 w-full overflow-hidden">
+                            {node.isFolder ? (
+                              <button 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setFiles(prev => prev.map(f => f.id === node.id ? { ...f, isOpen: !f.isOpen } : f));
+                                }}
+                                className="p-0.5 hover:bg-slate-800 rounded text-slate-500 hover:text-slate-300 shrink-0"
+                              >
+                                {node.isOpen ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+                              </button>
+                            ) : (
+                              <span className="w-3 shrink-0"></span>
+                            )}
+
+                            {node.isFolder ? (
+                              node.isOpen ? <FolderOpen className="w-3.5 h-3.5 text-amber-500 shrink-0" /> : <Folder className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                            ) : (
+                              getFileIcon(node.language)
+                            )}
+
+                            {renamingFileId === node.id ? (
+                              <form 
+                                onSubmit={(e) => handleRenameSubmit(node.id, e)} 
+                                className="w-full"
+                                onClick={e => e.stopPropagation()}
+                              >
+                                 <input
+                                   type="text"
+                                   autoFocus
+                                   value={renameValue}
+                                   onChange={e => setRenameValue(e.target.value)}
+                                   onBlur={() => setRenamingFileId(null)}
+                                   className="bg-slate-800 text-slate-100 border border-indigo-500/50 rounded px-1 text-xs outline-none w-full"
+                                 />
+                              </form>
+                            ) : (
+                              <span 
+                                 className="truncate flex-1 font-medium"
+                                 onDoubleClick={(e) => {
+                                   e.stopPropagation();
+                                   setRenamingFileId(node.id);
+                                   setRenameValue(node.name);
+                                 }}
+                              >
+                                {node.name}
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 ml-1">
+                            {node.isFolder && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setCreatingParentId(node.id);
+                                  setCreatingType('file');
+                                  setIsCreating(true);
+                                }}
+                                className="p-1 hover:bg-slate-700 rounded text-slate-400 hover:text-indigo-400 transition-colors"
+                                title="New File"
+                              >
+                                <Plus className="w-3 h-3" />
+                              </button>
+                            )}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setRenamingFileId(node.id);
+                                setRenameValue(node.name);
+                              }}
+                              className="p-1 hover:bg-slate-700 rounded text-slate-400 hover:text-indigo-400 transition-colors"
+                              title="Rename"
+                            >
+                              <Edit2 className="w-3 h-3" />
+                            </button>
+                            <button
+                              onClick={(e) => handleDeleteFile(node.id, e)}
+                              className="p-1 hover:bg-slate-700 rounded text-slate-400 hover:text-red-400 transition-colors"
+                              title="Delete"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                            {movingFileId === node.id ? (
+                              <div 
+                                className="absolute right-0 top-full mt-1 bg-slate-950 border border-slate-800 rounded-lg shadow-2xl p-1.5 z-50 min-w-[140px] text-left"
+                                onClick={e => e.stopPropagation()}
+                              >
+                                <div className="text-[10px] text-slate-500 px-1 py-0.5 font-bold uppercase select-none">Move to:</div>
+                                <select 
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    handleMoveNode(node.id, val === 'root' ? null : val);
+                                  }}
+                                  className="w-full bg-slate-900 border border-slate-800 rounded px-1.5 py-1 text-slate-300 outline-none my-1 text-xs"
+                                  defaultValue=""
+                                >
+                                  <option value="" disabled>Select destination</option>
+                                  <option value="root">Workspace Root</option>
+                                  {files
+                                    .filter(f => f.isFolder && f.id !== node.id && !getDescendantIds(node.id, files).includes(f.id))
+                                    .map(folder => (
+                                      <option key={folder.id} value={folder.id}>
+                                        {folder.name}
+                                      </option>
+                                    ))}
+                                </select>
+                                <button 
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setMovingFileId(null);
+                                  }}
+                                  className="w-full text-center py-0.5 text-xs text-slate-400 hover:text-slate-200 hover:bg-slate-800 rounded"
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setMovingFileId(node.id);
+                                }}
+                                className="p-1 hover:bg-slate-700 rounded text-slate-400 hover:text-amber-400 transition-colors"
+                                title="Move"
+                              >
+                                <ArrowRight className="w-3 h-3" />
+                              </button>
+                            )}
+                          </div>
+                        </motion.div>
+                      </div>
+                    );
+                  }}
+                />
+              </div>
+            </div>
+            <div className="p-4 border-t border-slate-800">
+              <button className="w-full flex items-center justify-center gap-2 px-3 py-2 text-slate-400 hover:text-slate-200 hover:bg-slate-800 rounded-lg text-sm transition-colors">
+                <Settings className="w-4 h-4" />
+                Settings
+              </button>
             </div>
           </div>
-          <div className="p-4 border-t border-slate-800">
-            <button className="w-full flex items-center justify-center gap-2 px-3 py-2 text-slate-400 hover:text-slate-200 hover:bg-slate-800 rounded-lg text-sm transition-colors">
-              <Settings className="w-4 h-4" />
-              Settings
-            </button>
-          </div>
-        </div>
+        )}
 
         {/* Editor Area */}
         
@@ -1340,7 +1599,7 @@ export default function CloudOS({ initialPluginSearch }: CloudOSProps) {
                            value={stdinValue}
                            onChange={(e) => setStdinValue(e.target.value)}
                            placeholder="Enter standard input here before running..."
-                           className="flex-1 w-full p-2 bg-transparent text-slate-300 text-sm font-mono resize-none border-none outline-none placeholder:text-slate-700"
+                           className="flex-1 w-full p-2 bg-transparent text-slate-300 text-sm font-mono resize-none border-none outline-none placeholder:text-slate-300"
                          />
                        </div>
                     )}
@@ -1360,7 +1619,7 @@ export default function CloudOS({ initialPluginSearch }: CloudOSProps) {
                       ) : (
                         <iframe 
                           srcDoc={outputHtml}
-                          className="w-full h-full border-none bg-white"
+                          className="w-full h-full border-none bg-white/5"
                           title="Code Execution Output"
                           sandbox="allow-scripts"
                         />

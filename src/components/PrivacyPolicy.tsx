@@ -4,43 +4,43 @@ import React from 'react';
 export default function PrivacyPolicy() {
   return (
     <div className="flex flex-col gap-10 w-full max-w-4xl mx-auto animate-in fade-in duration-500 pb-12">
-      <div className="flex flex-col items-center text-center gap-6 py-12 border-b border-slate-200">
+      <div className="flex flex-col items-center text-center gap-6 py-12 border-b border-white/10">
         <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-indigo-500/10 border border-indigo-500/30 rounded-full shadow-sm">
           <Shield className="w-4 h-4 text-indigo-600" />
-          <span className="text-xs uppercase tracking-widest font-bold text-indigo-700">Thessvar Trust Center</span>
+          <span className="text-xs uppercase tracking-widest font-bold text-indigo-700">VantaOS Trust Center</span>
         </div>
         
-        <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight text-slate-900 drop-shadow-sm">
+        <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight text-white drop-shadow-sm">
           Data Privacy & Ownership
         </h1>
         
         <p className="text-xl text-slate-600 max-w-2xl leading-relaxed">
-          At Thessvar, we believe your data belongs to <span className="text-indigo-600 font-bold">you</span>. Our architecture ensures absolute data sovereignty, transparent model training, and zero-trust execution.
+          At VantaOS, we believe your data belongs to <span className="text-indigo-600 font-bold">you</span>. Our architecture ensures absolute data sovereignty, transparent model training, and zero-trust execution.
         </p>
       </div>
 
-      <div className="space-y-8 text-slate-700 leading-relaxed">
-        <section className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200">
-          <h2 className="text-2xl font-bold text-slate-900 mb-4 flex items-center gap-3">
+      <div className="space-y-8 text-slate-300 leading-relaxed">
+        <section className="bg-white/5 p-8 rounded-2xl shadow-sm border border-white/10">
+          <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-3">
             <Lock className="w-6 h-6 text-indigo-500" />
             1. Absolute Data Sovereignty
           </h2>
           <p className="mb-4">
-            You retain 100% ownership of your weights, datasets, and runtime code. When you utilize the Decentralized Compute Mesh or train models using the Thessvar Platform, your data never leaves your client context unencrypted. We utilize Fully Homomorphic Encryption (FHE) to guarantee that operations are performed on mathematically encrypted state space tensors.
+            You retain 100% ownership of your weights, datasets, and runtime code. When you utilize the Decentralized Compute Mesh or train models using the VantaOS Platform, your data never leaves your client context unencrypted. We utilize Fully Homomorphic Encryption (FHE) to guarantee that operations are performed on mathematically encrypted state space tensors.
           </p>
-          <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 font-mono text-sm text-slate-600">
+          <div className="bg-[#0a0a0c] p-4 rounded-xl border border-slate-100 font-mono text-sm text-slate-600">
             <span className="block text-xs text-slate-400 mb-2">// Mathematical Guarantee of Privacy</span>
             E(m₁) ⊗ E(m₂) = E(m₁ ⊙ m₂)
           </div>
         </section>
 
-        <section className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200">
-          <h2 className="text-2xl font-bold text-slate-900 mb-4 flex items-center gap-3">
+        <section className="bg-white/5 p-8 rounded-2xl shadow-sm border border-white/10">
+          <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-3">
             <Eye className="w-6 h-6 text-indigo-500" />
             2. Transparent Model Training
           </h2>
           <p>
-            We enforce full transparency in all data-handling processes. When your models are trained on the Thessvar cloud or P2P mesh:
+            We enforce full transparency in all data-handling processes. When your models are trained on the VantaOS cloud or P2P mesh:
           </p>
           <ul className="list-disc list-inside mt-4 space-y-2 text-slate-600 ml-4">
             <li>No proprietary data is ever used to fine-tune our global AI assistants without explicit opt-in.</li>
@@ -49,23 +49,23 @@ export default function PrivacyPolicy() {
           </ul>
         </section>
 
-        <section className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200">
-          <h2 className="text-2xl font-bold text-slate-900 mb-4 flex items-center gap-3">
+        <section className="bg-white/5 p-8 rounded-2xl shadow-sm border border-white/10">
+          <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-3">
             <Database className="w-6 h-6 text-indigo-500" />
             3. Zero-Cost, Zero-Tracking
           </h2>
           <p>
-            The Thessvar ecosystem operates under a strict $0 cost mandate. Because we do not rely on paywalls, commercial tiers, or data brokering, there are no hidden tracking scripts, no advertising SDKs, and no telemetry data sold to third parties. Our Autonomous Threat Neutralization Watchdog protects your node without logging your personal IP data.
+            The VantaOS ecosystem operates under a strict $0 cost mandate. Because we do not rely on paywalls, commercial tiers, or data brokering, there are no hidden tracking scripts, no advertising SDKs, and no telemetry data sold to third parties. Our Autonomous Threat Neutralization Watchdog protects your node without logging your personal IP data.
           </p>
         </section>
       </div>
 
-      <div className="mt-8 pt-8 border-t border-slate-200 text-center flex flex-col gap-3">
+      <div className="mt-8 pt-8 border-t border-white/10 text-center flex flex-col gap-3">
         <p className="text-slate-500 font-medium">
           Engineered with precision for the open-source community.
         </p>
-        <div className="text-sm text-slate-400 bg-white p-4 rounded-xl border border-slate-200 inline-block mx-auto">
-          <p className="mb-1">This platform was architected by <span className="font-bold text-slate-700">Mrityunjay K</span>, a student aspiring to become an Engineer.</p>
+        <div className="text-sm text-slate-400 bg-white/5 p-4 rounded-xl border border-white/10 inline-block mx-auto">
+          <p className="mb-1">This platform was architected by <span className="font-bold text-slate-300">Mrityunjay K</span>, a student aspiring to become an Engineer.</p>
           <p>
             Contact: <a href="mailto:ram1234598766@gmail.com" className="text-indigo-600 hover:underline font-medium">ram1234598766@gmail.com</a> | 
             Phone: <a href="tel:7981344431" className="text-indigo-600 hover:underline font-medium ml-1">7981344431</a>

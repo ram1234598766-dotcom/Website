@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 export default function GlobalHelperBot() {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<{role: 'bot' | 'user', text: string}[]>([
-    { role: 'bot', text: 'Greetings, User. I am the Novalith Support Construct. I can assist you with navigating the zero-cost decentralized mesh, setting up quantum-secure configurations, or writing TypeScript code. How may I serve you today?' }
+    { role: 'bot', text: 'Greetings, User. I am the VantaOS Assistant. I can assist you with navigating the zero-cost decentralized mesh, setting up quantum-secure configurations, or writing TypeScript code. How may I serve you today?' }
   ]);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
@@ -57,7 +57,7 @@ export default function GlobalHelperBot() {
               <Sparkles className="w-5 h-5 text-emerald-400" />
             </div>
             <div>
-              <h3 className="font-bold text-white text-sm">Novalith Assistant</h3>
+              <h3 className="font-bold text-white text-sm">VantaOS Assistant</h3>
               <div className="flex items-center gap-1.5">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_5px_#10b981]"></span>
                 <span className="text-[10px] text-emerald-500 uppercase tracking-widest font-mono font-semibold">Active Construct</span>

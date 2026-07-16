@@ -50,15 +50,15 @@ export default function CommandPalette({ isOpen, onClose, setCurrentView, onSear
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
-            className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100]"
+            className="fixed inset-0 bg-black/60 backdrop-blur-md z-[100]"
           />
           <motion.div
             initial={{ opacity: 0, scale: 0.95, y: -20, x: '-50%' }}
             animate={{ opacity: 1, scale: 1, y: 0, x: '-50%' }}
             exit={{ opacity: 0, scale: 0.95, y: -20, x: '-50%' }}
-            className="fixed top-[15vh] left-1/2 w-full max-w-2xl bg-slate-900 border border-slate-700 rounded-xl shadow-2xl overflow-hidden z-[101] flex flex-col"
+            className="fixed top-[15vh] left-1/2 w-full max-w-2xl bg-[#0a0a0c]/90 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.5)] overflow-hidden z-[101] flex flex-col"
           >
-            <div className="flex items-center px-4 py-3 border-b border-slate-800">
+            <div className="flex items-center px-4 py-3 border-b border-white/10">
               <Search className="w-5 h-5 text-slate-400 mr-3" />
               <input
                 type="text"
@@ -66,10 +66,10 @@ export default function CommandPalette({ isOpen, onClose, setCurrentView, onSear
                 placeholder="Search views, or type 'plugin <name>'..."
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                className="w-full bg-transparent border-none outline-none text-slate-200 text-lg placeholder-slate-500"
+                className="w-full bg-transparent border-none outline-none text-white text-lg placeholder-slate-500"
               />
-              <button onClick={onClose} className="text-slate-500 hover:text-slate-300 ml-3">
-                <span className="text-[10px] font-bold uppercase tracking-widest bg-slate-800 px-1.5 py-0.5 rounded">Esc</span>
+              <button onClick={onClose} className="text-slate-400 hover:text-white ml-3">
+                <span className="text-[10px] font-bold uppercase tracking-widest bg-white/10 px-1.5 py-0.5 rounded">Esc</span>
               </button>
             </div>
             
@@ -85,7 +85,7 @@ export default function CommandPalette({ isOpen, onClose, setCurrentView, onSear
                           setCurrentView(view.id);
                           onClose();
                         }}
-                        className="w-full flex items-center gap-3 px-3 py-3 hover:bg-slate-800 rounded-lg text-left text-slate-300 transition-colors"
+                        className="w-full flex items-center gap-3 px-3 py-3 hover:bg-white/5 rounded-lg text-left text-slate-300 transition-colors"
                       >
                         <view.icon className="w-4 h-4 text-slate-400" />
                         <span>{view.name}</span>
@@ -102,7 +102,7 @@ export default function CommandPalette({ isOpen, onClose, setCurrentView, onSear
                     if (onSearchPlugins) onSearchPlugins(pluginQuery);
                     onClose();
                   }}
-                  className="w-full flex items-center gap-3 px-3 py-4 hover:bg-slate-800 rounded-lg text-left text-indigo-300 transition-colors bg-indigo-500/10 border border-indigo-500/20"
+                  className="w-full flex items-center gap-3 px-3 py-4 hover:bg-indigo-500/20 rounded-lg text-left text-indigo-300 transition-colors bg-indigo-500/10 border border-indigo-500/20"
                 >
                   <Puzzle className="w-5 h-5" />
                   <span>Search for plugin: <strong className="text-indigo-200">{pluginQuery}</strong> in CloudOS</span>

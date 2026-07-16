@@ -2,6 +2,8 @@ import { ViewState } from '../types';
 import { Layers, MessageSquare, Box, BookOpen, Server, Users, Briefcase, Menu, X, TerminalSquare, Shield, ShieldAlert, FileText, BrainCircuit, Activity, Cloud, CloudOff, Code2 , UserPlus, LogIn} from 'lucide-react';
 import React, { useState, useEffect } from 'react';
 import { aiTrainerStore } from '../utils/aiTrainerWorker';
+import ThemeToggle from './ThemeToggle';
+import Logo from './Logo';
 
 interface NavigationProps {
   currentView: ViewState;
@@ -50,16 +52,16 @@ export default function Navigation({ currentView, setCurrentView, userEmail, isS
   }
 
   return (
-    <nav className="h-16 border-b border-slate-200 bg-white/80 backdrop-blur-md px-4 sm:px-8 flex items-center justify-between z-50 sticky top-0 shrink-0">
+    <nav className="h-16 border-b border-white/10 bg-black/40 backdrop-blur-xl px-4 sm:px-8 flex items-center justify-between z-50 sticky top-0 shrink-0">
       <div className="flex items-center gap-8">
         <div 
           className="flex items-center gap-2 cursor-pointer group" 
           onClick={() => setCurrentView('home')}
         >
-          <div className="w-8 h-8 bg-slate-900 rounded-lg flex items-center justify-center overflow-hidden border border-slate-700">
-            <img src="/favicon.svg" alt="Thessvar Logo" className="w-full h-full object-cover" />
+          <div className="w-8 h-8 rounded-lg flex items-center justify-center overflow-hidden text-indigo-400">
+            <Logo className="w-8 h-8" />
           </div>
-          <span className="text-xl font-bold tracking-tight text-slate-900 group-hover:text-indigo-900 transition-colors">Thessvar</span>
+          <span className="text-xl font-bold tracking-tight text-white group-hover:text-indigo-400 transition-colors">VantaOS</span>
         </div>
         
         {/* Desktop Nav */}
@@ -70,8 +72,8 @@ export default function Navigation({ currentView, setCurrentView, userEmail, isS
               onClick={() => setCurrentView(item.view)}
               className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors shrink-0 ${
                 currentView === item.view 
-                  ? 'bg-indigo-50 text-indigo-700' 
-                  : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                  ? 'bg-indigo-500/20 text-indigo-300' 
+                  : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
               }`}
             >
               {item.icon}
@@ -84,8 +86,8 @@ export default function Navigation({ currentView, setCurrentView, userEmail, isS
       <div className="flex items-center gap-4">
         {userEmail ? (
           <div className="hidden sm:flex items-center gap-3">
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-100 text-slate-700 rounded-full border border-slate-200">
-               <div className="w-5 h-5 rounded-full bg-indigo-200 text-indigo-700 flex items-center justify-center text-xs font-bold">
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-white/5 text-slate-300 rounded-full border border-white/10">
+               <div className="w-5 h-5 rounded-full bg-indigo-500/20 text-indigo-300 flex items-center justify-center text-xs font-bold">
                  {userEmail.charAt(0).toUpperCase()}
                </div>
                <span className="text-sm font-medium">{userEmail.split('@')[0]}</span>
@@ -95,13 +97,13 @@ export default function Navigation({ currentView, setCurrentView, userEmail, isS
           <div className="hidden sm:flex items-center gap-3">
             <button 
               onClick={() => onSignIn && onSignIn()}
-              className="px-4 py-2 text-sm font-semibold border border-slate-200 rounded-full hover:bg-slate-100 transition-colors text-slate-700"
+              className="px-4 py-2 text-sm font-semibold border border-white/10 rounded-full hover:bg-white/5 transition-colors text-slate-300"
             >
               <LogIn className="w-4 h-4 inline-block mr-1"/> Sign In
             </button>
             <button 
               onClick={() => onSignUp && onSignUp()}
-              className="px-4 py-2 text-sm font-semibold bg-indigo-600 text-white rounded-full shadow-md shadow-indigo-200 hover:bg-indigo-700 hover:shadow-lg transition-all"
+              className="px-4 py-2 text-sm font-semibold bg-indigo-600/90 text-white rounded-full shadow-[0_0_15px_rgba(79,70,229,0.3)] hover:bg-indigo-500 hover:shadow-[0_0_20px_rgba(79,70,229,0.5)] transition-all"
             >
               <UserPlus className="w-4 h-4 inline-block mr-1"/> Sign Up
             </button>
@@ -110,7 +112,7 @@ export default function Navigation({ currentView, setCurrentView, userEmail, isS
         
         {/* Mobile Menu Toggle */}
         <button 
-          className="lg:hidden p-2 text-slate-600 hover:bg-slate-100 rounded-md"
+          className="lg:hidden p-2 text-slate-400 hover:bg-white/10 rounded-md"
           onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
         >
           {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
@@ -119,7 +121,7 @@ export default function Navigation({ currentView, setCurrentView, userEmail, isS
 
       {/* Mobile Nav Dropdown */}
       {mobileMenuOpen && (
-        <div className="absolute top-16 left-0 right-0 bg-white border-b border-slate-200 shadow-lg lg:hidden flex flex-col p-4 gap-2 max-h-[calc(100vh-4rem)] overflow-y-auto overscroll-contain scroll-smooth z-50" style={{ scrollBehavior: 'smooth' }}>
+        <div className="absolute top-16 left-0 right-0 bg-[#0a0a0c]/95 backdrop-blur-xl border-b border-white/10 shadow-2xl lg:hidden flex flex-col p-4 gap-2 max-h-[calc(100vh-4rem)] overflow-y-auto overscroll-contain scroll-smooth z-50" style={{ scrollBehavior: 'smooth' }}>
           {navItems.map((item) => (
             <button
               key={item.view}
@@ -129,24 +131,24 @@ export default function Navigation({ currentView, setCurrentView, userEmail, isS
               }}
               className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
                 currentView === item.view 
-                  ? 'bg-indigo-50 text-indigo-700' 
-                  : 'text-slate-600 hover:bg-slate-50'
+                  ? 'bg-indigo-500/20 text-indigo-300' 
+                  : 'text-slate-400 hover:bg-white/5'
               }`}
             >
               {item.icon}
               {item.label}
             </button>
           ))}
-          <div className="h-px bg-slate-100 my-2"></div>
+          <div className="h-px bg-white/10 my-2"></div>
           <button 
             onClick={() => { if (onSignIn) onSignIn(); setMobileMenuOpen(false); }}
-            className="px-4 py-3 text-sm font-semibold text-slate-700 bg-slate-50 rounded-lg text-center"
+            className="px-4 py-3 text-sm font-semibold text-slate-300 bg-white/5 rounded-lg text-center"
           >
             <LogIn className="w-4 h-4 inline-block mr-2 mb-0.5"/> Sign In
           </button>
           <button 
             onClick={() => { if (onSignUp) onSignUp(); setMobileMenuOpen(false); }}
-            className="px-4 py-3 text-sm font-semibold bg-indigo-600 text-white rounded-lg text-center"
+            className="px-4 py-3 text-sm font-semibold bg-indigo-600/90 text-white rounded-lg text-center shadow-[0_0_15px_rgba(79,70,229,0.3)]"
           >
             <UserPlus className="w-4 h-4 inline-block mr-2 mb-0.5"/> Sign Up
           </button>

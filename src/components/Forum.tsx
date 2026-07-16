@@ -237,7 +237,7 @@ export default function Forum() {
           <aside className="w-full md:w-64 shrink-0 flex flex-col gap-2">
             {[1, 2, 3, 4, 5].map(i => <div key={i} className="h-10 w-full bg-slate-200 rounded-md animate-pulse"></div>)}
           </aside>
-          <div className="flex-1 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden p-4">
+          <div className="flex-1 bg-white/5 rounded-xl border border-white/10 shadow-sm overflow-hidden p-4">
             <div className="divide-y divide-slate-100">
               {[1, 2, 3, 4].map(i => (
                 <div key={i} className="py-4 flex gap-4">
@@ -259,7 +259,7 @@ export default function Forum() {
     <div className="flex flex-col gap-8 w-full max-w-5xl mx-auto animate-in fade-in duration-500">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-3xl font-extrabold tracking-tight text-slate-900">Community Forum</h2>
+          <h2 className="text-3xl font-extrabold tracking-tight text-white">Community Forum</h2>
           <p className="text-slate-600 mt-1">Live, real-time discussions powered by Supabase.</p>
         </div>
         
@@ -291,13 +291,13 @@ export default function Forum() {
       </div>
 
       {!session && !activeThread ? (
-        <div className="flex justify-center items-center py-20 bg-slate-50 border border-slate-200 rounded-xl">
+        <div className="flex justify-center items-center py-20 bg-[#0a0a0c] border border-white/10 rounded-xl">
           <p className="text-slate-600 font-medium">Please sign in from the top navigation to participate in the community.</p>
         </div>
       ) : isComposing ? (
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden p-6">
+        <div className="bg-white/5 rounded-xl border border-white/10 shadow-sm overflow-hidden p-6">
           <div className="flex justify-between items-center mb-6">
-            <h3 className="text-xl font-bold text-slate-900">Create New Thread</h3>
+            <h3 className="text-xl font-bold text-white">Create New Thread</h3>
             <button onClick={() => setIsComposing(false)} className="text-slate-400 hover:text-slate-600">Cancel</button>
           </div>
           <form onSubmit={handleCreateThread} className="flex flex-col gap-4">
@@ -306,13 +306,13 @@ export default function Forum() {
               placeholder="Thread Title"
               value={newThreadTitle}
               onChange={e => setNewThreadTitle(e.target.value)}
-              className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-500 font-semibold"
+              className="w-full px-4 py-2 bg-[#0a0a0c] border border-white/10 rounded-lg focus:outline-none focus:border-indigo-500 font-semibold"
               required
             />
             <select
               value={newThreadCategory}
               onChange={e => setNewThreadCategory(e.target.value)}
-              className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-500"
+              className="w-full px-4 py-2 bg-[#0a0a0c] border border-white/10 rounded-lg focus:outline-none focus:border-indigo-500"
             >
               {categories.slice(1).map(c => <option key={c} value={c}>{c}</option>)}
             </select>
@@ -321,7 +321,7 @@ export default function Forum() {
               value={newThreadContent}
               onChange={e => setNewThreadContent(e.target.value)}
               rows={6}
-              className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-500 resize-none"
+              className="w-full px-4 py-2 bg-[#0a0a0c] border border-white/10 rounded-lg focus:outline-none focus:border-indigo-500 resize-none"
               required
             ></textarea>
             <button type="submit" className="self-end px-6 py-2 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 transition-colors">
@@ -330,7 +330,7 @@ export default function Forum() {
           </form>
         </div>
       ) : activeThread ? (
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+        <div className="bg-white/5 rounded-xl border border-white/10 shadow-sm overflow-hidden flex flex-col">
           <div className="p-4 border-b border-slate-100 flex items-center gap-4">
             <button 
               onClick={() => setActiveThread(null)}
@@ -349,28 +349,28 @@ export default function Forum() {
                 >
                   <ArrowUp className="w-6 h-6" />
                 </button>
-                <span className="text-sm font-bold text-slate-700">{activeThread.upvotes_count || 0}</span>
+                <span className="text-sm font-bold text-slate-300">{activeThread.upvotes_count || 0}</span>
               </div>
               <div>
-                <h2 className="text-2xl font-bold text-slate-900 mb-2">{activeThread.title}</h2>
+                <h2 className="text-2xl font-bold text-white mb-2">{activeThread.title}</h2>
                 <div className="flex items-center gap-3 text-sm text-slate-500 mb-4">
                   <span className="font-medium px-2 py-0.5 bg-slate-100 rounded text-slate-600">
                     {activeThread.category}
                   </span>
-                  <span>Posted by <span className="font-semibold text-slate-700">{activeThread.author?.username || 'Unknown'}</span></span>
+                  <span>Posted by <span className="font-semibold text-slate-300">{activeThread.author?.username || 'Unknown'}</span></span>
                   <span>{formatDistanceToNow(new Date(activeThread.created_at))} ago</span>
                 </div>
-                <div className="text-slate-700 whitespace-pre-wrap">{activeThread.content}</div>
+                <div className="text-slate-300 whitespace-pre-wrap">{activeThread.content}</div>
               </div>
             </div>
           </div>
 
-          <div className="bg-slate-50 flex-1 p-6 flex flex-col gap-6">
-            <h3 className="font-bold text-slate-800 text-lg">{replies.length} Replies</h3>
+          <div className="bg-[#0a0a0c] flex-1 p-6 flex flex-col gap-6">
+            <h3 className="font-bold text-slate-200 text-lg">{replies.length} Replies</h3>
             
             <div className="flex flex-col gap-4">
               {replies.map(reply => (
-                <div key={reply.id} className="bg-white p-4 rounded-xl border border-slate-200 flex gap-4">
+                <div key={reply.id} className="bg-white/5 p-4 rounded-xl border border-white/10 flex gap-4">
                   <div className="flex flex-col items-center justify-start gap-1 min-w-[2.5rem]">
                     <button 
                       onClick={() => handleUpvote(undefined, reply.id)}
@@ -378,28 +378,28 @@ export default function Forum() {
                     >
                       <ArrowUp className="w-4 h-4" />
                     </button>
-                    <span className="text-xs font-bold text-slate-700">{reply.upvotes_count || 0}</span>
+                    <span className="text-xs font-bold text-slate-300">{reply.upvotes_count || 0}</span>
                   </div>
                   <div>
                     <div className="flex items-center gap-2 text-xs text-slate-500 mb-2">
-                      <span className="font-bold text-slate-700">{reply.author?.username || 'Unknown'}</span>
+                      <span className="font-bold text-slate-300">{reply.author?.username || 'Unknown'}</span>
                       <span>•</span>
                       <span>{formatDistanceToNow(new Date(reply.created_at))} ago</span>
                     </div>
-                    <div className="text-slate-700 text-sm whitespace-pre-wrap">{reply.content}</div>
+                    <div className="text-slate-300 text-sm whitespace-pre-wrap">{reply.content}</div>
                   </div>
                 </div>
               ))}
             </div>
 
             {session && (
-              <form onSubmit={handleReply} className="mt-4 flex flex-col gap-3 bg-white p-4 rounded-xl border border-slate-200">
+              <form onSubmit={handleReply} className="mt-4 flex flex-col gap-3 bg-white/5 p-4 rounded-xl border border-white/10">
                 <textarea
                   placeholder="Write a reply..."
                   value={replyContent}
                   onChange={e => setReplyContent(e.target.value)}
                   rows={3}
-                  className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-500 resize-none"
+                  className="w-full px-4 py-2 bg-[#0a0a0c] border border-white/10 rounded-lg focus:outline-none focus:border-indigo-500 resize-none"
                   required
                 ></textarea>
                 <button type="submit" className="self-end px-4 py-2 bg-indigo-600 text-white text-sm font-bold rounded-lg hover:bg-indigo-700 transition-colors">
@@ -416,24 +416,24 @@ export default function Forum() {
             {categories.map((cat, i) => (
               <button 
                 key={cat}
-                className={`text-left px-3 py-2 rounded-md text-sm font-medium transition-colors ${i === 0 ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}`}
+                className={`text-left px-3 py-2 rounded-md text-sm font-medium transition-colors ${i === 0 ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-100 hover:text-white'}`}
               >
                 {cat}
               </button>
             ))}
           </aside>
 
-          <div className="flex-1 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="flex-1 bg-white/5 rounded-xl border border-white/10 shadow-sm overflow-hidden">
             <div className="p-4 border-b border-slate-100 flex gap-4">
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                 <input 
                   type="text" 
                   placeholder="Search discussions..." 
-                  className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                  className="w-full pl-9 pr-4 py-2 bg-[#0a0a0c] border border-white/10 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
                 />
               </div>
-              <button className="p-2 border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50">
+              <button className="p-2 border border-white/10 rounded-lg text-slate-600 hover:bg-[#0a0a0c]">
                 <Filter className="w-4 h-4" />
               </button>
             </div>
@@ -443,7 +443,7 @@ export default function Forum() {
                 <div className="p-8 text-center text-slate-500">No threads found. Be the first to post!</div>
               ) : (
                 threads.map(thread => (
-                  <div key={thread.id} className="p-4 sm:p-5 hover:bg-slate-50 transition-colors flex gap-4">
+                  <div key={thread.id} className="p-4 sm:p-5 hover:bg-[#0a0a0c] transition-colors flex gap-4">
                     <div className="flex flex-col items-center justify-center gap-1 min-w-[3rem]">
                       <button 
                         onClick={(e) => { e.stopPropagation(); handleUpvote(thread.id, undefined); }}
@@ -451,13 +451,13 @@ export default function Forum() {
                       >
                         <ArrowUp className="w-5 h-5" />
                       </button>
-                      <span className="text-sm font-bold text-slate-700">{thread.upvotes_count || 0}</span>
+                      <span className="text-sm font-bold text-slate-300">{thread.upvotes_count || 0}</span>
                     </div>
                     
                     <div className="flex-1 flex flex-col justify-center">
                       <h3 
                         onClick={() => setActiveThread(thread)}
-                        className="font-semibold text-slate-900 text-base leading-tight mb-1 cursor-pointer hover:text-indigo-600 transition-colors"
+                        className="font-semibold text-white text-base leading-tight mb-1 cursor-pointer hover:text-indigo-600 transition-colors"
                       >
                         {thread.title}
                       </h3>
@@ -465,7 +465,7 @@ export default function Forum() {
                         <span className="font-medium px-2 py-0.5 bg-slate-100 rounded text-slate-600">
                           {thread.category}
                         </span>
-                        <span>Posted by <span className="font-medium text-slate-700">{thread.author?.username || 'Unknown'}</span></span>
+                        <span>Posted by <span className="font-medium text-slate-300">{thread.author?.username || 'Unknown'}</span></span>
                         <span>&bull;</span>
                         <span>{formatDistanceToNow(new Date(thread.created_at))} ago</span>
                       </div>

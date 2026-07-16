@@ -1,27 +1,62 @@
+import React, { useRef } from 'react';
 import { ViewState } from '../types';
 import { motion, useScroll, useTransform } from 'motion/react';
-import { useRef } from 'react';
-import FiveDShapeAnimation from './FiveDShapeAnimation';
+import { Terminal, GitBranch, MessageSquareText, Users, Shield, Zap, ArrowRight, LogIn, Code2, Globe } from 'lucide-react';
+import Logo from './Logo';
 
 interface HomeProps {
   setCurrentView: (view: ViewState) => void;
+  onSignIn?: () => void;
+  onSignUp?: () => void;
 }
 
-export default function Home({ setCurrentView }: HomeProps) {
+export default function Home({ setCurrentView, onSignIn, onSignUp }: HomeProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  
   const { scrollYProgress } = useScroll({
     target: containerRef,
     offset: ["start start", "end start"]
   });
-  
-  const yHero = useTransform(scrollYProgress, [0, 1], [0, 200]);
-  const yShape = useTransform(scrollYProgress, [0, 1], [0, 150]);
-  const yCards = useTransform(scrollYProgress, [0, 1], [0, -50]);
+  const yHero = useTransform(scrollYProgress, [0, 1], [0, 100]);
   const opacityFade = useTransform(scrollYProgress, [0, 0.5], [1, 0]);
 
+  const features = [
+    {
+      icon: <Terminal className="w-6 h-6 text-indigo-400" />,
+      title: "Cloud OS Web IDE",
+      description: "A full-featured, zero-config development environment running entirely in your browser with real-time preview."
+    },
+    {
+      icon: <GitBranch className="w-6 h-6 text-purple-400" />,
+      title: "GitHub Synchronization",
+      description: "Seamlessly import, modify, and commit changes back to your GitHub repositories without ever leaving the workspace."
+    },
+    {
+      icon: <MessageSquareText className="w-6 h-6 text-emerald-400" />,
+      title: "Omni-AI Terminal",
+      description: "An integrated intelligence layer that writes code, debugs errors, and searches the web alongside you."
+    },
+    {
+      icon: <Users className="w-6 h-6 text-amber-400" />,
+      title: "Live Collaboration",
+      description: "Code together in real-time with multiplayer cursors, shared terminal sessions, and instant state sync."
+    },
+    {
+      icon: <Shield className="w-6 h-6 text-rose-400" />,
+      title: "Zero-Trust Architecture",
+      description: "Your data remains yours. Built with end-to-end security principles to protect your intellectual property."
+    },
+    {
+      icon: <Zap className="w-6 h-6 text-cyan-400" />,
+      title: "Instant Edge Deploy",
+      description: "Push your full-stack applications to edge networks instantly with one click, scaling globally by default."
+    }
+  ];
+
   return (
-    <div ref={containerRef} className="relative min-h-screen">
-      {/* Hero & Value Prop Section */}
+    <div ref={containerRef} className="relative min-h-screen pt-12 pb-8 flex flex-col items-center">
+      
+      {/* 1. Hero Section */}
       <motion.section 
         style={{ y: yHero, opacity: opacityFade }}
         initial="hidden"
@@ -30,157 +65,155 @@ export default function Home({ setCurrentView }: HomeProps) {
           hidden: { opacity: 0 },
           visible: {
             opacity: 1,
-            transition: {
-              staggerChildren: 0.2,
-              delayChildren: 0.1
-            }
+            transition: { staggerChildren: 0.2, delayChildren: 0.1 }
           }
         }}
-        className="text-center max-w-3xl mx-auto space-y-6 mt-4 sm:mt-8 mb-4"
+        className="text-center max-w-4xl mx-auto space-y-8 mt-12 sm:mt-24 mb-32 px-4"
       >
+        <motion.div variants={{ hidden: { opacity: 0, y: 20 }, visible: { opacity: 1, y: 0, transition: { duration: 0.8, ease: "easeOut" } } }} className="flex justify-center mb-8">
+            <div className="w-20 h-20 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-indigo-400 shadow-[0_0_30px_rgba(99,102,241,0.2)]">
+                <Logo className="w-12 h-12" />
+            </div>
+        </motion.div>
+
         <motion.div variants={{ hidden: { opacity: 0, y: 20 }, visible: { opacity: 1, y: 0, transition: { duration: 0.8, ease: "easeOut" } } }}>
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-indigo-50 border border-indigo-100 rounded-full">
-            <span className="flex h-2 w-2 rounded-full bg-indigo-500 animate-pulse"></span>
-            <span className="text-[10px] sm:text-xs uppercase tracking-widest font-bold text-indigo-700">Thessvar V2.0 &bull; Global Accessibility</span>
+          <div className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-500/10 border border-indigo-500/20 backdrop-blur-md rounded-full shadow-[0_0_15px_rgba(99,102,241,0.1)]">
+            <span className="flex h-2.5 w-2.5 rounded-full bg-indigo-400 animate-pulse shadow-[0_0_8px_rgba(129,140,248,0.8)]"></span>
+            <span className="text-[10px] sm:text-xs uppercase tracking-widest font-bold text-indigo-300">VantaOS is now in Public Beta</span>
           </div>
         </motion.div>
         
-        <motion.h1 variants={{ hidden: { opacity: 0, y: 20 }, visible: { opacity: 1, y: 0, transition: { duration: 0.8, ease: "easeOut" } } }} className="text-4xl sm:text-5xl md:text-6xl font-extrabold tracking-tight text-slate-900 leading-tight">
-          The world's first <span className="text-indigo-600">open AI stack</span>.
+        <motion.h1 variants={{ hidden: { opacity: 0, y: 20 }, visible: { opacity: 1, y: 0, transition: { duration: 0.8, ease: "easeOut" } } }} className="text-5xl sm:text-6xl md:text-8xl font-black tracking-tighter text-white leading-[1.1]">
+          The Intelligent <br/> <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-400">Developer Cloud</span>
         </motion.h1>
         
-        <motion.p variants={{ hidden: { opacity: 0, y: 20 }, visible: { opacity: 1, y: 0, transition: { duration: 0.8, ease: "easeOut" } } }} className="text-base sm:text-lg text-slate-600 max-w-2xl mx-auto leading-relaxed">
-          At Thessvar, we believe your data belongs to you. Our architecture ensures absolute data sovereignty, transparent model training, and zero-trust execution.
+        <motion.p variants={{ hidden: { opacity: 0, y: 20 }, visible: { opacity: 1, y: 0, transition: { duration: 0.8, ease: "easeOut" } } }} className="text-lg sm:text-xl text-slate-400 max-w-2xl mx-auto leading-relaxed font-medium">
+          Write, build, and deploy full-stack applications entirely in the browser. Powered by an omnipresent AI layer and zero-trust security.
         </motion.p>
+
+        <motion.div variants={{ hidden: { opacity: 0, y: 20 }, visible: { opacity: 1, y: 0, transition: { duration: 0.8, ease: "easeOut" } } }} className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-8">
+            <button 
+              onClick={onSignUp}
+              className="w-full sm:w-auto px-8 py-4 text-base font-bold bg-indigo-600/90 text-white rounded-full shadow-[0_0_20px_rgba(79,70,229,0.4)] hover:bg-indigo-500 hover:shadow-[0_0_30px_rgba(79,70,229,0.6)] transition-all flex items-center justify-center gap-2 group"
+            >
+              Get Started for Free <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+            </button>
+            <button 
+              onClick={onSignIn}
+              className="w-full sm:w-auto px-8 py-4 text-base font-bold bg-white/5 text-slate-200 border border-white/10 rounded-full hover:bg-white/10 transition-colors flex items-center justify-center gap-2"
+            >
+              Sign In <LogIn className="w-5 h-5 opacity-70" />
+            </button>
+        </motion.div>
       </motion.section>
 
-      {/* Animation Section */}
-      <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-6 sm:gap-8 min-h-0">
-        <motion.div 
-          style={{ y: yShape }}
-          initial={{ opacity: 0, x: -50 }}
-          animate={{ opacity: 1, x: 0 }} 
-          transition={{ duration: 0.8, delay: 0.2 }} 
-          className="lg:col-span-7 flex flex-col"
-        >
-          <FiveDShapeAnimation />
-        </motion.div>
-
-        {/* Feature Cards */}
-        <motion.div 
-          style={{ y: yCards }}
-          initial={{ opacity: 0, x: 50 }}
-          animate={{ opacity: 1, x: 0 }} 
-          transition={{ duration: 0.8, delay: 0.4 }} 
-          className="lg:col-span-5 flex flex-col gap-6 sm:gap-8 min-h-0"
-        >          {/* CloudOS IDE */}
-          <div 
-            onClick={() => setCurrentView('ide')}
-            className="bg-white rounded-2xl p-6 border border-slate-200 flex-1 shadow-sm hover:shadow-lg hover:border-indigo-200 transition-all group cursor-pointer flex flex-col justify-between relative"
-          >
-            <div>
-              <div className="flex items-center gap-2 mb-3">
-                <svg className="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path></svg>
-                <h3 className="font-bold text-slate-800 text-lg">CloudOS Web IDE</h3>
-              </div>
-              <p className="text-sm text-slate-500 leading-relaxed">Full-stack browser development environment. Real-time compilation, multi-language support, and cloud persistence.</p>
-            </div>
-            <div className="mt-6 flex items-end justify-between">
-              <div>
-                <div className="text-3xl font-black text-slate-900 tracking-tighter">0ms</div>
-                <div className="text-xs font-bold text-slate-400 uppercase tracking-widest">Setup Time</div>
-              </div>
-              <div className="text-indigo-500 bg-indigo-50 px-2 py-1 rounded text-xs font-bold font-mono">Zero Config</div>
-            </div>
-            {/* Tooltip */}
-            <div className="absolute -top-12 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-800 text-white text-xs px-3 py-2 rounded shadow-lg pointer-events-none whitespace-nowrap z-50">
-              Access the CloudOS IDE with 25+ language plugins
-              <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-slate-800 rotate-45"></div>
-            </div>
-          </div>
-
-          {/* Security & FHE */}
-          <div 
-            onClick={() => setCurrentView('governance')}
-            className="bg-indigo-600 rounded-2xl p-6 text-white relative overflow-hidden flex-1 shadow-lg shadow-indigo-600/20 group cursor-pointer"
-          >
-            <div className="relative z-10 h-full flex flex-col justify-center">
-              <h3 className="font-bold text-lg mb-3 group-hover:text-indigo-100 transition-colors">Absolute Data Sovereignty</h3>
-              <p className="text-sm text-indigo-100/90 leading-relaxed max-w-sm">
-                You retain 100% ownership of your weights, datasets, and runtime code. We utilize Fully Homomorphic Encryption (FHE).
-              </p>
-              <div className="mt-6 inline-flex items-center gap-3 w-fit">
-                <div className="p-2.5 bg-white/10 backdrop-blur-sm rounded-lg border border-white/20 group-hover:bg-white/20 transition-colors">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
-                </div>
-                <span className="text-xs font-mono font-bold uppercase tracking-widest text-indigo-50">Encryption Active</span>
-              </div>
-            </div>
-            <div className="absolute -right-8 -bottom-8 w-40 h-40 bg-white/10 rounded-full blur-3xl transition-transform duration-700 group-hover:scale-150"></div>
-            <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/50 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
-            {/* Tooltip */}
-            <div className="absolute -top-12 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-800 text-white text-xs px-3 py-2 rounded shadow-lg pointer-events-none whitespace-nowrap z-50">
-              Zero-trust architecture with end-to-end encryption
-              <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-slate-800 rotate-45"></div>
-            </div>
-          </div>
-          
-          
-        </motion.div>
-      </div>
-
-      <motion.div 
-        initial={{ opacity: 0, y: 50 }} 
-        animate={{ opacity: 1, y: 0 }} 
-        transition={{ duration: 0.8, delay: 0.6 }} 
-        className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-6"
+      {/* 2. Live Preview Section */}
+      <motion.section 
+        initial={{ opacity: 0, y: 40 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true, margin: "-100px" }}
+        transition={{ duration: 1, ease: "easeOut" }}
+        className="w-full max-w-6xl mx-auto mb-32 relative z-10 px-4"
       >
-        <div onClick={() => setCurrentView('omni-ai')} className="bg-slate-900 border border-slate-800 p-6 rounded-2xl cursor-pointer hover:border-emerald-500/50 transition-colors group">
-          <div className="w-10 h-10 bg-emerald-500/10 rounded-lg flex items-center justify-center mb-4 group-hover:bg-emerald-500/20 transition-colors">
-            <svg className="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
-          </div>
-          <h4 className="text-white font-bold mb-2">Omni-AI Terminal</h4>
-          <p className="text-slate-400 text-sm">Deep-thinking assistant that hooks into live data and web searches instantly.</p>
+        <div className="absolute -inset-1 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-3xl blur-2xl opacity-20"></div>
+        <div className="relative rounded-2xl border border-white/10 bg-[#0d0d12] overflow-hidden shadow-2xl flex flex-col">
+            {/* Fake macOS Window Header */}
+            <div className="h-12 bg-white/5 border-b border-white/10 flex items-center px-4 gap-2 shrink-0">
+                <div className="flex gap-2">
+                    <div className="w-3 h-3 rounded-full bg-rose-500/80"></div>
+                    <div className="w-3 h-3 rounded-full bg-amber-500/80"></div>
+                    <div className="w-3 h-3 rounded-full bg-emerald-500/80"></div>
+                </div>
+                <div className="flex-1 flex justify-center">
+                    <div className="px-4 py-1.5 rounded-md bg-black/40 border border-white/5 flex items-center gap-2 text-xs font-medium text-slate-400">
+                        <Globe className="w-3.5 h-3.5" /> vantaos.dev/workspace
+                    </div>
+                </div>
+            </div>
+            
+            {/* Fake IDE Interface */}
+            <div className="flex flex-1 min-h-[400px] md:min-h-[500px]">
+                {/* Sidebar */}
+                <div className="hidden md:flex w-64 border-r border-white/10 bg-black/20 p-4 flex-col gap-4">
+                    <div className="text-xs font-bold uppercase tracking-widest text-slate-500">Explorer</div>
+                    <div className="flex flex-col gap-2">
+                        <div className="flex items-center gap-2 text-sm text-slate-300 bg-white/5 px-2 py-1.5 rounded"><Terminal className="w-4 h-4 text-indigo-400" /> server.ts</div>
+                        <div className="flex items-center gap-2 text-sm text-slate-400 px-2 py-1.5 hover:bg-white/5 rounded transition-colors"><Code2 className="w-4 h-4 text-emerald-400" /> App.tsx</div>
+                        <div className="flex items-center gap-2 text-sm text-slate-400 px-2 py-1.5 hover:bg-white/5 rounded transition-colors"><MessageSquareText className="w-4 h-4 text-purple-400" /> types.ts</div>
+                    </div>
+                </div>
+                {/* Editor Area */}
+                <div className="flex-1 p-6 font-mono text-sm leading-relaxed overflow-hidden bg-[#0a0a0c]">
+                    <div className="text-slate-400"><span className="text-purple-400">import</span> { '{' } serve { '}' } <span className="text-purple-400">from</span> <span className="text-emerald-300">'@vantaos/runtime'</span>;</div>
+                    <br/>
+                    <div className="text-slate-400"><span className="text-purple-400">const</span> app = <span className="text-indigo-300">serve</span>({'{'}</div>
+                    <div className="text-slate-400 pl-4">port: <span className="text-amber-300">3000</span>,</div>
+                    <div className="text-slate-400 pl-4">fetch(req) {'{'}</div>
+                    <div className="text-slate-400 pl-8"><span className="text-purple-400">return new</span> <span className="text-indigo-300">Response</span>(<span className="text-emerald-300">'Hello from VantaOS Edge!'</span>);</div>
+                    <div className="text-slate-400 pl-4">{'}'}</div>
+                    <div className="text-slate-400">{'}'});</div>
+                    <br/>
+                    <div className="text-slate-500 italic">// Real-time compilation active...</div>
+                    <div className="flex items-center gap-2 mt-4 text-emerald-400">
+                        <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></div>
+                        Server running perfectly.
+                    </div>
+                </div>
+            </div>
+        </div>
+      </motion.section>
+
+      {/* 3. Feature Highlights Section */}
+      <motion.section 
+        className="w-full max-w-6xl mx-auto mb-32 px-4 z-10 relative"
+      >
+        <div className="text-center mb-16">
+            <h2 className="text-3xl md:text-5xl font-black text-white tracking-tight mb-4">Everything you need. <br/> Nothing you don't.</h2>
+            <p className="text-slate-400 text-lg max-w-2xl mx-auto">VantaOS brings the entire development lifecycle into a single, cohesive interface built for speed and focus.</p>
         </div>
 
-        <div onClick={() => setCurrentView('showcase')} className="bg-slate-900 border border-slate-800 p-6 rounded-2xl cursor-pointer hover:border-indigo-500/50 transition-colors group">
-          <div className="w-10 h-10 bg-indigo-500/10 rounded-lg flex items-center justify-center mb-4 group-hover:bg-indigo-500/20 transition-colors">
-             <svg className="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path></svg>
-          </div>
-          <h4 className="text-white font-bold mb-2">Model Hub</h4>
-          <p className="text-slate-400 text-sm">Directly download and load local inference for Llama, Mistral, and more.</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {features.map((feature, idx) => (
+                <motion.div
+                    key={idx}
+                    initial={{ opacity: 0, y: 30 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true, margin: "-50px" }}
+                    transition={{ duration: 0.6, delay: idx * 0.1, ease: "easeOut" }}
+                    className="bg-white/5 backdrop-blur-lg border border-white/10 p-8 rounded-3xl hover:bg-white/10 hover:border-indigo-500/30 transition-all group shadow-lg flex flex-col"
+                >
+                    <div className="w-14 h-14 bg-black/40 border border-white/10 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 group-hover:bg-indigo-500/20 group-hover:border-indigo-500/40 transition-all duration-300">
+                        {feature.icon}
+                    </div>
+                    <h3 className="text-xl font-bold text-white mb-3 tracking-tight">{feature.title}</h3>
+                    <p className="text-slate-400 text-sm leading-relaxed">{feature.description}</p>
+                </motion.div>
+            ))}
         </div>
+      </motion.section>
 
-        <div onClick={() => setCurrentView('foundation')} className="bg-slate-900 border border-slate-800 p-6 rounded-2xl cursor-pointer hover:border-amber-500/50 transition-colors group">
-          <div className="w-10 h-10 bg-amber-500/10 rounded-lg flex items-center justify-center mb-4 group-hover:bg-amber-500/20 transition-colors">
-            <svg className="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"></path></svg>
-          </div>
-          <h4 className="text-white font-bold mb-2">MoE Foundation</h4>
-          <p className="text-slate-400 text-sm">State-of-the-art open source sparse architecture built for the edge.</p>
+      {/* 5. Footer */}
+      <footer className="w-full max-w-6xl mx-auto border-t border-white/10 pt-12 pb-8 px-4 z-10 relative">
+        <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+            <div className="flex items-center gap-3">
+                <Logo className="w-6 h-6 text-indigo-400" />
+                <span className="font-bold text-white tracking-tight text-lg">VantaOS</span>
+            </div>
+            
+            <div className="flex flex-wrap items-center justify-center gap-6 text-sm font-medium">
+                <a href="#" className="text-slate-400 hover:text-white transition-colors">GitHub Repo</a>
+                <a href="#" className="text-slate-400 hover:text-white transition-colors">Documentation</a>
+                <button onClick={onSignIn} className="text-slate-400 hover:text-white transition-colors">Sign In</button>
+                <button onClick={onSignUp} className="text-indigo-400 hover:text-indigo-300 transition-colors">Get Started</button>
+            </div>
         </div>
-      </motion.div>
-
-      {/* Bottom Transparency Ticker */}
-      <footer className="py-5 flex flex-col md:flex-row items-start md:items-center gap-4 md:gap-8 border-t border-slate-200 mt-4 sm:mt-auto">
-        <div className="flex items-center gap-3 text-[10px] font-bold text-slate-500 uppercase tracking-widest shrink-0">
-          <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
-          <span>Training Transparency Ledger</span>
-          <span className="hidden md:block w-1 h-1 bg-slate-300 rounded-full"></span>
-        </div>
-        <div className="flex-1 flex flex-wrap md:flex-nowrap gap-x-6 gap-y-3 w-full">
-          <div className="flex items-center gap-2">
-            <span className="text-slate-500 text-xs font-medium">Model v4 Training:</span>
-            <span className="text-slate-900 text-xs font-semibold border-b border-slate-900">100% Verified Clean Sets</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-slate-500 text-xs font-medium">Compute Source:</span>
-            <span className="text-slate-900 text-xs font-semibold">100% Renewable</span>
-          </div>
-        </div>
-        <div className="text-slate-500 text-xs font-medium shrink-0 pt-2 md:pt-0 border-t border-slate-100 md:border-none w-full md:w-auto mt-2 md:mt-0">
-          Global Nodes: <span className="text-indigo-600 font-bold ml-1">4,281</span>
+        
+        <div className="mt-8 pt-8 border-t border-white/5 flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-slate-500">
+            <p>&copy; {new Date().getFullYear()} VantaOS. All rights reserved.</p>
+            <p className="flex items-center gap-1">Built with <Logo className="w-3 h-3 text-indigo-400 mx-1"/> VantaOS</p>
         </div>
       </footer>
     </div>
   );
 }
+

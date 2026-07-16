@@ -97,15 +97,15 @@ export default function OllamaLocal() {
     <div className="w-full max-w-5xl mx-auto flex flex-col min-h-[85vh] animate-in fade-in duration-500">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
-          <h2 className="text-3xl font-extrabold tracking-tight text-slate-900">Ollama Local Engine</h2>
+          <h2 className="text-3xl font-extrabold tracking-tight text-white">Ollama Local Engine</h2>
           <p className="text-slate-600 mt-1">Connect to your local Ollama instance for private inference.</p>
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="md:col-span-1 flex flex-col gap-6">
-          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-            <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
+          <div className="bg-white/5 p-6 rounded-2xl border border-white/10 shadow-sm">
+            <h3 className="font-bold text-slate-200 mb-4 flex items-center gap-2">
               <Server className="w-5 h-5 text-indigo-500" /> Connection settings
             </h3>
             
@@ -116,7 +116,7 @@ export default function OllamaLocal() {
                   type="text" 
                   value={ollamaUrl}
                   onChange={(e) => setOllamaUrl(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-indigo-500"
+                  className="w-full px-3 py-2 bg-[#0a0a0c] border border-white/10 rounded-lg text-sm focus:outline-none focus:border-indigo-500"
                 />
               </div>
               
@@ -145,12 +145,12 @@ export default function OllamaLocal() {
           </div>
 
           {status === 'connected' && (
-            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-               <h3 className="font-bold text-slate-800 mb-4">Available Models ({models.length})</h3>
+            <div className="bg-white/5 p-6 rounded-2xl border border-white/10 shadow-sm">
+               <h3 className="font-bold text-slate-200 mb-4">Available Models ({models.length})</h3>
                <select 
                  value={selectedModel}
                  onChange={(e) => setSelectedModel(e.target.value)}
-                 className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-indigo-500"
+                 className="w-full px-3 py-2 bg-[#0a0a0c] border border-white/10 rounded-lg text-sm focus:outline-none focus:border-indigo-500"
                >
                  {models.map(m => (
                    <option key={m.name} value={m.name}>{m.name} ({(m.size / 1024 / 1024 / 1024).toFixed(2)} GB)</option>

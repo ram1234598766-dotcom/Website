@@ -67,7 +67,7 @@ export default function AdminPanel() {
             <ShieldAlert className="w-3 h-3 text-red-500" />
             <span className="text-[10px] uppercase tracking-widest font-bold text-red-500">Omniscient Admin Protocol Active</span>
           </div>
-          <h2 className="text-3xl font-extrabold tracking-tight text-slate-900">Admin Override Center</h2>
+          <h2 className="text-3xl font-extrabold tracking-tight text-white">Admin Override Center</h2>
           <p className="text-slate-600 max-w-2xl text-base">
             Authorized access granted to <span className="font-mono text-xs bg-slate-200 px-1 py-0.5 rounded">ram1234598766@gmail.com</span>. Monitor live database statistics and anomaly-detection networks.
           </p>
@@ -83,7 +83,7 @@ export default function AdminPanel() {
               <Users className="w-6 h-6 text-emerald-500" />
             </div>
             <div>
-              <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">Registered Users</div>
+              <div className="text-xs font-bold text-slate-400 uppercase tracking-wider">Registered Users</div>
               <div className="text-2xl font-black text-white">
                 {metrics.loading ? <Loader2 className="w-5 h-5 animate-spin mt-1" /> : metrics.usersCount}
               </div>
@@ -97,7 +97,7 @@ export default function AdminPanel() {
               <MessageSquare className="w-6 h-6 text-indigo-500" />
             </div>
             <div>
-              <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">Active Threads</div>
+              <div className="text-xs font-bold text-slate-400 uppercase tracking-wider">Active Threads</div>
               <div className="text-2xl font-black text-white">
                 {metrics.loading ? <Loader2 className="w-5 h-5 animate-spin mt-1" /> : metrics.threadsCount}
               </div>
@@ -111,7 +111,7 @@ export default function AdminPanel() {
               <Reply className="w-6 h-6 text-blue-500" />
             </div>
             <div>
-              <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">Total Replies</div>
+              <div className="text-xs font-bold text-slate-400 uppercase tracking-wider">Total Replies</div>
               <div className="text-2xl font-black text-white">
                 {metrics.loading ? <Loader2 className="w-5 h-5 animate-spin mt-1" /> : metrics.repliesCount}
               </div>
@@ -125,7 +125,7 @@ export default function AdminPanel() {
               <Server className="w-6 h-6 text-amber-500" />
             </div>
             <div>
-              <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">Auth Diagnostics</div>
+              <div className="text-xs font-bold text-slate-400 uppercase tracking-wider">Auth Diagnostics</div>
               <div className="text-sm font-mono text-slate-400 mt-1">Providers status</div>
             </div>
           </div>
@@ -175,7 +175,7 @@ export default function AdminPanel() {
               <Activity className="w-6 h-6 text-rose-500" />
             </div>
             <div>
-              <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">Compile / Run Counts</div>
+              <div className="text-xs font-bold text-slate-400 uppercase tracking-wider">Compile / Run Counts</div>
               <div className="text-sm font-mono text-slate-400 mt-1">Not tracked yet</div>
             </div>
           </div>
@@ -196,7 +196,7 @@ export default function AdminPanel() {
                 const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({ logs, metrics }, null, 2));
                 const downloadAnchorNode = document.createElement('a');
                 downloadAnchorNode.setAttribute("href", dataStr);
-                downloadAnchorNode.setAttribute("download", "novalith-system-logs.json");
+                downloadAnchorNode.setAttribute("download", "vantaos-system-logs.json");
                 document.body.appendChild(downloadAnchorNode);
                 downloadAnchorNode.click();
                 downloadAnchorNode.remove();
@@ -214,7 +214,7 @@ export default function AdminPanel() {
         
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm text-slate-400">
-            <thead className="text-xs uppercase bg-[#0D1117] text-slate-500 border-b border-slate-800">
+            <thead className="text-xs uppercase bg-[#0D1117] text-slate-400 border-b border-slate-800">
               <tr>
                 <th className="px-6 py-4 font-bold">Threat Type</th>
                 <th className="px-6 py-4 font-bold">Target / Source</th>
