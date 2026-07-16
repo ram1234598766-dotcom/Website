@@ -1,19 +1,17 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
+import { BrainCircuit, Send, Settings, Activity, Zap } from 'lucide-react';
 import { get, set } from 'idb-keyval';
-import { BrainCircuit, Send, AlertTriangle, ShieldCheck, Activity, Cpu, Zap } from 'lucide-react';
-import { sanitizeInput, detectSqlInjection } from '../lib/sanitize';
 
-const HISTORY_KEY = 'omni-ai-history';
+const HISTORY_KEY = 'vantaos_omni_ai_history';
 
 export default function OmniAI() {
-  const [messages, setMessages] = useState<{role: 'user' | 'assistant', content: string}[]>([]);
+  const [messages, setMessages] = useState<{ role: 'user' | 'assistant', content: string }[]>([]);
   const [input, setInput] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [modelType, setModelType] = useState<'deep' | 'quick'>('deep');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    // Load history
     get(HISTORY_KEY).then((val) => {
       if (val && Array.isArray(val)) {
         setMessages(val);
@@ -29,58 +27,36 @@ export default function OmniAI() {
     e.preventDefault();
     if (!input.trim() || isGenerating) return;
 
-    try {
-      const scanRes = await fetch('/api/security/scan', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ payload: input })
-      });
-      const scanData = await scanRes.json();
-      if (scanData.threatsFound) {
-        alert('Security violation: Malicious payload detected and quarantined by Backend Security Software.');
-        return;
-      }
-    } catch (e) {
-      console.warn('Security scan failed', e);
-    }
-
-    const safeInput = sanitizeInput(input);
-    const userMessage = { role: 'user' as const, content: safeInput };
+    const userMessage = { role: 'user' as const, content: input };
     const newMessages = [...messages, userMessage];
+    
     setMessages(newMessages);
     setInput('');
     setIsGenerating(true);
     set(HISTORY_KEY, newMessages);
 
     try {
-      const systemInstruction = "You are the Omni-AI for VantaOS. You are 100% free and unlimited.";
-      const formattedMessages = [
-        { role: "system", content: systemInstruction },
-        ...newMessages
-      ];
-
-      const response = await fetch('https://text.pollinations.ai/', {
+      const response = await fetch('/api/ai/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          messages: formattedMessages,
-          model: modelType === 'deep' ? 'openai' : 'mistral',
-          jsonMode: false
+          messages: newMessages,
+          modelType: modelType 
         })
       });
-
-      if (!response.ok) {
-        throw new Error(`Failed to connect to Omni-AI mesh: ${response.statusText}`);
-      }
-
-      const assistantResponse = await response.text();
       
-      const finalMessages = [...newMessages, { role: 'assistant' as const, content: assistantResponse }];
+      if (!response.ok) {
+        throw new Error(`Failed to connect to Omni-AI server: ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      
+      const finalMessages = [...newMessages, { role: 'assistant' as const, content: data.text }];
       setMessages(finalMessages);
       set(HISTORY_KEY, finalMessages);
     } catch (err: any) {
       console.error(err);
-      setMessages((prev) => [...prev, { role: 'assistant', content: `[MESH ERROR]: ${err.message}` }]);
+      setMessages((prev) => [...prev, { role: 'assistant', content: `[API ERROR]: ${err.message}` }]);
     } finally {
       setIsGenerating(false);
     }
@@ -105,10 +81,11 @@ export default function OmniAI() {
             <h1 className="text-2xl font-bold text-white tracking-tight">Omni-AI Terminal</h1>
             <div className="flex items-center gap-2 mt-1">
               <span className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]"></span>
-              <span className="text-xs font-mono text-slate-400 uppercase tracking-widest">Cloud Mesh Active</span>
+              <span className="text-xs font-mono text-slate-400 uppercase tracking-widest">Online</span>
             </div>
           </div>
         </div>
+
         <div className="flex flex-col items-end text-right gap-3">
           
           {/* Model Switcher */}
@@ -131,7 +108,7 @@ export default function OmniAI() {
 
           <div className="text-[10px] text-slate-500 max-w-[300px] leading-tight flex items-center justify-end gap-1">
             <Activity className="w-3 h-3 text-emerald-500" />
-            100% Free / Unlimited / Real-Time Data Access
+            Connected to Gemini
           </div>
         </div>
       </div>
@@ -193,6 +170,7 @@ export default function OmniAI() {
               <Send className="w-5 h-5" />
             </button>
           </form>
+
           <div className="flex justify-between items-center mt-3 px-2">
             <div className="text-[10px] text-slate-500">
               Press Enter to send. Cloud inference is highly optimized for complex logic.

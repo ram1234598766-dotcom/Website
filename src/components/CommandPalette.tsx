@@ -1,18 +1,34 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, Compass, Puzzle } from 'lucide-react';
+import { Search, Compass, Puzzle, File, Folder, Plus, Save, LogOut, Settings as SettingsIcon, Terminal } from 'lucide-react';
 import { ViewState } from '../types';
+import { supabase } from '../lib/supabase';
 
 interface CommandPaletteProps {
   isOpen: boolean;
   onClose: () => void;
   setCurrentView: (view: ViewState) => void;
-  onSearchPlugins?: (query: string) => void;
 }
 
-export default function CommandPalette({ isOpen, onClose, setCurrentView, onSearchPlugins }: CommandPaletteProps) {
-  const [query, setQuery] = useState('');
+type ActionType = 'view' | 'file' | 'open-file' | 'action' | 'plugin';
 
+interface PaletteItem {
+  id: string;
+  type: ActionType;
+  name: string;
+  description?: string;
+  icon: any;
+  onSelect: () => void;
+}
+
+export default function CommandPalette({ isOpen, onClose, setCurrentView }: CommandPaletteProps) {
+  const [query, setQuery] = useState('');
+  const [selectedIndex, setSelectedIndex] = useState(0);
+  const listRef = useRef<HTMLDivElement>(null);
+  
+  // Get IDE state if available
+  const ideState = (window as any).vantaosIDE;
+  
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -22,24 +38,184 @@ export default function CommandPalette({ isOpen, onClose, setCurrentView, onSear
     if (isOpen) {
       window.addEventListener('keydown', handleKeyDown);
       setQuery(''); // Reset query on open
+      setSelectedIndex(0);
     }
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose]);
-
+  
   const views: { id: ViewState; name: string; icon: any }[] = [
     { id: 'home', name: 'Home', icon: Compass },
-    { id: 'ide', name: 'CloudOS IDE', icon: Compass },
-    { id: 'forum', name: 'Community', icon: Compass },
-    { id: 'showcase', name: 'Models', icon: Compass },
+    { id: 'ide', name: 'CloudOS IDE', icon: Terminal },
+    { id: 'forum', name: 'Community Forum', icon: Compass },
+    { id: 'showcase', name: 'Models Showcase', icon: Compass },
     { id: 'privacy', name: 'Data Privacy', icon: Compass },
     { id: 'omni-ai', name: 'Omni AI', icon: Compass },
     { id: 'foundation', name: 'AI Foundation', icon: Compass },
     { id: 'ollama', name: 'Ollama Local', icon: Compass },
   ];
+  
+  const actions: PaletteItem[] = [
+    {
+      id: 'action-new-file',
+      type: 'action',
+      name: 'New File',
+      description: 'Create a new file in CloudOS',
+      icon: Plus,
+      onSelect: () => {
+        setCurrentView('ide');
+        if (ideState?.newFile) ideState.newFile();
+        onClose();
+      }
+    },
+    {
+      id: 'action-save',
+      type: 'action',
+      name: 'Save',
+      description: 'Save active file',
+      icon: Save,
+      onSelect: () => {
+        if (ideState?.saveFile) ideState.saveFile();
+        onClose();
+      }
+    },
+    
+    {
+      id: 'action-sign-out',
+      type: 'action',
+      name: 'Sign Out',
+      description: 'Sign out of VantaOS',
+      icon: LogOut,
+      onSelect: () => {
+        supabase.auth.signOut();
+        onClose();
+      }
+    }
+  ];
 
-  const filteredViews = views.filter(v => v.name.toLowerCase().includes(query.toLowerCase()));
-  const isPluginSearch = query.toLowerCase().startsWith('plugin ');
-  const pluginQuery = isPluginSearch ? query.slice(7) : '';
+  let items: PaletteItem[] = [];
+  
+  // 1. Add Views
+  views.forEach(v => {
+    items.push({
+      id: `view-${v.id}`,
+      type: 'view',
+      name: `Open ${v.name}`,
+      icon: v.icon,
+      onSelect: () => {
+        setCurrentView(v.id);
+        onClose();
+      }
+    });
+  });
+  
+  // 2. Add Actions
+  items.push(...actions);
+  
+  // 3. Add IDE Files if available
+  if (ideState) {
+    const files = ideState.files || [];
+    const openTabs = ideState.openTabs || [];
+    
+    // Open files
+    files.filter((f: any) => openTabs.includes(f.id)).forEach((f: any) => {
+      items.push({
+        id: `openfile-${f.id}`,
+        type: 'open-file',
+        name: f.name,
+        description: 'Open file (Currently Active)',
+        icon: File,
+        onSelect: () => {
+          ideState.setActiveFileId(f.id);
+          onClose();
+        }
+      });
+    });
+    
+    // File tree
+    files.filter((f: any) => !f.isFolder).forEach((f: any) => {
+      items.push({
+        id: `file-${f.id}`,
+        type: 'file',
+        name: f.name,
+        description: 'File tree',
+        icon: File,
+        onSelect: () => {
+          ideState.setActiveFileId(f.id);
+          onClose();
+        }
+      });
+    });
+  }
+  
+  
+  
+  const fuzzyMatch = (str: string, pattern: string) => {
+    let i = 0, j = 0;
+    const s = str.toLowerCase();
+    const p = pattern.toLowerCase();
+    while (i < s.length && j < p.length) {
+      if (s[i] === p[j]) j++;
+      i++;
+    }
+    return j === p.length;
+  };
+
+  let filteredItems = items;
+  if (query) {
+    filteredItems = items.filter(item => 
+      fuzzyMatch(item.name, query) || 
+      (item.description && fuzzyMatch(item.description, query))
+    );
+  }
+  
+  // De-duplicate file items (if a file is open, it appears in open files and file tree, prefer open-file)
+  const uniqueItems = new Map<string, PaletteItem>();
+  filteredItems.forEach(item => {
+    if (item.type === 'file') {
+      const openFileId = item.id.replace('file-', 'openfile-');
+      if (uniqueItems.has(openFileId)) return;
+    }
+    uniqueItems.set(item.id, item);
+  });
+  filteredItems = Array.from(uniqueItems.values());
+  
+  
+
+  // Handle keyboard navigation
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setSelectedIndex(prev => (prev + 1) % filteredItems.length);
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setSelectedIndex(prev => (prev - 1 + filteredItems.length) % filteredItems.length);
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        if (filteredItems[selectedIndex]) {
+          filteredItems[selectedIndex].onSelect();
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, filteredItems, selectedIndex]);
+  
+  // Reset selection when query changes
+  useEffect(() => {
+    setSelectedIndex(0);
+  }, [query]);
+
+  // Auto-scroll to selected item
+  useEffect(() => {
+    if (listRef.current) {
+      const selectedEl = listRef.current.children[selectedIndex] as HTMLElement;
+      if (selectedEl) {
+        selectedEl.scrollIntoView({ block: 'nearest' });
+      }
+    }
+  }, [selectedIndex]);
 
   return (
     <AnimatePresence>
@@ -63,7 +239,7 @@ export default function CommandPalette({ isOpen, onClose, setCurrentView, onSear
               <input
                 type="text"
                 autoFocus
-                placeholder="Search views, or type 'plugin <name>'..."
+                placeholder="Search files, views, actions, ..."
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 className="w-full bg-transparent border-none outline-none text-white text-lg placeholder-slate-500"
@@ -73,40 +249,30 @@ export default function CommandPalette({ isOpen, onClose, setCurrentView, onSear
               </button>
             </div>
             
-            <div className="max-h-[60vh] overflow-y-auto p-2">
-              {!isPluginSearch ? (
-                <>
-                  <div className="px-3 py-2 text-xs font-bold text-slate-500 uppercase tracking-wider">Navigation</div>
-                  {filteredViews.length > 0 ? (
-                    filteredViews.map(view => (
-                      <button
-                        key={view.id}
-                        onClick={() => {
-                          setCurrentView(view.id);
-                          onClose();
-                        }}
-                        className="w-full flex items-center gap-3 px-3 py-3 hover:bg-white/5 rounded-lg text-left text-slate-300 transition-colors"
-                      >
-                        <view.icon className="w-4 h-4 text-slate-400" />
-                        <span>{view.name}</span>
-                      </button>
-                    ))
-                  ) : (
-                    <div className="px-3 py-4 text-center text-sm text-slate-500">No views found</div>
-                  )}
-                </>
+            <div className="max-h-[60vh] overflow-y-auto p-2" ref={listRef}>
+              {filteredItems.length > 0 ? (
+                filteredItems.map((item, index) => {
+                  const isSelected = index === selectedIndex;
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={item.onSelect}
+                      className={`w-full flex items-center justify-between px-3 py-3 rounded-lg text-left transition-colors ${
+                        isSelected ? 'bg-indigo-500/20 text-indigo-300' : 'hover:bg-white/5 text-slate-300'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <item.icon className={`w-4 h-4 ${isSelected ? 'text-indigo-400' : 'text-slate-400'}`} />
+                        <span>{item.name}</span>
+                      </div>
+                      {item.description && (
+                        <span className="text-xs text-slate-500">{item.description}</span>
+                      )}
+                    </button>
+                  );
+                })
               ) : (
-                <button
-                  onClick={() => {
-                    setCurrentView('ide');
-                    if (onSearchPlugins) onSearchPlugins(pluginQuery);
-                    onClose();
-                  }}
-                  className="w-full flex items-center gap-3 px-3 py-4 hover:bg-indigo-500/20 rounded-lg text-left text-indigo-300 transition-colors bg-indigo-500/10 border border-indigo-500/20"
-                >
-                  <Puzzle className="w-5 h-5" />
-                  <span>Search for plugin: <strong className="text-indigo-200">{pluginQuery}</strong> in CloudOS</span>
-                </button>
+                <div className="px-3 py-4 text-center text-sm text-slate-500">No results found</div>
               )}
             </div>
           </motion.div>

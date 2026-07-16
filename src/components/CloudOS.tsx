@@ -2,8 +2,10 @@ import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Virtuoso } from 'react-virtuoso';
 import Editor, { DiffEditor, useMonaco } from '@monaco-editor/react';
-import { Download, Play, Terminal, Code2, FolderTree, Settings, FileJson, FileType, CheckCircle2, Plus, Trash2, Edit2, File as FileIcon, Archive, ChevronDown, ChevronRight, Folder, FolderOpen, ArrowRight, Cloud, CloudOff, FileCode2, Database, FileTerminal, Puzzle, X, Activity } from 'lucide-react';
-import { Keyboard, GitMerge } from 'lucide-react';
+import { Download, Play, Terminal, Code2, FolderTree, Settings, FileJson, FileType, CheckCircle2, Plus, Trash2, Edit2, File as FileIcon, Archive, ChevronDown, ChevronRight, Folder, FolderOpen, ArrowRight, Cloud, CloudOff, FileCode2, Database, FileTerminal, Puzzle, X, Activity, Columns, Rows } from 'lucide-react';
+import { Keyboard, GitMerge, Github } from 'lucide-react';
+import TerminalPanel from './TerminalPanel';
+import GitHubManager from './GitHubManager';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 import { auth, db } from '../lib/firebase';
@@ -19,31 +21,7 @@ interface PluginMeta {
 
 const DEFAULT_PLUGINS: Record<string, PluginMeta> = {
   prettier: { name: 'Prettier', description: 'Auto-formatter for JS, HTML, CSS', active: true },
-  eslint: { name: 'ESLint', description: 'JavaScript Linter', active: false },
-  clang: { name: 'Clang-Format', description: 'C++ style rules', active: true },
-  gitlens: { name: 'GitLens', description: 'Supercharge Git', active: false },
-  liveServer: { name: 'Live Server', description: 'Launch a local dev server', active: false },
-  vscodeIcons: { name: 'VSCode Icons', description: 'Icons for Visual Studio Code', active: true },
-  materialIcon: { name: 'Material Icon Theme', description: 'Material Design Icons', active: false },
-  python: { name: 'Python Extension', description: 'IntelliSense, linting, debugging', active: true },
-  cpp: { name: 'C/C++ Extension', description: 'C/C++ IntelliSense, debugging', active: true },
-  java: { name: 'Java Extension Pack', description: 'Popular extensions for Java', active: false },
-  docker: { name: 'Docker', description: 'Build, manage Docker containers', active: false },
-  kubernetes: { name: 'Kubernetes', description: 'Develop, deploy K8s applications', active: false },
-  restClient: { name: 'REST Client', description: 'REST Client for IDE', active: true },
-  thunderClient: { name: 'Thunder Client', description: 'Lightweight API Client', active: false },
-  spellChecker: { name: 'Code Spell Checker', description: 'Spell checker for source code', active: true },
-  pathIntellisense: { name: 'Path Intellisense', description: 'Visual Studio Code plugin that autocompletes filenames', active: true },
-  reactSnippets: { name: 'React Snippets', description: 'ES7 React/Redux/GraphQL/React-Native snippets', active: true },
-  autoCloseTag: { name: 'Auto Close Tag', description: 'Auto add HTML/XML close tag', active: true },
-  autoRenameTag: { name: 'Auto Rename Tag', description: 'Auto rename paired HTML/XML tag', active: true },
-  bracketPair: { name: 'Bracket Pair Colorizer', description: 'A customizable extension for colorizing matching brackets', active: true },
-  settingsSync: { name: 'Settings Sync', description: 'Synchronize Settings, Snippets, Themes', active: false },
-  remoteSsh: { name: 'Remote - SSH', description: 'Open any folder on a remote machine', active: false },
-  vim: { name: 'Vim', description: 'Vim emulation', active: false },
-  jupyter: { name: 'Jupyter', description: 'Jupyter notebook support', active: true },
-  markdown: { name: 'Markdown All in One', description: 'All you need to write Markdown', active: true },
-  tailwind: { name: 'Tailwind CSS IntelliSense', description: 'Intelligent Tailwind CSS tooling', active: true }
+  eslint: { name: 'ESLint', description: 'JavaScript Linter', active: false }
 };
 import * as prettier from 'prettier/standalone';
 import * as prettierPluginBabel from 'prettier/plugins/babel';
@@ -100,78 +78,111 @@ const LANGUAGES = [
 ];
 
 const DEFAULT_FILES: FileNode[] = [
-  { id: 'f-src', name: 'src', content: '', language: 'folder', isFolder: true, parentId: null, isOpen: true },
-  { id: '0', name: 'main.js', content: '// Start coding here...\nconsole.log("Hello VantaOS!");\n', language: 'javascript', parentId: 'f-src' },
-  { id: 'f-utils', name: 'utils', content: '', language: 'folder', isFolder: true, parentId: 'f-src', isOpen: false },
-  { id: '1', name: 'math.js', content: '// Math utilities\nexport function add(a, b) {\n  return a + b;\n}\n', language: 'javascript', parentId: 'f-utils' },
-  { id: '2', name: 'styles.css', content: '/* Application Styles */\nbody {\n  margin: 0;\n  background: #0f172a;\n}\n', language: 'css', parentId: 'f-src' },
-  { id: '3', name: 'index.html', content: '<!DOCTYPE html>\n<html>\n<head>\n  <link rel="stylesheet" href="src/styles.css">\n</head>\n<body>\n  <script src="src/main.js"></script>\n</body>\n</html>\n', language: 'html', parentId: null },
-  { id: '4', name: 'README.md', content: '# VantaOS Cloud Project\n\nWelcome to your browser-isolated workspace. Build, compile, and execute with absolute sovereignty.\n', language: 'markdown', parentId: null }
+  { id: '0', name: 'Untitled.js', content: '// Start coding here...\nconsole.log("Hello from VantaOS!");\n', language: 'javascript', parentId: null }
 ];
 
-interface CloudOSProps {
-  initialPluginSearch?: string;
-}
 
-export default function CloudOS({ initialPluginSearch }: CloudOSProps) {
+
+export default function CloudOS() {
   const monaco = useMonaco();
   const editorRef = useRef<any>(null);
   const [files, setFiles] = useState<FileNode[]>(DEFAULT_FILES);
   const [originalFiles, setOriginalFiles] = useState<Record<string, string>>({});
   const [showDiff, setShowDiff] = useState(false);
   const [activeFileId, setActiveFileId] = useState<string>('0');
+  const [isTerminalOpen, setIsTerminalOpen] = useState(true);
+    const [terminalHeight, setTerminalHeight] = useState(256);
+  const [terminalTheme, setTerminalTheme] = useState<any>('dark');
+  const [terminalFontSize, setTerminalFontSize] = useState<number>(13);
+  const [showTerminalSettings, setShowTerminalSettings] = useState(false);
+  const [isResizingTerminal, setIsResizingTerminal] = useState(false);
+  const [terminalOutput, setTerminalOutput] = useState<string>('VantaOS Terminal\n$ ');
+  const terminalRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isResizingTerminal) return;
+      const newHeight = window.innerHeight - e.clientY;
+      if (newHeight > 100 && newHeight < window.innerHeight - 200) {
+        setTerminalHeight(newHeight);
+      }
+    };
+    const handleMouseUp = () => setIsResizingTerminal(false);
+    if (isResizingTerminal) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+    }
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isResizingTerminal]);
+
+  useEffect(() => {
+    if (terminalRef.current) {
+      terminalRef.current.scrollTop = terminalRef.current.scrollHeight;
+    }
+  }, [terminalOutput]);
+
+  const handleRun = async () => {
+    setIsTerminalOpen(true);
+    const file = files.find(f => f.id === activeFileId);
+    if (!file) return;
+    
+    try {
+        // Save to real disk for execution
+        await fetch('/api/fs/write', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ filename: file.name, content: file.content })
+        });
+
+        // Send to integrated terminal
+        let cmd = '';
+        if (file.language === 'javascript' || file.name.endsWith('.js')) {
+            cmd = `node "${file.name}"\n`;
+        } else if (file.language === 'typescript' || file.name.endsWith('.ts')) {
+            cmd = `npx tsx "${file.name}"\n`;
+        } else if (file.language === 'python' || file.name.endsWith('.py')) {
+            cmd = `python3 "${file.name}"\n`;
+        } else if (file.language === 'cpp' || file.name.endsWith('.cpp')) {
+            cmd = `g++ "${file.name}" -o "${file.name}.out" && ./"${file.name}.out"\n`;
+        } else if (file.language === 'c' || file.name.endsWith('.c')) {
+            cmd = `gcc "${file.name}" -o "${file.name}.out" && ./"${file.name}.out"\n`;
+        } else if (file.language === 'rust' || file.name.endsWith('.rs')) {
+            cmd = `rustc "${file.name}" && ./"${file.name.replace('.rs', '')}"\n`;
+        } else if (file.language === 'go' || file.name.endsWith('.go')) {
+            cmd = `go run "${file.name}"\n`;
+        } else if (file.language === 'java' || file.name.endsWith('.java')) {
+            cmd = `javac "${file.name}" && java "${file.name.replace('.java', '')}"\n`;
+        } else if (file.name.endsWith('.sh')) {
+            cmd = `bash "${file.name}"\n`;
+        } else {
+            cmd = `echo "File saved. Execute manually. Unrecognized language: ${file.language}"\n`;
+        }
+        window.dispatchEvent(new CustomEvent('terminal-send', { detail: cmd }));
+    } catch (err) {
+        console.error("Failed to run", err);
+    }
+  };
+
+  const [dirtyTabs, setDirtyTabs] = useState<string[]>([]);
+  const [splitMode, setSplitMode] = useState<'none' | 'side-by-side' | 'stacked'>('none');
+  const [secondaryActiveFileId, setSecondaryActiveFileId] = useState<string | null>(null);
+  
+  
+
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [creatingParentId, setCreatingParentId] = useState<string | null>(null);
   const [creatingType, setCreatingType] = useState<'file' | 'folder' | null>(null);
   const [movingFileId, setMovingFileId] = useState<string | null>(null);
   const [isExporting, setIsExporting] = useState(false);
-  const [showOutput, setShowOutput] = useState(false);
-  const [outputHtml, setOutputHtml] = useState('');
-  const [terminalOutput, setTerminalOutput] = useState('');
-  const [isSynced, setIsSynced] = useState(false);
+        const [isSynced, setIsSynced] = useState(false);
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'error'>('idle');
-  const [compileProgress, setCompileProgress] = useState(0);
-  const [showDiagnostics, setShowDiagnostics] = useState(false);
-  const [debuggerActive, setDebuggerActive] = useState(false);
-  const [showPlugins, setShowPlugins] = useState(false);
+          const [showGithub, setShowGithub] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
   
-  const [plugins, setPlugins] = useState<Record<string, PluginMeta>>(DEFAULT_PLUGINS);
-  const [pluginSearch, setPluginSearch] = useState(initialPluginSearch || '');
-  const [registryLoading, setRegistryLoading] = useState(false);
   
-
-  
-  // Plugin Store Fetch
-  useEffect(() => {
-    if (showPlugins && !registryLoading) {
-      setRegistryLoading(true);
-      // Simulate fetching open-source package metadata from a remote JSON registry
-      fetch('https://registry.npmjs.org/-/v1/search?text=keywords:prettier,eslint,monaco-plugin&size=15')
-        .then(res => res.json())
-        .then(data => {
-          if (data.objects) {
-            setPlugins(prev => {
-              const next = { ...prev };
-              data.objects.forEach((obj: any) => {
-                const pkg = obj.package;
-                if (!next[pkg.name]) {
-                  next[pkg.name] = {
-                    name: pkg.name,
-                    description: pkg.description || 'Remote plugin module',
-                    active: false,
-                    version: pkg.version
-                  };
-                }
-              });
-              return next;
-            });
-          }
-        })
-        .catch(err => console.error("Plugin fetch failed", err))
-        .finally(() => setRegistryLoading(false));
-    }
-  }, [showPlugins]);
   
   const [remoteCursors, setRemoteCursors] = useState<Record<string, {line: number, column: number, color: string}>>({});
   const decorationsRef = useRef<string[]>([]);
@@ -207,6 +218,9 @@ export default function CloudOS({ initialPluginSearch }: CloudOSProps) {
 
   const handleEditorDidMount = (editor: any, monacoInstance: any) => {
     editorRef.current = editor;
+    editor.addCommand(monacoInstance.KeyMod.CtrlCmd | monacoInstance.KeyCode.KeyS, () => {
+       window.dispatchEvent(new CustomEvent('save-active-file'));
+    });
     
     // Listen for cursor changes
     editor.onDidChangeCursorPosition((e: any) => {
@@ -236,7 +250,7 @@ export default function CloudOS({ initialPluginSearch }: CloudOSProps) {
   const [openTabs, setOpenTabs] = useState<string[]>([DEFAULT_FILES[0].id]);
   
   // File creation state
-  const [isCreating, setIsCreating] = useState(false);
+    const [isCreating, setIsCreating] = useState(false);
   const [newFileName, setNewFileName] = useState('');
   
   // File renaming state
@@ -257,8 +271,7 @@ export default function CloudOS({ initialPluginSearch }: CloudOSProps) {
         const data = docSnap.data();
         if (data.editorTheme) setEditorTheme(data.editorTheme);
         if (data.openTabs) setOpenTabs(data.openTabs);
-        if (data.plugins) setPlugins(data.plugins);
-      }
+              }
     });
     
     return () => unsubscribe();
@@ -306,24 +319,45 @@ export default function CloudOS({ initialPluginSearch }: CloudOSProps) {
     }
   };
 
+
+  useEffect(() => {
+    const handleSave = () => {
+      setDirtyTabs(prev => prev.filter(id => id !== activeFileId && id !== secondaryActiveFileId));
+      setOriginalFiles(prev => {
+         const newOrig = { ...prev };
+         const f1 = files.find(f => f.id === activeFileId);
+         if (f1) newOrig[activeFileId] = f1.content;
+         if (secondaryActiveFileId) {
+             const f2 = files.find(f => f.id === secondaryActiveFileId);
+             if (f2) newOrig[secondaryActiveFileId] = f2.content;
+         }
+         return newOrig;
+      });
+    };
+    window.addEventListener('save-active-file', handleSave);
+    return () => window.removeEventListener('save-active-file', handleSave as any);
+  }, [activeFileId, secondaryActiveFileId, files]);
+
   // Trigger save on settings change
   useEffect(() => {
-    saveSettingsToCloud({ editorTheme, openTabs, plugins });
-  }, [editorTheme, openTabs, plugins]);
-  const [stdinValue, setStdinValue] = useState('');
-
+    saveSettingsToCloud({ editorTheme, openTabs });
+  }, [editorTheme, openTabs]);
+  
   const activeFile = files.find(f => f.id === activeFileId) || files[0];
 
   useEffect(() => {
     const handleKeyDown = async (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'p' || e.key === 'P')) {
         e.preventDefault();
-        document.getElementById('run-code-button')?.click();
+        
+      } else if ((e.ctrlKey || e.metaKey) && e.key === '/') {
+        e.preventDefault();
+        setShowShortcuts(prev => !prev);
       } else if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S')) {
         e.preventDefault();
         
         // Auto-formatter plugin logic
-        if (plugins.prettier?.active) {
+        if (true) {
            const file = files.find(f => f.id === activeFileId);
            if (file) {
                try {
@@ -355,32 +389,20 @@ export default function CloudOS({ initialPluginSearch }: CloudOSProps) {
            }
         }
         
-        setSyncStatus('syncing');
-        setTimeout(() => setSyncStatus('idle'), 500);
+        window.dispatchEvent(new CustomEvent('save-active-file'));
       } else if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) {
         e.preventDefault();
         setIsSearchOpen(true);
       } else if (e.key === 'Escape' && isSearchOpen) {
         setIsSearchOpen(false);
-      } else if ((e.ctrlKey || e.metaKey) && (e.key === 'p' || e.key === 'P')) {
-        e.preventDefault();
-        setShowPlugins(prev => !prev);
-      } else if ((e.ctrlKey || e.metaKey) && e.key === '/') {
-        e.preventDefault();
-        setShowShortcuts(prev => !prev);
+      
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isSearchOpen, activeFileId, files, plugins]);
+  }, [isSearchOpen, activeFileId, files]);
 
-  useEffect(() => {
-    if (initialPluginSearch) {
-      setShowPlugins(true);
-      setPluginSearch(initialPluginSearch);
-    }
-  }, [initialPluginSearch]);
-
+  
   useEffect(() => {
     if (searchQuery.trim() === '') {
       setSearchResults([]);
@@ -407,6 +429,23 @@ export default function CloudOS({ initialPluginSearch }: CloudOSProps) {
   }, [searchQuery, files]);
 
   useEffect(() => {
+
+    const loadSettings = async () => {
+      if (auth.currentUser) {
+         try {
+           const docSnap = await getDoc(doc(db, 'workspaces', auth.currentUser.uid));
+           if (docSnap.exists()) {
+             const data = docSnap.data();
+             if (data.settings) {
+                if (data.settings.editorTheme) setEditorTheme(data.settings.editorTheme);
+                
+                if (data.settings.openTabs && data.settings.openTabs.length > 0) setOpenTabs(data.settings.openTabs);
+             }
+           }
+         } catch(e) {}
+      }
+    };
+    loadSettings();
     const loadFiles = async () => {
       if (auth.currentUser) {
         try {
@@ -501,46 +540,17 @@ export default function CloudOS({ initialPluginSearch }: CloudOSProps) {
     }
   }, [files, isSynced]);
 
-    const handleEditorChange = (value: string | undefined) => {
-    if (value !== undefined) {
-      setFiles(prev => prev.map(f => f.id === activeFileId ? { ...f, content: value } : f));
+    const handleEditorChange = (value: string | undefined, isSecondary: boolean = false) => {
+    const fileId = isSecondary ? secondaryActiveFileId : activeFileId;
+    if (value !== undefined && fileId) {
+      setFiles(prev => prev.map(f => f.id === fileId ? { ...f, content: value } : f));
+      setDirtyTabs(prev => {
+        if (!prev.includes(fileId)) return [...prev, fileId];
+        return prev;
+      });
       
       // Simulate ESLint
-      if (plugins.eslint && monaco && activeFile.language === 'javascript') {
-        const model = editorRef.current?.getModel();
-        if (model) {
-          const markers: any[] = [];
-          const lines = value.split('\n');
-          lines.forEach((line, i) => {
-            if (line.includes('var ')) {
-              markers.push({
-                severity: monaco.MarkerSeverity.Warning,
-                message: 'Unexpected var, use let or const instead. (eslint: no-var)',
-                startLineNumber: i + 1,
-                startColumn: line.indexOf('var ') + 1,
-                endLineNumber: i + 1,
-                endColumn: line.indexOf('var ') + 4
-              });
-            }
-            if (line.includes('console.log')) {
-              markers.push({
-                severity: monaco.MarkerSeverity.Info,
-                message: 'Unexpected console statement. (eslint: no-console)',
-                startLineNumber: i + 1,
-                startColumn: line.indexOf('console.log') + 1,
-                endLineNumber: i + 1,
-                endColumn: line.indexOf('console.log') + 12
-              });
-            }
-          });
-          monaco.editor.setModelMarkers(model, 'eslint', markers);
-        }
-      } else if (monaco && !plugins.eslint) {
-        const model = editorRef.current?.getModel();
-        if (model) {
-          monaco.editor.setModelMarkers(model, 'eslint', []);
-        }
-      }
+      
     }
   };
 
@@ -653,14 +663,9 @@ export default function CloudOS({ initialPluginSearch }: CloudOSProps) {
     setMovingFileId(null);
   };
 
-  const [isRunning, setIsRunning] = useState(false);
-
+  
   const handleFormat = async () => {
-    if (!plugins['prettier']?.active) {
-      setTerminalOutput('Error: Prettier plugin is not enabled.');
-      setShowOutput(true);
-      return;
-    }
+    
     
     try {
       let formatted = activeFile.content;
@@ -686,132 +691,12 @@ export default function CloudOS({ initialPluginSearch }: CloudOSProps) {
       const updatedFiles = files.map(f => f.id === activeFileId ? { ...f, content: formatted } : f);
       setFiles(updatedFiles);
     } catch (e: any) {
-      setTerminalOutput('Format error: ' + e.message);
-      setShowOutput(true);
+      console.error('Format error:', e);
+      alert('Format error: ' + e.message);
     }
   };
 
-  const handleRun = async () => {
-    setShowOutput(true);
-    setTerminalOutput('');
-    setOutputHtml('');
-    setCompileProgress(0);
-    
-    if (activeFile.language === 'markdown') {
-      setOutputHtml(`
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/github-markdown-css/5.2.0/github-markdown.min.css">
-          <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-        </head>
-        <body class="markdown-body" style="padding: 20px;">
-          <div id="content"></div>
-          <script>
-            document.getElementById('content').innerHTML = marked.parse(${JSON.stringify(activeFile.content)});
-          </script>
-        </body>
-        </html>
-      `);
-      return;
-    }
-
-    if (activeFile.language === 'markdown') {
-      setOutputHtml(`
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/github-markdown-css/5.2.0/github-markdown.min.css">
-          <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-        </head>
-        <body class="markdown-body" style="padding: 20px;">
-          <div id="content"></div>
-          <script>
-            document.getElementById('content').innerHTML = marked.parse(${JSON.stringify(activeFile.content)});
-          </script>
-        </body>
-        </html>
-      `);
-      return;
-    }
-
-    if (activeFile.language === 'html') {
-      setOutputHtml(activeFile.content);
-      return;
-    } 
-    
-    if (activeFile.language === 'css') {
-      setOutputHtml(`
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <style>${activeFile.content}</style>
-        </head>
-        <body>
-          <div style="padding: 20px; text-align: center; font-family: sans-serif;">
-            <h1>CSS Applied Successfully</h1>
-            <p>This is a preview of your CSS rules applied to sample elements.</p>
-            <button style="padding: 10px 20px; background: #3b82f6; color: white; border: none; border-radius: 5px;">Sample Button</button>
-          </div>
-        </body>
-        </html>
-      `);
-      return;
-    }
-    
-    setIsRunning(true);
-    setTerminalOutput(`VantaOS Cloud Compiler [Version 2.4.1]\nInitiating Edge execution for ${activeFile.language.toUpperCase()}...\nDeploying code to sandbox...`);
-    
-    // Simulate compilation progress
-    const progressInterval = setInterval(() => {
-      setCompileProgress(prev => (prev < 90 ? prev + 10 : prev));
-    }, 300);
-    
-    try {
-      let token = 'null';
-      if (auth.currentUser) {
-        token = await auth.currentUser.getIdToken();
-      }
-
-      const response = await fetch("/api/run", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          language: activeFile.language,
-          code: activeFile.content,
-          stdin: stdinValue
-        })
-      });
-      
-      clearInterval(progressInterval);
-      setCompileProgress(100);
-      
-      const data = await response.json();
-      
-      if (data.program_error) {
-         setTerminalOutput(prev => prev + `\n\n[ERROR] Execution Failed:\n${data.program_error}`);
-      } else {
-         let out = `\n\n=== EXECUTION RESULT ===\n`;
-         if (data.compiler_error) out += `\n[COMPILER ERROR]\n${data.compiler_error}\n`;
-         if (data.program_message) out += `\n[OUTPUT]\n${data.program_message}\n`;
-         else if (data.program_output) out += `\n[OUTPUT]\n${data.program_output}\n`;
-         
-         out += `\n[STATUS] Exit Code: ${data.status}`;
-         setTerminalOutput(prev => prev + out);
-      }
-    } catch (err: any) {
-      clearInterval(progressInterval);
-      setCompileProgress(100);
-      setTerminalOutput(prev => prev + `\n\n[FATAL ERROR] Failed to connect to execution sandbox:\n${err.message}`);
-    } finally {
-      setIsRunning(false);
-      setTimeout(() => setCompileProgress(0), 1000);
-    }
-  };
-
+  
   const handleExportProject = async () => {
     setIsExporting(true);
     const zip = new JSZip();
@@ -900,6 +785,31 @@ export default function CloudOS({ initialPluginSearch }: CloudOSProps) {
   };
 
   const visibleNodes = getVisibleNodes();
+  useEffect(() => {
+    (window as any).vantaosIDE = {
+      files,
+      openTabs,
+      activeFileId,
+      setActiveFileId: (id: string) => {
+        setOpenTabs((prev: string[]) => {
+          if (!prev.includes(id)) return [...prev, id];
+          return prev;
+        });
+        setActiveFileId(id);
+      },
+      newFile: () => {
+        setCreatingType("file");
+        setCreatingParentId(null);
+      },
+      saveFile: () => {
+        window.dispatchEvent(new CustomEvent('save-active-file'));
+      }
+    };
+    return () => {
+      delete (window as any).vantaosIDE;
+    };
+  }, [files, openTabs, activeFileId, setOpenTabs, setActiveFileId, setCreatingType, setCreatingParentId]);
+
 
   return (
     <div className="flex flex-col h-screen w-screen rounded-none overflow-hidden bg-slate-900 animate-in fade-in duration-500 relative">
@@ -1013,20 +923,16 @@ export default function CloudOS({ initialPluginSearch }: CloudOSProps) {
           </button>
           
           <button 
-            onClick={() => setShowPlugins(!showPlugins)}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border ${showPlugins ? 'bg-purple-600/20 text-purple-400 border-purple-500/20' : 'bg-slate-800/50 text-slate-400 border-slate-700/50 hover:bg-slate-800 hover:text-slate-300'}`}
+            onClick={() => setShowGithub(!showGithub)}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border ${showGithub ? 'bg-emerald-600/20 text-emerald-400 border-emerald-500/20' : 'bg-slate-800/50 text-slate-400 border-slate-700/50 hover:bg-slate-800 hover:text-slate-300'}`}
           >
-            <Puzzle className="w-4 h-4" />
-            Plugins
+            <Github className="w-4 h-4" />
+            GitHub
           </button>
           
-          <button 
-            onClick={() => setDebuggerActive(!debuggerActive)}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border ${debuggerActive ? 'bg-amber-600/20 text-amber-400 border-amber-500/20' : 'bg-slate-800/50 text-slate-400 border-slate-700/50 hover:bg-slate-800 hover:text-slate-300'}`}
-          >
-            <Code2 className="w-4 h-4" />
-            Debugger {debuggerActive ? 'On' : 'Off'}
-          </button>
+          
+          
+          
           
           <button 
             onClick={handleExportProject}
@@ -1036,15 +942,13 @@ export default function CloudOS({ initialPluginSearch }: CloudOSProps) {
             {isExporting ? <CheckCircle2 className="w-4 h-4" /> : <Archive className="w-4 h-4" />}
             {isExporting ? 'Exported!' : 'Export Project'}
           </button>
-          {plugins['gitlens']?.active && (
-            <button
+          <button
               onClick={() => setShowDiff(!showDiff)}
               className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border ${showDiff ? 'bg-indigo-600/20 text-indigo-400 border-indigo-500/50' : 'bg-slate-800/50 text-slate-400 border-slate-700/50 hover:bg-slate-800 hover:text-slate-300'}`}
             >
               <Code2 className="w-4 h-4" />
               <span className="hidden sm:inline">Diff</span>
             </button>
-          )}
           
           <button
             onClick={handleFormat}
@@ -1053,23 +957,14 @@ export default function CloudOS({ initialPluginSearch }: CloudOSProps) {
             <Code2 className="w-4 h-4" />
             <span className="hidden sm:inline">Format</span>
           </button>
-          <button 
-            id="run-code-button"
+          <button
             onClick={handleRun}
-            disabled={isRunning}
-            className="flex whitespace-nowrap items-center gap-2 px-3 py-1.5 bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600/30 hover:text-emerald-300 rounded-lg text-sm font-medium transition-colors border border-emerald-500/20 disabled:opacity-50"
+            className="flex whitespace-nowrap items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors bg-emerald-600 hover:bg-emerald-500 text-white shadow shadow-emerald-900/20"
           >
-            {isRunning ? (
-              <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-emerald-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-              </svg>
-            ) : (
-              <Play className="w-4 h-4" />
-            )}
-            {isRunning ? 'Running...' : 'Compile & Run'}
+            <Play className="w-4 h-4" />
+            <span className="hidden sm:inline">Compile & Run</span>
           </button>
-        </div>
+                  </div>
       </div>
 
       <div className="flex flex-1 overflow-hidden">
@@ -1311,12 +1206,7 @@ export default function CloudOS({ initialPluginSearch }: CloudOSProps) {
                 />
               </div>
             </div>
-            <div className="p-4 border-t border-slate-800">
-              <button className="w-full flex items-center justify-center gap-2 px-3 py-2 text-slate-400 hover:text-slate-200 hover:bg-slate-800 rounded-lg text-sm transition-colors">
-                <Settings className="w-4 h-4" />
-                Settings
-              </button>
-            </div>
+            
           </div>
         )}
 
@@ -1358,9 +1248,12 @@ export default function CloudOS({ initialPluginSearch }: CloudOSProps) {
           <div className="flex items-center justify-between bg-slate-900/50 border-b border-slate-800 pr-4">
             <div className="flex overflow-x-auto shrink-0 cloudos-scroll" style={{ scrollbarWidth: 'thin', scrollBehavior: 'smooth' }}>
               <AnimatePresence>
-              {openTabs.map(tabId => {
+              {openTabs.map((tabId, index) => {
                 const tabFile = files.find(f => f.id === tabId);
                 if (!tabFile) return null;
+                const isPrimary = activeFileId === tabId;
+                const isSecondary = secondaryActiveFileId === tabId;
+                const isDirty = dirtyTabs.includes(tabId);
                 return (
                   <motion.div 
                     layout
@@ -1368,11 +1261,35 @@ export default function CloudOS({ initialPluginSearch }: CloudOSProps) {
                     animate={{ opacity: 1, x: 0 }}
                     exit={{ opacity: 0, scale: 0.9 }}
                     key={tabId}
-                    onClick={() => setActiveFileId(tabId)}
-                    className={`flex items-center gap-2 px-4 py-2 text-sm font-mono cursor-pointer border-r border-slate-800 min-w-[120px] max-w-[200px] group ${activeFileId === tabId ? 'bg-[#1e1e1e] text-slate-300 border-t-2 border-t-indigo-500' : 'bg-slate-900 text-slate-500 border-t-2 border-t-transparent hover:bg-slate-800'}`}
+                    draggable
+                    onDragStart={(e: any) => {
+                      e.dataTransfer.setData('text/plain', index.toString());
+                    }}
+                    onDragOver={(e: any) => e.preventDefault()}
+                    onDrop={(e: any) => {
+                      e.preventDefault();
+                      const fromIndex = parseInt(e.dataTransfer.getData('text/plain'));
+                      const toIndex = index;
+                      if (fromIndex !== toIndex && !isNaN(fromIndex)) {
+                        const newTabs = [...openTabs];
+                        const [moved] = newTabs.splice(fromIndex, 1);
+                        newTabs.splice(toIndex, 0, moved);
+                        setOpenTabs(newTabs);
+                      }
+                    }}
+                    onClick={() => {
+                        if (splitMode !== 'none' && activeFileId !== tabId && secondaryActiveFileId !== tabId) {
+                            setSecondaryActiveFileId(tabId);
+                        } else {
+                            setActiveFileId(tabId);
+                            if (splitMode === 'none') setSecondaryActiveFileId(null);
+                        }
+                    }}
+                    className={`flex items-center gap-2 px-4 py-2 text-sm font-mono cursor-pointer border-r border-slate-800 min-w-[120px] max-w-[200px] group ${isPrimary ? 'bg-[#1e1e1e] text-slate-300 border-t-2 border-t-indigo-500' : isSecondary ? 'bg-[#1e1e1e] text-slate-300 border-t-2 border-t-emerald-500' : 'bg-slate-900 text-slate-500 border-t-2 border-t-transparent hover:bg-slate-800'}`}
                   >
                     {getFileIcon(tabFile.language)}
                     <span className="truncate flex-1">{tabFile.name}</span>
+                    {isDirty && <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />}
                     <button 
                       onClick={(e) => {
                         e.stopPropagation();
@@ -1380,12 +1297,14 @@ export default function CloudOS({ initialPluginSearch }: CloudOSProps) {
                         setOpenTabs(newTabs);
                         if (activeFileId === tabId && newTabs.length > 0) {
                           setActiveFileId(newTabs[0]);
+                        } else if (secondaryActiveFileId === tabId) {
+                          setSecondaryActiveFileId(null);
                         } else if (newTabs.length === 0) {
                           setOpenTabs([files[0].id]);
                           setActiveFileId(files[0].id);
                         }
                       }}
-                      className="opacity-0 group-hover:opacity-100 hover:text-rose-400 p-0.5 rounded"
+                      className="opacity-0 group-hover:opacity-100 hover:text-rose-400 p-0.5 rounded ml-1"
                     >
                       <X className="w-3 h-3" />
                     </button>
@@ -1440,6 +1359,38 @@ export default function CloudOS({ initialPluginSearch }: CloudOSProps) {
                   </div>
                 </div>
               </div>
+              <div className="flex items-center gap-1 border-l border-slate-800 pl-4 ml-2">
+                <button 
+                  onClick={() => {
+                     setSplitMode('none');
+                     setSecondaryActiveFileId(null);
+                  }}
+                  className={`p-1 rounded ${splitMode === 'none' ? 'bg-indigo-500/20 text-indigo-400' : 'text-slate-500 hover:text-white hover:bg-white/10'}`}
+                  title="Single View"
+                >
+                  <Activity className="w-4 h-4" />
+                </button>
+                <button 
+                  onClick={() => {
+                     setSplitMode('side-by-side');
+                     if (!secondaryActiveFileId) setSecondaryActiveFileId(openTabs.find(t => t !== activeFileId) || null);
+                  }}
+                  className={`p-1 rounded ${splitMode === 'side-by-side' ? 'bg-indigo-500/20 text-indigo-400' : 'text-slate-500 hover:text-white hover:bg-white/10'}`}
+                  title="Split Side-by-Side"
+                >
+                  <Columns className="w-4 h-4" />
+                </button>
+                <button 
+                  onClick={() => {
+                     setSplitMode('stacked');
+                     if (!secondaryActiveFileId) setSecondaryActiveFileId(openTabs.find(t => t !== activeFileId) || null);
+                  }}
+                  className={`p-1 rounded ${splitMode === 'stacked' ? 'bg-indigo-500/20 text-indigo-400' : 'text-slate-500 hover:text-white hover:bg-white/10'}`}
+                  title="Split Stacked"
+                >
+                  <Rows className="w-4 h-4" />
+                </button>
+              </div>
             </div>
           </div>
           
@@ -1460,275 +1411,201 @@ export default function CloudOS({ initialPluginSearch }: CloudOSProps) {
                   transition={{ duration: 0.15 }}
                   className="absolute inset-0 flex"
                 >
-                  <motion.div 
-                    key={activeFileId}
-                    initial={{ opacity: 0, scale: 0.98, y: 10 }}
-                    animate={{ opacity: 1, scale: 1, y: 0 }}
-                    transition={{ type: "spring", stiffness: 300, damping: 25, mass: 0.5 }}
-                    drag
-                    dragConstraints={{ top: -200, left: -200, right: 200, bottom: 200 }}
-                    dragElastic={0.15}
-                    dragMomentum={true}
-                    dragTransition={{ bounceStiffness: 400, bounceDamping: 20 }}
-                    whileDrag={{ cursor: "grabbing" }}
-                    className="flex-1 relative cursor-grab"
+                                    <motion.div 
+                    key={`${activeFileId}-${splitMode}-${secondaryActiveFileId}`}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    className={`flex-1 flex ${splitMode === 'stacked' ? 'flex-col' : 'flex-row'} w-full h-full relative`}
                   >
-                    {showDiff ? (
-                      <DiffEditor height="100%"
-                        original={originalFiles[activeFile.id] || ''}
-                        modified={activeFile.content}
+                    <div className="flex-1 relative min-h-0 min-w-0">
+                      {showDiff ? (
+                        <DiffEditor height="100%"
+                          original={originalFiles[activeFile.id] || ''}
+                          modified={activeFile.content}
+                          language={activeFile.language}
+                          theme={editorTheme}
+                          options={{
+                            renderSideBySide: true,
+                            minimap: { enabled: false },
+                            fontSize: 14,
+                            fontFamily: '"JetBrains Mono", monospace'
+                          }}
+                        />
+                      ) : (
+                      <Editor height="100%" className="cloudos-scroll smooth-typing"
                         language={activeFile.language}
                         theme={editorTheme}
+                        value={activeFile.content}
+                        onChange={(val) => handleEditorChange(val, false)}
+                        onMount={handleEditorDidMount}
                         options={{
-                          renderSideBySide: true,
-                          minimap: { enabled: false },
+                          minimap: { enabled: true, renderCharacters: false },
                           fontSize: 14,
-                          fontFamily: '"JetBrains Mono", monospace'
+                          fontFamily: '"JetBrains Mono", monospace',
+                          padding: { top: 16, bottom: 100 },
+                          scrollBeyondLastLine: true,
+                          smoothScrolling: true,
+                          cursorBlinking: "smooth",
+                          cursorSmoothCaretAnimation: "on",
+                          formatOnPaste: true,
+                          automaticLayout: true,
+                          wordWrap: 'off',
+                          scrollbar: {
+                            useShadows: false,
+                            verticalScrollbarSize: 12,
+                            horizontalScrollbarSize: 12,
+                            vertical: 'visible',
+                            horizontal: 'visible',
+                            verticalSliderSize: 10,
+                            horizontalSliderSize: 10,
+                          }
                         }}
-                      />
-                    ) : (
-                    <Editor height="100%" className="cloudos-scroll smooth-typing"
-                      language={activeFile.language}
-                      theme={editorTheme}
-                      value={activeFile.content}
-                      onChange={handleEditorChange}
-                      onMount={handleEditorDidMount}
-                      options={{
-                        minimap: { enabled: true, renderCharacters: false },
-                        fontSize: 14,
-                        fontFamily: '"JetBrains Mono", monospace',
-                        padding: { top: 16, bottom: 100 },
-                        scrollBeyondLastLine: true,
-                        smoothScrolling: true,
-                        cursorBlinking: "smooth",
-                        cursorSmoothCaretAnimation: "on",
-                        formatOnPaste: true,
-                        automaticLayout: true,
-                        wordWrap: 'off',
-                        scrollbar: {
-                          useShadows: false,
-                          verticalScrollbarSize: 12,
-                          horizontalScrollbarSize: 12,
-                          vertical: 'visible',
-                          horizontal: 'visible',
-                          verticalSliderSize: 10,
-                          horizontalSliderSize: 10,
+                        loading={
+                          <div className="flex items-center justify-center h-full text-slate-500 font-mono text-sm">
+                            Loading IDE...
+                          </div>
                         }
-                      }}
-                      loading={
-                        <div className="flex items-center justify-center h-full text-slate-500 font-mono text-sm">
-                          Loading IDE...
-                        </div>
-                      }
-                    />
-                  )}
-                  </motion.div>
-                  
-                  {debuggerActive && (
-                    <div className="w-64 border-l border-slate-700 bg-slate-900 flex flex-col">
-                      <div className="px-3 py-2 bg-slate-800 border-b border-slate-700 text-xs font-mono font-bold text-slate-300 uppercase shrink-0">
-                        Debugger Data
-                      </div>
-                      <div className="p-3 text-sm text-slate-400 font-mono overflow-y-auto">
-                        <div className="mb-2">
-                          <span className="text-slate-500">Breakpoints:</span> <span className="text-emerald-400">0 Active</span>
-                        </div>
-                        <div className="mb-2">
-                          <span className="text-slate-500">Call Stack:</span> <span className="text-slate-600">Not running</span>
-                        </div>
-                        <div className="mb-2">
-                          <span className="text-slate-500">Variables:</span> <span className="text-slate-600">N/A</span>
-                        </div>
-                        <div className="mt-4 p-2 bg-slate-800 rounded border border-slate-700">
-                          Waiting for execution to hit breakpoint...
-                        </div>
-                      </div>
+                      />
+                      )}
                     </div>
-                  )}
+                    {splitMode !== 'none' && secondaryActiveFileId && (
+                      <>
+                        <div className={`bg-slate-800 ${splitMode === 'stacked' ? 'h-[2px] w-full' : 'w-[2px] h-full'} z-10`} />
+                        <div className="flex-1 relative min-h-0 min-w-0">
+                          {(() => {
+                            const secFile = files.find(f => f.id === secondaryActiveFileId);
+                            if (!secFile) return null;
+                            return (
+                              <Editor height="100%" className="cloudos-scroll smooth-typing"
+                                language={secFile.language}
+                                theme={editorTheme}
+                                value={secFile.content}
+                                onChange={(val) => handleEditorChange(val, true)}
+                                options={{
+                                  minimap: { enabled: true, renderCharacters: false },
+                                  fontSize: 14,
+                                  fontFamily: '"JetBrains Mono", monospace',
+                                  padding: { top: 16, bottom: 100 },
+                                  scrollBeyondLastLine: true,
+                                  smoothScrolling: true,
+                                  cursorBlinking: "smooth",
+                                  cursorSmoothCaretAnimation: "on",
+                                  formatOnPaste: true,
+                                  automaticLayout: true,
+                                  wordWrap: 'off',
+                                  scrollbar: {
+                                    useShadows: false,
+                                    verticalScrollbarSize: 12,
+                                    horizontalScrollbarSize: 12,
+                                    vertical: 'visible',
+                                    horizontal: 'visible',
+                                    verticalSliderSize: 10,
+                                    horizontalSliderSize: 10,
+                                  }
+                                }}
+                                loading={
+                                  <div className="flex items-center justify-center h-full text-slate-500 font-mono text-sm">
+                                    Loading Secondary IDE...
+                                  </div>
+                                }
+                              />
+                            );
+                          })()}
+                        </div>
+                      </>
+                    )}
+                  </motion.div>
                 </motion.div>
               </AnimatePresence>
             </div>
-            
-            {/* Output Panel */}
-            <AnimatePresence>
-              {showOutput && (
-                <motion.div 
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: 250, opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
-                  className="w-full bg-slate-950 border-t border-slate-800 flex flex-col shrink-0 overflow-hidden relative"
-                >
-                  {isRunning && (
-                    <div className="absolute top-0 left-0 h-0.5 bg-emerald-500 transition-all duration-300 ease-out z-10" style={{ width: `${compileProgress}%` }} />
-                  )}
-                  <div className="flex items-center justify-between px-4 py-2 bg-slate-900 border-b border-slate-800 shrink-0">
-                    <div className="flex items-center gap-3">
-                      <span className="text-xs font-mono text-slate-400 font-bold uppercase tracking-wider">Output Console</span>
-                      {isRunning && (
-                        <div className="flex items-center gap-2">
-                           <svg className="animate-spin h-3 w-3 text-emerald-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                           </svg>
-                           <span className="text-[10px] text-emerald-400/70 uppercase tracking-widest font-mono">Compiling {compileProgress}%</span>
-                        </div>
-                      )}
-                      {isRunning && (
-                         <div className="flex items-center gap-4 ml-4 px-3 py-1 bg-slate-950 rounded-lg border border-slate-800 text-[10px] font-mono text-slate-400">
-                           <div className="flex items-center gap-1">
-                             <Activity className="w-3 h-3 text-indigo-400" />
-                             CPU: <span className="text-indigo-400 font-bold">{Math.floor(Math.random() * 40) + 10}%</span>
-                           </div>
-                           <div className="flex items-center gap-1">
-                             <Database className="w-3 h-3 text-emerald-400" />
-                             MEM: <span className="text-emerald-400 font-bold">{Math.floor(Math.random() * 200) + 50}MB</span>
-                           </div>
-                         </div>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-4">
-                      <button onClick={() => { setTerminalOutput(''); setOutputHtml(''); }} className="text-slate-500 hover:text-slate-300 text-xs font-bold uppercase tracking-wider">Clear</button>
-                      <button onClick={() => setShowOutput(false)} className="text-slate-500 hover:text-slate-300 text-xs font-bold uppercase tracking-wider">Close</button>
-                    </div>
+
+            {/* VS Code like Terminal Panel */}
+            {isTerminalOpen && (
+              <div style={{ height: terminalHeight }} className="bg-[#1e1e1e] border-t border-slate-800 flex flex-col shrink-0 relative">
+                {/* Resizer */}
+                <div 
+                  className="absolute top-0 left-0 right-0 h-1 cursor-row-resize hover:bg-indigo-500/50 z-10"
+                  onMouseDown={() => setIsResizingTerminal(true)}
+                />
+                <div className="flex items-center justify-between px-4 py-2 bg-[#252526] border-b border-slate-800">
+                  <div className="flex items-center gap-4 text-xs font-medium uppercase tracking-wider text-slate-400">
+                    <button className="text-slate-200 border-b border-blue-500 pb-1">Terminal</button>
+                    
                   </div>
-                  <div className="flex flex-1 overflow-hidden relative">
-                    {activeFile.language !== 'html' && activeFile.language !== 'css' && (
-                       <div className="w-1/3 border-r border-slate-800 flex flex-col bg-[#1e1e1e]">
-                         <div className="text-[10px] font-bold text-slate-500 uppercase px-3 py-1 bg-slate-900 border-b border-slate-800">Standard Input (stdin)</div>
-                         <textarea
-                           value={stdinValue}
-                           onChange={(e) => setStdinValue(e.target.value)}
-                           placeholder="Enter standard input here before running..."
-                           className="flex-1 w-full p-2 bg-transparent text-slate-300 text-sm font-mono resize-none border-none outline-none placeholder:text-slate-300"
-                         />
-                       </div>
+                  <div className="flex items-center gap-2 relative">
+                    
+                    <button onClick={() => setShowTerminalSettings(!showTerminalSettings)} className="p-1 hover:bg-slate-700 rounded text-slate-400 hover:text-slate-200" title="Terminal Settings">
+                      <Settings className="w-3.5 h-3.5" />
+                    </button>
+                    
+                    {showTerminalSettings && (
+                      <div className="absolute bottom-full right-0 mb-2 w-48 bg-slate-900 border border-slate-700 rounded-lg shadow-xl p-3 z-50">
+                        <div className="flex items-center justify-between mb-3">
+                          <span className="text-xs font-semibold text-slate-200">Terminal Settings</span>
+                          <button onClick={() => setShowTerminalSettings(false)} className="text-slate-400 hover:text-slate-200"><X className="w-3 h-3" /></button>
+                        </div>
+                        
+                        <div className="mb-3">
+                          <label className="block text-xs text-slate-400 mb-1">Font Size</label>
+                          <div className="flex items-center gap-2">
+                            <input 
+                              type="range" 
+                              min="10" 
+                              max="24" 
+                              value={terminalFontSize} 
+                              onChange={(e) => setTerminalFontSize(parseInt(e.target.value))}
+                              className="w-full accent-blue-500"
+                            />
+                            <span className="text-xs text-slate-300 min-w-[20px]">{terminalFontSize}</span>
+                          </div>
+                        </div>
+                        
+                        <div>
+                          <label className="block text-xs text-slate-400 mb-1">Theme</label>
+                          <select 
+                            value={terminalTheme} 
+                            onChange={(e) => setTerminalTheme(e.target.value)}
+                            className="w-full bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded px-2 py-1 outline-none focus:border-blue-500"
+                          >
+                            <option value="dark">Dark</option>
+                            <option value="light">Light</option>
+                            <option value="dracula">Dracula</option>
+                            <option value="monokai">Monokai</option>
+                            <option value="ubuntu">Ubuntu</option>
+                          </select>
+                        </div>
+                      </div>
                     )}
-                    <div className="flex-1 overflow-y-auto">
-                      {terminalOutput ? (
-                        <div className="h-full w-full font-mono text-sm text-emerald-400">
-                          <Virtuoso
-                            style={{ height: 256, width: '100%' }}
-                            totalCount={terminalOutput.split('\n').length}
-                            itemContent={(index) => (
-                              <div className="px-4 whitespace-pre-wrap">
-                                {terminalOutput.split('\n')[index]}
-                              </div>
-                            )}
-                          />
-                        </div>
-                      ) : (
-                        <iframe 
-                          srcDoc={outputHtml}
-                          className="w-full h-full border-none bg-white/5"
-                          title="Code Execution Output"
-                          sandbox="allow-scripts"
-                        />
-                      )}
-                    </div>
+
+                    <button onClick={() => window.dispatchEvent(new CustomEvent('terminal-send', { detail: 'clear\n' }))} className="p-1 hover:bg-slate-700 rounded text-slate-400 hover:text-slate-200" title="Clear Console">
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                    <button onClick={() => setIsTerminalOpen(false)} className="p-1 hover:bg-slate-700 rounded text-slate-400 hover:text-slate-200" title="Close Panel">
+                      <X className="w-3.5 h-3.5" />
+                    </button>
                   </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
+                </div>
+                <div className="flex-1 overflow-hidden relative">
+                  <TerminalPanel theme={terminalTheme} fontSize={terminalFontSize} />
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
-
-      {/* Developer Diagnostics View (Hidden) */}
+      
+      {/* Plugin Modal */}
       <AnimatePresence>
-        {showDiagnostics && (
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 20 }}
-            className="absolute bottom-16 right-4 w-80 bg-slate-900 border border-emerald-500/30 rounded-xl shadow-2xl overflow-hidden z-[100] font-mono"
-          >
-            <div className="flex items-center justify-between px-3 py-2 border-b border-slate-800 bg-slate-950">
-              <div className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest flex items-center gap-2">
-                <Activity className="w-3 h-3" /> Diagnostics
-              </div>
-              <button onClick={() => setShowDiagnostics(false)} className="text-slate-500 hover:text-slate-300">
-                <X className="w-3 h-3" />
-              </button>
-            </div>
-            <div className="p-3 space-y-3 text-xs text-slate-300">
-              <div>
-                <div className="text-slate-500 mb-1">Heap Memory</div>
-                <div className="flex justify-between items-center">
-                  <span>{(performance as any)?.memory?.usedJSHeapSize ? Math.round((performance as any).memory.usedJSHeapSize / 1024 / 1024) + ' MB' : '42 MB'}</span>
-                  <span className="text-emerald-400">Stable</span>
-                </div>
-              </div>
-              <div>
-                <div className="text-slate-500 mb-1">Loaded Plugins Bundle Size</div>
-                {Object.entries(plugins).filter(([k, p]) => p.active).length > 0 ? (
-                  Object.entries(plugins).filter(([k, p]) => p.active).map(([key, p]) => (
-                    <div key={key} className="flex justify-between items-center mt-1">
-                      <span>{p.name}</span>
-                      <span className="text-indigo-400">{Math.round(Math.random() * 400 + 50)} KB</span>
-                    </div>
-                  ))
-                ) : (
-                  <div className="text-slate-500 italic">No plugins active</div>
-                )}
-              </div>
-            </div>
-          </motion.div>
+        {showGithub && (
+          <GitHubManager 
+            files={files} 
+            setFiles={setFiles} 
+            originalFiles={originalFiles} 
+            setOriginalFiles={setOriginalFiles} 
+            onClose={() => setShowGithub(false)} 
+          />
         )}
-      </AnimatePresence>
-
-      {/* Plugins Modal */}
-      <AnimatePresence>
-        {showPlugins && (
-          <motion.div 
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.95 }}
-            className="absolute top-16 left-1/2 -translate-x-1/2 w-[500px] bg-slate-900 border border-purple-500/30 rounded-xl shadow-2xl overflow-hidden z-50 flex flex-col"
-          >
-            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800 bg-slate-950">
-              <div className="flex items-center gap-2 text-purple-400 font-bold">
-                <Puzzle className="w-5 h-5" />
-                Plugin Store
-              </div>
-              <button onClick={() => setShowPlugins(false)} className="text-slate-500 hover:text-slate-300 font-bold text-xs uppercase tracking-wider">
-                Close
-              </button>
-            </div>
-            <div className="px-4 pt-4">
-              <input
-                type="text"
-                placeholder="Search plugins..."
-                value={pluginSearch}
-                onChange={(e) => setPluginSearch(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-purple-500 transition-colors"
-              />
-            </div>
-            <div className="p-4 space-y-3 max-h-[400px] overflow-y-auto cloudos-scroll">
-              {registryLoading && <div className="text-center text-slate-400 text-sm font-mono animate-pulse">Fetching remote registry...</div>}
-              {Object.entries(plugins)
-                .filter(([_, plugin]) => plugin.name.toLowerCase().includes(pluginSearch.toLowerCase()) || plugin.description.toLowerCase().includes(pluginSearch.toLowerCase()))
-                .map(([key, plugin]) => (
-                <div key={key} className="flex items-center justify-between p-3 bg-slate-800 rounded border border-slate-700">
-                  <div>
-                    <div className="text-sm font-bold text-slate-200">
-                      {plugin.name} 
-                      {plugin.version && <span className="ml-2 text-[10px] text-slate-500 font-mono">v{plugin.version}</span>}
-                    </div>
-                    <div className="text-xs text-slate-400">{plugin.description}</div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                      <button 
-                          onClick={() => setPlugins(prev => ({ ...prev, [key]: { ...prev[key], active: !prev[key].active } }))}
-                          className={`text-xs px-2 py-1 rounded font-bold transition-colors ${plugin.active ? 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}
-                      >
-                          {plugin.active ? 'Active' : 'Enable'}
-                      </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </motion.div>
-        )}
+        
       </AnimatePresence>
       {/* Shortcuts Modal */}
       <AnimatePresence>
@@ -1758,14 +1635,8 @@ export default function CloudOS({ initialPluginSearch }: CloudOSProps) {
                   <span className="text-slate-400">Save & Format</span>
                   <span className="font-mono bg-slate-800 text-slate-300 px-2 py-1 rounded border border-slate-700">Ctrl + S</span>
                 </div>
-                <div className="flex justify-between items-center text-sm">
-                  <span className="text-slate-400">Run Code</span>
-                  <span className="font-mono bg-slate-800 text-slate-300 px-2 py-1 rounded border border-slate-700">Ctrl + Enter</span>
-                </div>
-                <div className="flex justify-between items-center text-sm">
-                  <span className="text-slate-400">Toggle Plugins</span>
-                  <span className="font-mono bg-slate-800 text-slate-300 px-2 py-1 rounded border border-slate-700">Ctrl + P</span>
-                </div>
+
+                
                 <div className="flex justify-between items-center text-sm">
                   <span className="text-slate-400">Toggle Shortcuts</span>
                   <span className="font-mono bg-slate-800 text-slate-300 px-2 py-1 rounded border border-slate-700">Ctrl + /</span>

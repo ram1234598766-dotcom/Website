@@ -3,11 +3,6 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
 
 export default function AdminPanel() {
-  const [logs] = useState([
-    { id: 1, type: 'DDoS', ip: '192.168.x.x', status: 'Neutralized', time: '2 mins ago' },
-    { id: 2, type: 'Prompt Injection', target: 'LumenVision', status: 'Blocked', time: '15 mins ago' },
-    { id: 3, type: 'SQLi Attempt', target: 'Auth Node 4', status: 'Neutralized', time: '1 hour ago' },
-  ]);
 
   const [metrics, setMetrics] = useState({
     usersCount: 0,
@@ -167,76 +162,6 @@ export default function AdminPanel() {
                 </button>
              </div>
           </div>
-        </div>
-
-        <div className="bg-[#0a0d12] border border-slate-800 p-6 rounded-2xl flex flex-col gap-4 shadow-lg">
-          <div className="flex items-center gap-3">
-            <div className="p-3 bg-rose-950/50 rounded-xl border border-rose-900/50">
-              <Activity className="w-6 h-6 text-rose-500" />
-            </div>
-            <div>
-              <div className="text-xs font-bold text-slate-400 uppercase tracking-wider">Compile / Run Counts</div>
-              <div className="text-sm font-mono text-slate-400 mt-1">Not tracked yet</div>
-            </div>
-          </div>
-        </div>
-
-      </div>
-
-      {/* Threat Log */}
-      <div className="bg-[#0a0d12] border border-slate-800 rounded-2xl overflow-hidden shadow-2xl">
-        <div className="p-5 border-b border-slate-800 bg-[#161B22] flex items-center justify-between">
-          <h3 className="text-sm font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
-            <Lock className="w-4 h-4 text-emerald-500" />
-            AI Threat Watchdog Logs
-          </h3>
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => {
-                const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({ logs, metrics }, null, 2));
-                const downloadAnchorNode = document.createElement('a');
-                downloadAnchorNode.setAttribute("href", dataStr);
-                downloadAnchorNode.setAttribute("download", "vantaos-system-logs.json");
-                document.body.appendChild(downloadAnchorNode);
-                downloadAnchorNode.click();
-                downloadAnchorNode.remove();
-              }}
-              className="text-xs font-bold uppercase tracking-wider px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition-colors border border-slate-700"
-            >
-              Export JSON
-            </button>
-            <div className="flex items-center gap-2">
-              <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
-              <span className="text-[10px] text-emerald-500 uppercase tracking-wider font-mono font-bold">Watchdog Active</span>
-            </div>
-          </div>
-        </div>
-        
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm text-slate-400">
-            <thead className="text-xs uppercase bg-[#0D1117] text-slate-400 border-b border-slate-800">
-              <tr>
-                <th className="px-6 py-4 font-bold">Threat Type</th>
-                <th className="px-6 py-4 font-bold">Target / Source</th>
-                <th className="px-6 py-4 font-bold">Action Taken</th>
-                <th className="px-6 py-4 font-bold">Timestamp</th>
-              </tr>
-            </thead>
-            <tbody>
-              {logs.map((log) => (
-                <tr key={log.id} className="border-b border-slate-800/50 hover:bg-[#161B22] transition-colors">
-                  <td className="px-6 py-4 font-medium text-slate-200">{log.type}</td>
-                  <td className="px-6 py-4 font-mono text-xs">{log.ip || log.target}</td>
-                  <td className="px-6 py-4">
-                    <span className="px-2 py-1 bg-emerald-950/50 text-emerald-400 text-xs font-bold rounded border border-emerald-900/50">
-                      {log.status}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-xs">{log.time}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
         </div>
       </div>
     </div>

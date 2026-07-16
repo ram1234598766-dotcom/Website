@@ -2,12 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { sanitizeInput, detectSqlInjection } from '../lib/sanitize';
 import { Thread, Profile, Reply } from '../types';
-import { MessageSquare, ArrowUp, Plus, Search, Filter, LogOut, Loader2, ArrowLeft } from 'lucide-react';
+import { MessageSquare, ArrowUp, Plus, LogOut, Loader2, ArrowLeft } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 
 import AuthForm from './AuthForm';
 
 export default function Forum() {
+const categories = ["All Topics", "General", "AI Research", "Announcements", "Help & Support"];
   const [session, setSession] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [threads, setThreads] = useState<Thread[]>([]);
@@ -29,7 +30,6 @@ export default function Forum() {
   
   const [replyContent, setReplyContent] = useState('');
 
-  const categories = ['All Discussions', 'Announcements', 'Platform API', 'Infrastructure', 'Tutorials', 'Feature Requests', 'General'];
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -410,35 +410,9 @@ export default function Forum() {
           </div>
         </div>
       ) : (
-        <div className="flex flex-col md:flex-row gap-6">
-          <aside className="w-full md:w-64 shrink-0 flex flex-col gap-2">
-            <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 px-3">Categories</div>
-            {categories.map((cat, i) => (
-              <button 
-                key={cat}
-                className={`text-left px-3 py-2 rounded-md text-sm font-medium transition-colors ${i === 0 ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-100 hover:text-white'}`}
-              >
-                {cat}
-              </button>
-            ))}
-          </aside>
-
+        <div className="flex flex-col gap-6">
           <div className="flex-1 bg-white/5 rounded-xl border border-white/10 shadow-sm overflow-hidden">
-            <div className="p-4 border-b border-slate-100 flex gap-4">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                <input 
-                  type="text" 
-                  placeholder="Search discussions..." 
-                  className="w-full pl-9 pr-4 py-2 bg-[#0a0a0c] border border-white/10 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
-                />
-              </div>
-              <button className="p-2 border border-white/10 rounded-lg text-slate-600 hover:bg-[#0a0a0c]">
-                <Filter className="w-4 h-4" />
-              </button>
-            </div>
-            
-            <div className="divide-y divide-slate-100">
+            <div className="divide-y divide-slate-100/10">
               {threads.length === 0 ? (
                 <div className="p-8 text-center text-slate-500">No threads found. Be the first to post!</div>
               ) : (

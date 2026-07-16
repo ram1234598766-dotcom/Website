@@ -17,10 +17,8 @@ import Showcase from './components/Showcase';
 import AdminPanel from './components/AdminPanel';
 import PrivacyPolicy from './components/PrivacyPolicy';
 import OmniAI from './components/OmniAI';
-import FoundationModel from './components/FoundationModel';
 import CloudOS from './components/CloudOS';
 import OllamaLocal from './components/OllamaLocal';
-import GlobalHelperBot from './components/GlobalHelperBot';
 import AuthModal from './components/AuthModal';
 import { supabase, checkSupabaseConfig } from './lib/supabase';
 import { Session } from '@supabase/supabase-js';
@@ -37,8 +35,7 @@ export default function App() {
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin');
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
-  const [pluginSearchQuery, setPluginSearchQuery] = useState('');
-  const [securityStatus, setSecurityStatus] = useState<'checking' | 'secure' | 'threat'>('checking');
+    const [securityStatus, setSecurityStatus] = useState<'checking' | 'secure' | 'threat'>('checking');
   
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
@@ -78,6 +75,9 @@ export default function App() {
     
     supabase.auth.getSession().then(({ data: { session }, error }) => {
       setSession(session);
+      if (session?.provider_token) {
+         localStorage.setItem('github_token', session.provider_token);
+      }
       if (error) {
         console.error("Session error:", error);
       }
@@ -87,6 +87,10 @@ export default function App() {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session);
+
+      if (session?.provider_token) {
+         localStorage.setItem('github_token', session.provider_token);
+      }
       
       if (event === 'SIGNED_OUT') {
         setSessionWarning(false);
@@ -161,8 +165,7 @@ export default function App() {
               {currentView === 'admin' && <AdminPanel />}
               {currentView === 'privacy' && <PrivacyPolicy />}
               {currentView === 'omni-ai' && <OmniAI />}
-              {currentView === 'foundation' && <FoundationModel />}
-              {currentView === 'ide' && <CloudOS initialPluginSearch={pluginSearchQuery} />}
+              {currentView === 'ide' && <CloudOS  />}
               {currentView === 'ollama' && <OllamaLocal />}
             </motion.div>
           </AnimatePresence>
@@ -191,12 +194,11 @@ export default function App() {
           </footer>
         )}
 
-        <GlobalHelperBot />
         <CommandPalette 
           isOpen={isCommandPaletteOpen} 
           onClose={() => setIsCommandPaletteOpen(false)} 
           setCurrentView={setCurrentView}
-          onSearchPlugins={(q) => setPluginSearchQuery(q)}
+          
         />
         
         <AuthModal isOpen={showAuthModal} onClose={() => setShowAuthModal(false)} initialMode={authMode} />

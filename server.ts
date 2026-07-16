@@ -1,30 +1,97 @@
 import express from 'express';
+import { createServer } from 'http';
+import { Server } from 'socket.io';
+import { spawn } from 'child_process';
 import path from 'path';
 import { createServer as createViteServer } from 'vite';
+import { GoogleGenAI } from '@google/genai';
 
 async function startServer() {
   const app = express();
+  const httpServer = createServer(app);
+  const io = new Server(httpServer);
+
+  io.on('connection', (socket) => {
+    let bash;
+    try {
+       bash = require('node-pty').spawn('bash', [], {
+           name: 'xterm-color',
+           cols: 80,
+           rows: 24,
+           cwd: process.cwd(),
+           env: process.env
+       });
+       bash.onData((data) => socket.emit('terminal.incData', data));
+       socket.on('terminal.toTerm', (data) => bash.write(data));
+       socket.on('resize', (size) => bash.resize(size.cols, size.rows));
+    } catch (e) {
+       // Fallback to spawn
+       bash = spawn('bash', ['-i'], {
+           cwd: process.cwd(),
+           env: process.env
+       });
+       bash.stdout.on('data', (data) => socket.emit('terminal.incData', data.toString()));
+       bash.stderr.on('data', (data) => socket.emit('terminal.incData', data.toString()));
+       socket.on('terminal.toTerm', (data) => bash.stdin.write(data));
+    }
+
+    socket.on('disconnect', () => {
+      if (bash) bash.kill();
+    });
+  });
   const PORT = 3000;
 
   app.use(express.json());
 
-  // Backend Security Software Endpoint
-  app.post('/api/security/scan', (req, res) => {
-    const { payload } = req.body;
-    let threatsFound = false;
-    
-    if (typeof payload === 'string') {
-        const lower = payload.toLowerCase();
-        // Basic signature-based threat detection
-        if (lower.includes('drop table') || lower.includes('<script>') || lower.includes('alert(') || lower.includes('exec(')) {
-            threatsFound = true;
-        }
-    }
-    
-    res.json({ threatsFound, status: threatsFound ? 'Quarantined' : 'Clean', timestamp: new Date().toISOString() });
-  });
   
-  // Gemini Proxy Endpoint for AI features
+  app.post('/api/fs/write', async (req, res) => {
+    try {
+        const { filename, content } = req.body;
+        const fs = await import('fs/promises');
+        const path = await import('path');
+        const safePath = path.join(process.cwd(), filename.replace(/\.\.\//g, ''));
+        await fs.writeFile(safePath, content);
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post('/api/run', async (req, res) => {
+    try {
+        const { code, language } = req.body;
+        let jsCode = code;
+        if (language === 'typescript') {
+             // Basic transpilation for execution (using esbuild in memory is fast and clean, but let's just use ts-node or tsx programmatically if possible)
+             // We can just use esbuild or a simple child process to run tsx.
+             const fs = await import('fs/promises');
+             const path = await import('path');
+             const tmpfile = path.join(process.cwd(), 'temp-' + Date.now() + '.ts');
+             await fs.writeFile(tmpfile, code);
+             const { exec } = await import('child_process');
+             exec(`npx tsx ${tmpfile}`, { timeout: 5000 }, (err, stdout, stderr) => {
+                 fs.unlink(tmpfile).catch(()=>{});
+                 res.json({ stdout: stdout || '', stderr: stderr || (err ? err.message : '') });
+             });
+             return;
+        } else if (language === 'javascript') {
+             const fs = await import('fs/promises');
+             const path = await import('path');
+             const tmpfile = path.join(process.cwd(), 'temp-' + Date.now() + '.js');
+             await fs.writeFile(tmpfile, code);
+             const { exec } = await import('child_process');
+             exec(`node ${tmpfile}`, { timeout: 5000 }, (err, stdout, stderr) => {
+                 fs.unlink(tmpfile).catch(()=>{});
+                 res.json({ stdout: stdout || '', stderr: stderr || (err ? err.message : '') });
+             });
+             return;
+        }
+        res.json({ stdout: '', stderr: 'Unsupported language for server execution' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+  });
+
   // Supabase Edge Functions - Mock Auth Validation Endpoint
   app.post('/api/edge-functions/auth-sync', (req, res) => {
      const authHeader = req.headers.authorization;
@@ -36,22 +103,35 @@ async function startServer() {
 
   app.post('/api/ai/generate', async (req, res) => {
     try {
-        const { prompt } = req.body;
+        const { prompt, messages, modelType } = req.body;
         const apiKey = process.env.GEMINI_API_KEY;
         
         if (!apiKey) {
             return res.status(500).json({ error: 'GEMINI_API_KEY not configured on server' });
         }
         
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
-        });
+        const ai = new GoogleGenAI({ apiKey });
         
-        const data = await response.json();
-        const text = data.candidates?.[0]?.content?.parts?.[0]?.text || 'No response generated.';
-        res.json({ text });
+        if (messages && Array.isArray(messages)) {
+            // Chat mode
+            const formattedContents = messages.map(msg => ({
+                role: msg.role === 'user' ? 'user' : 'model',
+                parts: [{ text: msg.content }]
+            }));
+            
+            const response = await ai.models.generateContent({
+                model: 'gemini-2.5-flash',
+                contents: formattedContents,
+            });
+            return res.json({ text: response.text || 'No response generated.' });
+        } else {
+            // Simple prompt mode
+            const response = await ai.models.generateContent({
+                model: 'gemini-2.5-flash',
+                contents: prompt,
+            });
+            return res.json({ text: response.text || 'No response generated.' });
+        }
     } catch (err: any) {
         res.status(500).json({ error: err.message });
     }
@@ -71,7 +151,7 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
+  httpServer.listen(PORT, '0.0.0.0', () => {
     console.log(`Server running on http://localhost:${PORT}`);
   });
 }

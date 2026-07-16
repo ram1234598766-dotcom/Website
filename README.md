@@ -102,7 +102,7 @@
 99. Advanced Topic 99
 
 ## 1. Introduction
-Welcome to the VantaOS Ecosystem, the pinnacle of decentralized, open-source software platforms. Powered by the Lion Omni-Language Suite, VantaOS redefines the boundaries of full-stack web applications, native apps, and neural network architectures. This ecosystem is designed to be 100% perfect, operating with strictly $0 operational cost while remaining completely immune to external security vectors.
+Welcome to the VantaOS Ecosystem, the pinnacle of open-source software platforms. Powered by the Lion Omni-Language Suite, VantaOS redefines the boundaries of full-stack web applications, native apps, and neural network architectures. This ecosystem is designed to be 100% perfect, operating with strictly $0 operational cost while remaining completely immune to external security vectors.
 
 ## 2. The Sovereign AI Architect & CISO
 VantaOS is overseen by the Sovereign AI Architect, Core Runtime Compiler Engineer, and Chief Information Security Officer (CISO). The mandate is absolute: design, engineer, and scale without fabrication. There are no mock data structures, no stubs, and no simulated work. Everything operates on real byte streams, real Web APIs, and true relational schemas.
@@ -123,7 +123,7 @@ Every piece of data is owned by the user, secured via real relational databases 
 
 ## 5. Quantum-Secure Fortress Cybersecurity
 VantaOS is protected by state-of-the-art security measures.
-- **Fully Homomorphic Encryption (FHE)**: Compute on encrypted data without ever decrypting it in transit or at rest.
+- **Transit & Storage Security**: All data is encrypted in transit using standard TLS, and protected at rest via Supabase Row Level Security (RLS) policies.
 - **Threat Watchdog**: A vigilant, real-time security monitor that scans all incoming byte streams and API calls for malicious vectors.
 - **Repository Hygiene**: Continuous scanning ensures no hardcoded secrets or simulated logic compromise the system.
 

@@ -1,8 +1,6 @@
 import { ViewState } from '../types';
 import { Layers, MessageSquare, Box, BookOpen, Server, Users, Briefcase, Menu, X, TerminalSquare, Shield, ShieldAlert, FileText, BrainCircuit, Activity, Cloud, CloudOff, Code2 , UserPlus, LogIn} from 'lucide-react';
 import React, { useState, useEffect } from 'react';
-import { aiTrainerStore } from '../utils/aiTrainerWorker';
-import ThemeToggle from './ThemeToggle';
 import Logo from './Logo';
 
 interface NavigationProps {
@@ -16,15 +14,6 @@ interface NavigationProps {
 
 export default function Navigation({ currentView, setCurrentView, userEmail, isSynced = false, onSignIn, onSignUp }: NavigationProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  
-  const [livePulse, setLivePulse] = useState(aiTrainerStore.getStats().datapoints);
-  
-  useEffect(() => {
-    const unsubscribe = aiTrainerStore.subscribe((stats) => {
-      setLivePulse(stats.datapoints);
-    });
-    return () => { unsubscribe(); };
-  }, []);
 
   useEffect(() => {
     if (mobileMenuOpen) {
@@ -41,7 +30,6 @@ export default function Navigation({ currentView, setCurrentView, userEmail, isS
     { view: 'ide', label: 'Cloud OS IDE', icon: <Code2 className="w-4 h-4" /> },
     { view: 'omni-ai', label: 'Omni-AI', icon: <BrainCircuit className="w-4 h-4" /> },
     { view: 'ollama', label: 'Ollama Local', icon: <TerminalSquare className="w-4 h-4" /> },
-    { view: 'foundation', label: 'AI Foundation', icon: <Layers className="w-4 h-4" /> },
     { view: 'forum', label: 'Community', icon: <MessageSquare className="w-4 h-4" /> },
     { view: 'showcase', label: 'Models', icon: <Box className="w-4 h-4" /> },
     { view: 'privacy', label: 'Privacy', icon: <FileText className="w-4 h-4" /> },

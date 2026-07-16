@@ -55,6 +55,12 @@ export default function OllamaLocal() {
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ prompt })
           });
+          if (!res.ok) throw new Error('Generation failed');
+          const data = await res.json();
+          if (data.text) {
+              setResponse(data.text);
+          }
+          return;
       } else {
           res = await fetch(`${ollamaUrl}/api/generate`, {
             method: 'POST',

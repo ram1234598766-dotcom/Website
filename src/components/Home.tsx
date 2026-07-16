@@ -201,8 +201,7 @@ export default function Home({ setCurrentView, onSignIn, onSignUp }: HomeProps) 
             </div>
             
             <div className="flex flex-wrap items-center justify-center gap-6 text-sm font-medium">
-                <a href="#" className="text-slate-400 hover:text-white transition-colors">GitHub Repo</a>
-                <a href="#" className="text-slate-400 hover:text-white transition-colors">Documentation</a>
+                
                 <button onClick={onSignIn} className="text-slate-400 hover:text-white transition-colors">Sign In</button>
                 <button onClick={onSignUp} className="text-indigo-400 hover:text-indigo-300 transition-colors">Get Started</button>
             </div>
