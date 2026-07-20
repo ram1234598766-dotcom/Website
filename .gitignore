@@ -15,3 +15,8 @@ coverage/
 .mesh_node_identity
 *.o
 *.so
+
+# wrangler files
+.wrangler
+.dev.vars*
+!.dev.vars.example
