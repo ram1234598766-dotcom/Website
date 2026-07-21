@@ -141,7 +141,7 @@ const ModelCard: React.FC<{ model: ModelFile }> = ({ model }) => {
     <div className="bg-white/5 rounded-2xl border border-white/10 overflow-hidden shadow-sm hover:shadow-md hover:border-indigo-200 transition-all group flex flex-col">
       <div className="p-6 flex-1 flex flex-col">
         <div className="flex justify-between items-start mb-4">
-          <span className="px-2.5 py-1 bg-indigo-50 text-indigo-700 text-[10px] font-bold rounded-md uppercase tracking-wider">
+          <span className="px-2.5 py-1 bg-indigo-500/15 text-indigo-300 text-[10px] font-bold rounded-md uppercase tracking-wider">
             {model.architecture}
           </span>
           <div className="flex items-center gap-1.5 text-slate-500 text-xs font-bold bg-[#0a0a0c] px-2 py-1 rounded-md border border-slate-100">
@@ -152,7 +152,7 @@ const ModelCard: React.FC<{ model: ModelFile }> = ({ model }) => {
         <h3 className="text-xl font-bold text-white mb-1 group-hover:text-indigo-600 transition-colors truncate" title={model.name}>
           {model.name}
         </h3>
-        <p className="text-sm text-slate-500 mb-6 flex-1">By {model.author}</p>
+        <p className="text-sm text-slate-400 mb-6 flex-1">By {model.author}</p>
         
         <div className="bg-slate-900 rounded-xl border border-slate-800 p-4 mb-2 flex flex-col gap-2">
           <div className="text-xs text-slate-400 font-mono">Terminal Command</div>
@@ -194,7 +194,7 @@ const ModelCard: React.FC<{ model: ModelFile }> = ({ model }) => {
           href={model.url}
           target="_blank"
           rel="noopener noreferrer"
-          className="flex items-center justify-center gap-2 w-full py-2 bg-[#0a0a0c] hover:bg-slate-100 text-slate-600 text-sm font-bold rounded-lg transition-colors border border-white/10 mt-2"
+          className="flex items-center justify-center gap-2 w-full py-2 bg-white/5 hover:bg-white/10 text-slate-300 text-sm font-bold rounded-lg transition-colors border border-white/10 mt-2"
         >
           View in Ollama Library <ExternalLink className="w-3 h-3" />
         </a>
@@ -209,7 +209,7 @@ export default function Showcase() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-3xl font-extrabold tracking-tight text-white">Ollama Model Hub</h2>
-          <p className="text-slate-600 mt-1">Discover open-source models and run them instantly via Ollama.</p>
+          <p className="text-slate-400 mt-1">Discover open-source models and run them instantly via Ollama.</p>
         </div>
       </div>
 

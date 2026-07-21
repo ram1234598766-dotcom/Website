@@ -193,7 +193,7 @@ export default function GitHubManager({ files, setFiles, originalFiles, setOrigi
             <p className="text-slate-400 text-sm mb-6">Sign in to sync your repositories, clone code, and commit directly from VantaOS.</p>
             <button 
               onClick={handleLogin}
-              className="px-4 py-2 bg-white text-black font-semibold rounded-lg hover:bg-slate-200 transition-colors w-full"
+              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-lg transition-colors w-full"
             >
               Connect GitHub
             </button>

@@ -8,11 +8,12 @@ interface NavigationProps {
   setCurrentView: (view: ViewState) => void;
   userEmail?: string;
   isSynced?: boolean;
+  isAdmin?: boolean;
   onSignIn?: () => void;
   onSignUp?: () => void;
 }
 
-export default function Navigation({ currentView, setCurrentView, userEmail, isSynced = false, onSignIn, onSignUp }: NavigationProps) {
+export default function Navigation({ currentView, setCurrentView, userEmail, isSynced = false, isAdmin = false, onSignIn, onSignUp }: NavigationProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
@@ -35,7 +36,7 @@ export default function Navigation({ currentView, setCurrentView, userEmail, isS
     { view: 'privacy', label: 'Privacy', icon: <FileText className="w-4 h-4" /> },
   ];
 
-  if (userEmail === 'ram1234598766@gmail.com') {
+  if (isAdmin) {
     navItems.push({ view: 'admin', label: 'Admin Panel', icon: <ShieldAlert className="w-4 h-4" /> });
   }
 

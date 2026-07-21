@@ -104,7 +104,7 @@ export default function OllamaLocal() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
           <h2 className="text-3xl font-extrabold tracking-tight text-white">Ollama Local Engine</h2>
-          <p className="text-slate-600 mt-1">Connect to your local Ollama instance for private inference.</p>
+          <p className="text-slate-400 mt-1">Connect to your local Ollama instance for private inference.</p>
         </div>
       </div>
 
@@ -183,7 +183,7 @@ export default function OllamaLocal() {
                {response ? (
                  <div className="text-emerald-400 whitespace-pre-wrap leading-relaxed">{response}</div>
                ) : (
-                 <div className="h-full flex flex-col items-center justify-center text-slate-600">
+                 <div className="h-full flex flex-col items-center justify-center text-slate-400">
                    <Server className="w-12 h-12 mb-4 opacity-50" />
                    <p>Connect to Ollama and select a model to begin.</p>
                  </div>
