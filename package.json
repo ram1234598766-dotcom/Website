@@ -61,7 +61,4 @@
     "typescript": "~5.8.2",
     "wrangler": "^3.99.0"
   },
-  "overrides": {
-    "node-domexception": "file:./mock-domexception"
-  }
 }
