@@ -114,7 +114,7 @@ const categories = ["All Topics", "General", "AI Research", "Announcements", "He
     e.preventDefault();
     setAuthError('');
     
-    if (!import.meta.env.VITE_SUPABASE_URL || import.meta.env.VITE_SUPABASE_URL.includes('placeholder')) {
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL.includes('placeholder')) {
       setAuthError('Supabase is not configured. Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your AI Studio secrets.');
       return;
     }
@@ -229,22 +229,22 @@ const categories = ["All Topics", "General", "AI Research", "Announcements", "He
       <div className="flex flex-col gap-8 w-full max-w-5xl mx-auto p-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
            <div>
-             <div className="h-8 w-48 bg-slate-200 rounded animate-pulse mb-2"></div>
-             <div className="h-4 w-64 bg-slate-200 rounded animate-pulse"></div>
+             <div className="h-8 w-48 bg-white/5 rounded animate-pulse mb-2"></div>
+             <div className="h-4 w-64 bg-white/5 rounded animate-pulse"></div>
            </div>
         </div>
         <div className="flex flex-col md:flex-row gap-6">
           <aside className="w-full md:w-64 shrink-0 flex flex-col gap-2">
-            {[1, 2, 3, 4, 5].map(i => <div key={i} className="h-10 w-full bg-slate-200 rounded-md animate-pulse"></div>)}
+            {[1, 2, 3, 4, 5].map(i => <div key={i} className="h-10 w-full bg-white/5 rounded-md animate-pulse"></div>)}
           </aside>
           <div className="flex-1 bg-white/5 rounded-xl border border-white/10 shadow-sm overflow-hidden p-4">
             <div className="divide-y divide-slate-100">
               {[1, 2, 3, 4].map(i => (
                 <div key={i} className="py-4 flex gap-4">
-                  <div className="w-8 h-8 bg-slate-200 rounded animate-pulse shrink-0"></div>
+                  <div className="w-8 h-8 bg-white/5 rounded animate-pulse shrink-0"></div>
                   <div className="flex-1 flex flex-col gap-2">
-                    <div className="h-5 w-3/4 bg-slate-200 rounded animate-pulse"></div>
-                    <div className="h-4 w-1/2 bg-slate-200 rounded animate-pulse"></div>
+                    <div className="h-5 w-3/4 bg-white/5 rounded animate-pulse"></div>
+                    <div className="h-4 w-1/2 bg-white/5 rounded animate-pulse"></div>
                   </div>
                 </div>
               ))}
@@ -260,17 +260,17 @@ const categories = ["All Topics", "General", "AI Research", "Announcements", "He
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-3xl font-extrabold tracking-tight text-white">Community Forum</h2>
-          <p className="text-slate-600 mt-1">Live, real-time discussions powered by Supabase.</p>
+          <p className="text-slate-300 mt-1">Live, real-time discussions powered by Supabase.</p>
         </div>
         
         {session ? (
           <div className="flex items-center gap-4">
-            <span className="text-sm font-medium text-slate-600">
+            <span className="text-sm font-medium text-slate-300">
               Welcome, {session.user.user_metadata?.username || session.user.email}
             </span>
             <button 
               onClick={() => supabase.auth.signOut()}
-              className="inline-flex items-center gap-2 px-3 py-1.5 bg-slate-100 text-slate-600 text-sm font-semibold rounded-lg hover:bg-slate-200 transition-colors"
+              className="inline-flex items-center gap-2 px-3 py-1.5 bg-slate-100 text-slate-300 text-sm font-semibold rounded-lg hover:bg-white/5 transition-colors"
             >
               <LogOut className="w-4 h-4" />
               Sign Out
@@ -286,19 +286,19 @@ const categories = ["All Topics", "General", "AI Research", "Announcements", "He
             )}
           </div>
         ) : (
-          <div className="text-sm text-slate-500">Sign in to participate in the real-time forum.</div>
+          <div className="text-sm text-slate-400">Sign in to participate in the real-time forum.</div>
         )}
       </div>
 
       {!session && !activeThread ? (
         <div className="flex justify-center items-center py-20 bg-[#0a0a0c] border border-white/10 rounded-xl">
-          <p className="text-slate-600 font-medium">Please sign in from the top navigation to participate in the community.</p>
+          <p className="text-slate-300 font-medium">Please sign in from the top navigation to participate in the community.</p>
         </div>
       ) : isComposing ? (
         <div className="bg-white/5 rounded-xl border border-white/10 shadow-sm overflow-hidden p-6">
           <div className="flex justify-between items-center mb-6">
             <h3 className="text-xl font-bold text-white">Create New Thread</h3>
-            <button onClick={() => setIsComposing(false)} className="text-slate-400 hover:text-slate-600">Cancel</button>
+            <button onClick={() => setIsComposing(false)} className="text-slate-400 hover:text-slate-300">Cancel</button>
           </div>
           <form onSubmit={handleCreateThread} className="flex flex-col gap-4">
             <input
@@ -334,7 +334,7 @@ const categories = ["All Topics", "General", "AI Research", "Announcements", "He
           <div className="p-4 border-b border-slate-100 flex items-center gap-4">
             <button 
               onClick={() => setActiveThread(null)}
-              className="p-2 -ml-2 rounded-lg text-slate-500 hover:bg-slate-100 transition-colors flex items-center gap-1"
+              className="p-2 -ml-2 rounded-lg text-slate-400 hover:bg-slate-100 transition-colors flex items-center gap-1"
             >
               <ArrowLeft className="w-4 h-4" /> Back to threads
             </button>
@@ -353,8 +353,8 @@ const categories = ["All Topics", "General", "AI Research", "Announcements", "He
               </div>
               <div>
                 <h2 className="text-2xl font-bold text-white mb-2">{activeThread.title}</h2>
-                <div className="flex items-center gap-3 text-sm text-slate-500 mb-4">
-                  <span className="font-medium px-2 py-0.5 bg-slate-100 rounded text-slate-600">
+                <div className="flex items-center gap-3 text-sm text-slate-400 mb-4">
+                  <span className="font-medium px-2 py-0.5 bg-slate-100 rounded text-slate-300">
                     {activeThread.category}
                   </span>
                   <span>Posted by <span className="font-semibold text-slate-300">{activeThread.author?.username || 'Unknown'}</span></span>
@@ -381,7 +381,7 @@ const categories = ["All Topics", "General", "AI Research", "Announcements", "He
                     <span className="text-xs font-bold text-slate-300">{reply.upvotes_count || 0}</span>
                   </div>
                   <div>
-                    <div className="flex items-center gap-2 text-xs text-slate-500 mb-2">
+                    <div className="flex items-center gap-2 text-xs text-slate-400 mb-2">
                       <span className="font-bold text-slate-300">{reply.author?.username || 'Unknown'}</span>
                       <span>•</span>
                       <span>{formatDistanceToNow(new Date(reply.created_at))} ago</span>
@@ -414,7 +414,7 @@ const categories = ["All Topics", "General", "AI Research", "Announcements", "He
           <div className="flex-1 bg-white/5 rounded-xl border border-white/10 shadow-sm overflow-hidden">
             <div className="divide-y divide-slate-100/10">
               {threads.length === 0 ? (
-                <div className="p-8 text-center text-slate-500">No threads found. Be the first to post!</div>
+                <div className="p-8 text-center text-slate-400">No threads found. Be the first to post!</div>
               ) : (
                 threads.map(thread => (
                   <div key={thread.id} className="p-4 sm:p-5 hover:bg-[#0a0a0c] transition-colors flex gap-4">
@@ -435,8 +435,8 @@ const categories = ["All Topics", "General", "AI Research", "Announcements", "He
                       >
                         {thread.title}
                       </h3>
-                      <div className="flex items-center gap-3 text-xs text-slate-500">
-                        <span className="font-medium px-2 py-0.5 bg-slate-100 rounded text-slate-600">
+                      <div className="flex items-center gap-3 text-xs text-slate-400">
+                        <span className="font-medium px-2 py-0.5 bg-slate-100 rounded text-slate-300">
                           {thread.category}
                         </span>
                         <span>Posted by <span className="font-medium text-slate-300">{thread.author?.username || 'Unknown'}</span></span>

@@ -1,13 +1,22 @@
-node_modules/
+# Next.js
+.next/
+out/
+.vercel/
+.open-next/
+
+# build outputs
 build/
 dist/
 coverage/
-.DS_Store
-*.log
+node_modules/
+
+# secrets
 .env*
 !.env.example
 
-# Decentralized Compute Node Credentials & Encryption Keys
+# system files
+.DS_Store
+*.log
 *.pem
 *.key
 *.fhe_keys

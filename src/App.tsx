@@ -5,7 +5,6 @@
 import { useState, useEffect } from 'react';
 import { ShieldCheck, ShieldAlert, Loader2 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
-import { startAiTrainerWorker } from './utils/aiTrainerWorker';
 import { ViewState } from './types';
 import { signInAnonymously } from 'firebase/auth';
 import { auth } from './lib/firebase';
@@ -35,7 +34,9 @@ export default function App() {
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin');
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
-    const [securityStatus, setSecurityStatus] = useState<'checking' | 'secure' | 'threat'>('checking');
+  const [securityStatus, setSecurityStatus] = useState<'checking' | 'secure' | 'threat' | 'offline'>('checking');
+  const [securityFindings, setSecurityFindings] = useState<string[]>([]);
+  const isAdmin = !!session && (session.user?.app_metadata?.role === 'admin' || session.user?.user_metadata?.role === 'admin');
   
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
@@ -49,18 +50,25 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const checkSecurity = () => {
+    const checkSecurity = async () => {
       setSecurityStatus('checking');
-      fetch('/api/security/scan', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ payload: 'ping' })
-      }).then(res => res.json()).then(data => {
+      try {
+        const res = await fetch('/api/security/scan', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({})
+        });
+        if (!res.ok) throw new Error(String(res.status));
+        const data = await res.json();
         setSecurityStatus(data.threatsFound ? 'threat' : 'secure');
-      }).catch(() => setSecurityStatus('threat'));
+        setSecurityFindings(Array.isArray(data.findings) ? data.findings.map((f) => f.message) : []);
+      } catch {
+        setSecurityStatus('offline');
+        setSecurityFindings(['Security watchdog is unreachable — server may be offline.']);
+      }
     };
     checkSecurity();
-    const interval = setInterval(checkSecurity, 15000);
+    const interval = setInterval(checkSecurity, 30000);
     return () => clearInterval(interval);
   }, []);
 
@@ -70,7 +78,6 @@ export default function App() {
       console.warn("Firebase anonymous sign-in failed:", err);
     });
 
-    startAiTrainerWorker();
     checkSupabaseConfig();
     
     supabase.auth.getSession().then(({ data: { session }, error }) => {
@@ -147,7 +154,7 @@ export default function App() {
               Your session is about to expire. <button onClick={() => supabase.auth.refreshSession()} className="underline font-bold hover:text-amber-100">Click here to refresh</button>
            </div>
         )}
-        <Navigation currentView={currentView} setCurrentView={setCurrentView} userEmail={session?.user?.email} isSynced={!!session} onSignIn={() => { setAuthMode('signin'); setShowAuthModal(true); }} onSignUp={() => { setAuthMode('signup'); setShowAuthModal(true); }} />
+        <Navigation currentView={currentView} setCurrentView={setCurrentView} userEmail={session?.user?.email} isSynced={!!session} isAdmin={isAdmin} onSignIn={() => { setAuthMode('signin'); setShowAuthModal(true); }} onSignUp={() => { setAuthMode('signup'); setShowAuthModal(true); }} />
         
         <main className="flex-1 flex flex-col max-w-7xl mx-auto w-full p-4 sm:p-8 relative z-10">
           <AnimatePresence mode="wait">
@@ -175,7 +182,7 @@ export default function App() {
           <footer className="w-full bg-[#0a0a0c]/80 backdrop-blur-xl border-t border-white/10 py-6 mt-auto relative z-10">
             <div className="max-w-7xl mx-auto px-4 sm:px-8 flex flex-col md:flex-row items-center justify-between gap-4">
               <div className="text-sm text-slate-500">
-                VantaOS ecosystem architected by <span className="font-bold text-slate-300">Mrityunjay K</span>
+                VantaOS — the open-source developer cloud
               </div>
               <div className="text-sm text-slate-500 flex items-center gap-3">
                 <motion.div 

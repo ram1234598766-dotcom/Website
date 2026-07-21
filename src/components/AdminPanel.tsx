@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
 
 export default function AdminPanel() {
-
+  const [adminEmail, setAdminEmail] = useState('');
   const [metrics, setMetrics] = useState({
     usersCount: 0,
     threadsCount: 0,
@@ -54,6 +54,12 @@ export default function AdminPanel() {
     };
   }, []);
 
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      setAdminEmail(data.user?.email || '');
+    });
+  }, []);
+
   return (
     <div className="flex flex-col gap-8 w-full max-w-6xl mx-auto animate-in fade-in duration-500 pb-12">
       <div className="flex flex-col md:flex-row gap-6 items-start md:items-center justify-between border-b border-red-500/20 pb-6 mt-4">
@@ -63,8 +69,8 @@ export default function AdminPanel() {
             <span className="text-[10px] uppercase tracking-widest font-bold text-red-500">Omniscient Admin Protocol Active</span>
           </div>
           <h2 className="text-3xl font-extrabold tracking-tight text-white">Admin Override Center</h2>
-          <p className="text-slate-600 max-w-2xl text-base">
-            Authorized access granted to <span className="font-mono text-xs bg-slate-200 px-1 py-0.5 rounded">ram1234598766@gmail.com</span>. Monitor live database statistics and anomaly-detection networks.
+          <p className="text-slate-400 max-w-2xl text-base">
+            Authorized access for <span className="font-mono text-xs bg-white/10 px-1 py-0.5 rounded">{adminEmail || 'your account'}</span>. Monitor live database statistics.
           </p>
         </div>
       </div>
