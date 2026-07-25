@@ -7,8 +7,7 @@
     "dev": "next dev",
     "build": "next build",
     "lint": "tsc --noEmit",
-    "pages:build": "npx @cloudflare/next-on-pages",
-    "deploy": "npm run pages:build && wrangler pages deploy",
+    "deploy": "npm run build && wrangler pages deploy out",
     "clean": "rm -rf .next out .vercel dist"
   },
   "dependencies": {
