@@ -1,0 +1,5 @@
+name = "vantaos"
+compatibility_date = "2025-07-01"
+
+[assets]
+directory = "out"
