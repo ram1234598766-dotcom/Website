@@ -120,7 +120,7 @@ export default function OmniAI() {
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
           {messages.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-slate-500">
-              <BrainCircuit className="w-12 h-12 text-slate-700 mb-4" />
+              <BrainCircuit className="w-12 h-12 text-slate-500 mb-4" />
               <p>Cloud Engine connected. Ask anything.</p>
             </div>
           ) : (

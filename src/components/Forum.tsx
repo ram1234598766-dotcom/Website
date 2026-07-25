@@ -270,7 +270,7 @@ const categories = ["All Topics", "General", "AI Research", "Announcements", "He
             </span>
             <button 
               onClick={() => supabase.auth.signOut()}
-              className="inline-flex items-center gap-2 px-3 py-1.5 bg-slate-100 text-slate-300 text-sm font-semibold rounded-lg hover:bg-white/5 transition-colors"
+              className="inline-flex items-center gap-2 px-3 py-1.5 bg-white/10 text-slate-300 text-sm font-semibold rounded-lg hover:bg-white/5 transition-colors"
             >
               <LogOut className="w-4 h-4" />
               Sign Out
@@ -334,7 +334,7 @@ const categories = ["All Topics", "General", "AI Research", "Announcements", "He
           <div className="p-4 border-b border-slate-100 flex items-center gap-4">
             <button 
               onClick={() => setActiveThread(null)}
-              className="p-2 -ml-2 rounded-lg text-slate-400 hover:bg-slate-100 transition-colors flex items-center gap-1"
+              className="p-2 -ml-2 rounded-lg text-slate-400 hover:bg-white/10 transition-colors flex items-center gap-1"
             >
               <ArrowLeft className="w-4 h-4" /> Back to threads
             </button>
@@ -354,7 +354,7 @@ const categories = ["All Topics", "General", "AI Research", "Announcements", "He
               <div>
                 <h2 className="text-2xl font-bold text-white mb-2">{activeThread.title}</h2>
                 <div className="flex items-center gap-3 text-sm text-slate-400 mb-4">
-                  <span className="font-medium px-2 py-0.5 bg-slate-100 rounded text-slate-300">
+                  <span className="font-medium px-2 py-0.5 bg-white/10 rounded text-slate-300">
                     {activeThread.category}
                   </span>
                   <span>Posted by <span className="font-semibold text-slate-300">{activeThread.author?.username || 'Unknown'}</span></span>
@@ -436,7 +436,7 @@ const categories = ["All Topics", "General", "AI Research", "Announcements", "He
                         {thread.title}
                       </h3>
                       <div className="flex items-center gap-3 text-xs text-slate-400">
-                        <span className="font-medium px-2 py-0.5 bg-slate-100 rounded text-slate-300">
+                        <span className="font-medium px-2 py-0.5 bg-white/10 rounded text-slate-300">
                           {thread.category}
                         </span>
                         <span>Posted by <span className="font-medium text-slate-300">{thread.author?.username || 'Unknown'}</span></span>

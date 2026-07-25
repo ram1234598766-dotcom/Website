@@ -60,11 +60,7 @@ export default function PrivacyPolicy() {
           Engineered with precision for the open-source community.
         </p>
         <div className="text-sm text-slate-400 bg-white/5 p-4 rounded-xl border border-white/10 inline-block mx-auto">
-          <p className="mb-1">This platform was architected by <span className="font-bold text-slate-300">Mrityunjay K</span>, a student aspiring to become an Engineer.</p>
-          <p>
-            Contact: <a href="mailto:ram1234598766@gmail.com" className="text-indigo-400 hover:underline font-medium">ram1234598766@gmail.com</a> | 
-            Phone: <a href="tel:7981344431" className="text-indigo-400 hover:underline font-medium ml-1">7981344431</a>
-          </p>
+          <p className="mb-1">Built by the VantaOS team — open-source and privacy-first.</p>
         </div>
       </div>
     </div>
