@@ -207,3 +207,5 @@ server with `npm run dev` / `npm start`.
 ## License
 
 Licensed under the Apache License 2.0. See the repository for details.
+#   F i x   a p p l i e d   f o r   w r a n g l e r   v 4   a s s e t s . d i r e c t o r y  
+ 
