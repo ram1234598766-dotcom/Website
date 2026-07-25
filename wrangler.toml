@@ -1,4 +1,7 @@
 name = "vantaos"
-compatibility_date = "2025-01-01"
-compatibility_flags = ["nodejs_compat"]
+compatibility_date = "2025-07-01"
+compatibility_flags = ["nodejs_compat", "nodejs_compat_v2"]
 pages_build_output_dir = "out"
+
+[vars]
+ENVIRONMENT = "production"
