@@ -1,5 +1,9 @@
-name = "website"
+name = "vantaos"
 compatibility_date = "2025-07-01"
 
 [assets]
 directory = "out"
+binding = "ASSETS"
+
+[env.production]
+vars = { NODE_VERSION = "22" }

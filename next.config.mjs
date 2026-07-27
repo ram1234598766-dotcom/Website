@@ -1,9 +1,12 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  transpilePackages: ['three', '@react-three/fiber', '@react-three/drei'],
   output: 'export',
   eslint: { ignoreDuringBuilds: true },
+  images: { unoptimized: true },
+  experimental: {
+    optimizePackageImports: ['lucide-react', '@monaco-editor/react', 'date-fns'],
+  },
 };
 
 export default nextConfig;

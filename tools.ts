@@ -1,4 +1,3 @@
-import google from 'googlethis';
 import { AstrologyService } from './src/utils/AstrologyService';
 
 export async function getWeatherData(city: string) {
@@ -25,22 +24,27 @@ export async function getAstrologyData(sign: string) {
 
 export async function getWebSearchData(query: string) {
   try {
-    const options = { page: 0, safe: false, additional_params: { hl: 'en' } };
-    const response = await google.search(query, options);
-    
-    let results = [];
-    if (response.knowledge_panel && response.knowledge_panel.description) {
-      results.push(`Knowledge: ${response.knowledge_panel.title} - ${response.knowledge_panel.description}`);
+    const res = await fetch(
+      `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`,
+      { headers: { 'User-Agent': 'Mozilla/5.0' } }
+    );
+    const html = await res.text();
+    const titles = html.match(/<a[^>]+class="result__a"[^>]*>([\s\S]*?)<\/a>/gi);
+    const snippets = html.match(/<a[^>]+class="result__snippet"[^>]*>([\s\S]*?)<\/a>/gi);
+
+    let results = [`Web search results for "${query}":`];
+
+    if (titles && snippets) {
+      const count = Math.min(titles.length, snippets.length, 5);
+      for (let i = 0; i < count; i++) {
+        const title = titles[i].replace(/<[^>]*>/g, '').trim();
+        const snippet = snippets[i].replace(/<[^>]*>/g, '').trim();
+        results.push(`${i + 1}. ${title} — ${snippet}`);
+      }
     }
-    if (response.featured_snippet && response.featured_snippet.description) {
-      results.push(`Snippet: ${response.featured_snippet.description}`);
-    }
-    response.results.slice(0, 4).forEach(r => {
-      results.push(`- ${r.title}: ${r.description}`);
-    });
-    
-    return `Web search results for "${query}":\n` + results.join('\n');
+
+    return results.join('\n');
   } catch (e) {
-    return `Web search for ${query} is currently unavailable.`;
+    return `Web search for "${query}" is currently unavailable.`;
   }
 }
