@@ -1,0 +1,21 @@
+# Normalize line endings
+* text=auto eol=lf
+
+# Mark generated/config files as such so they don't skew language stats
+package-lock.json linguist-generated=true
+firebase-applet-config.json linguist-generated=true
+wrangler.toml linguist-generated=true
+.next linguist-generated=true
+out linguist-generated=true
+node_modules linguist-generated=true
+
+# Documentation isn't code
+*.md linguist-documentation=true
+*.txt linguist-documentation=true
+.env.example linguist-documentation=true
+
+# JSON config files shouldn't count toward language stats
+*.json linguist-vendored=true
+
+# Shell scripts
+*.sh linguist-language=Shell
