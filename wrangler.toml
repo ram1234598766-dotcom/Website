@@ -1,4 +1,4 @@
-name = "vantaos"
+name = "website"
 compatibility_date = "2025-07-01"
 main = "workers/worker.ts"
 
