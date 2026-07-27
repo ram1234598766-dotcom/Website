@@ -91,23 +91,23 @@ const categories = ["All Topics", "General", "AI Research", "Announcements", "He
   }, [activeThread]);
 
   async function loadThreads() {
-    const { data, error } = await supabase
-      .from('threads')
-      .select('*, author:profiles(*)');
-    
+    const { data, error } = await (supabase
+      .from('threads') as any)
+      .select('*, author:profiles(*)') as any;
+
     if (data) {
-      setThreads(data.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));
+      setThreads((data as any[]).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));
     }
   }
 
   async function loadReplies(threadId: string) {
-    const { data, error } = await supabase
-      .from('replies')
+    const { data, error } = await (supabase
+      .from('replies') as any)
       .select('*, author:profiles(*)')
       .eq('thread_id', threadId)
-      .order('created_at', { ascending: true });
-    
-    if (data) setReplies(data);
+      .order('created_at', { ascending: true }) as any;
+
+    if (data) setReplies(data as any[]);
   }
 
   async function handleAuth(e: React.FormEvent) {
@@ -155,17 +155,17 @@ const categories = ["All Topics", "General", "AI Research", "Announcements", "He
       return;
     }
 
-    const { data, error } = await supabase
-      .from('threads')
+    const { data, error } = await (supabase
+      .from('threads') as any)
       .insert([
-        { 
-          title: sanitizeInput(newThreadTitle), 
-          content: sanitizeInput(newThreadContent), 
+        {
+          title: sanitizeInput(newThreadTitle),
+          content: sanitizeInput(newThreadContent),
           category: newThreadCategory,
           author_id: session.user.id
         }
       ])
-      .select();
+      .select() as any;
 
     if (error) {
       alert(error.message);
@@ -186,15 +186,15 @@ const categories = ["All Topics", "General", "AI Research", "Announcements", "He
       return;
     }
 
-    const { error } = await supabase
-      .from('replies')
+    const { error } = await (supabase
+      .from('replies') as any)
       .insert([
         {
           thread_id: activeThread.id,
           content: sanitizeInput(replyContent),
           author_id: session.user.id
         }
-      ]);
+      ]) as any;
 
     if (error) {
       alert(error.message);

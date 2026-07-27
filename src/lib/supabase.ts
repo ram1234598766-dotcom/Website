@@ -4,7 +4,21 @@ const rawUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseUrl = rawUrl.replace(/\/rest\/v1\/?$/, '');
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
-export const supabase = createClient(supabaseUrl, supabaseKey);
+let supabase: ReturnType<typeof createClient>;
+
+try {
+  if (!supabaseUrl || !supabaseKey) {
+    console.warn('Supabase env vars not configured. Using placeholder client.');
+    supabase = createClient('https://placeholder.supabase.co', 'placeholder-key');
+  } else {
+    supabase = createClient(supabaseUrl, supabaseKey);
+  }
+} catch (e) {
+  console.warn('Supabase client creation failed:', e);
+  supabase = createClient('https://placeholder.supabase.co', 'placeholder-key');
+}
+
+export { supabase };
 
 export function checkSupabaseConfig() {
   console.log('Supabase Configuration Check:');

@@ -464,12 +464,13 @@ export default function CloudOS() {
             throw new Error('Server-side authentication failed in Edge Function');
           }
           const { data, error } = await supabase.from('workspace_files').select('*');
-          if (data && data.length > 0) {
-            setFiles(data);
+          const rows = (data || []) as any[];
+          if (rows.length > 0) {
+            setFiles(rows);
             const orig: Record<string, string> = {};
-            data.forEach((d: any) => orig[d.id] = d.content);
+            rows.forEach((d: any) => orig[d.id] = d.content);
             setOriginalFiles(orig);
-            setActiveFileId(data[0].id);
+            setActiveFileId(rows[0].id);
             setIsSynced(true);
             return;
           }
@@ -521,7 +522,7 @@ export default function CloudOS() {
           }
           
           for (const f of files) {
-             await supabase.from('workspace_files').upsert({
+             await (supabase.from('workspace_files') as any).upsert({
                 id: f.id,
                 name: f.name,
                 content: f.content,
