@@ -1,6 +1,6 @@
 name = "vantaos"
 compatibility_date = "2025-07-01"
-main = "src/worker.ts"
+main = "workers/worker.ts"
 
 [assets]
 directory = "out"

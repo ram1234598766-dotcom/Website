@@ -62,7 +62,7 @@ export default {
       );
     }
   },
-} satisfies ExportedHandler<Env>;
+};
 
 async function handleAiGenerate(request: Request, env: Env): Promise<Response> {
   const { prompt, messages } = await request.json() as any;
