@@ -107,8 +107,11 @@ export default function CloudOS() {
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
       if (!isResizingTerminal) return;
-      const newHeight = window.innerHeight - e.clientY;
-      if (newHeight > 100 && newHeight < window.innerHeight - 200) {
+      const container = document.querySelector('.cloudos-editor-area');
+      if (!container) return;
+      const rect = container.getBoundingClientRect();
+      const newHeight = rect.bottom - e.clientY;
+      if (newHeight > 80 && newHeight < window.innerHeight - 150) {
         setTerminalHeight(newHeight);
       }
     };
@@ -398,6 +401,9 @@ export default function CloudOS() {
       } else if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) {
         e.preventDefault();
         setIsSearchOpen(true);
+      } else if ((e.ctrlKey || e.metaKey) && e.key === '`') {
+        e.preventDefault();
+        setIsTerminalOpen(prev => !prev);
       } else if (e.key === 'Escape' && isSearchOpen) {
         setIsSearchOpen(false);
       
@@ -818,7 +824,7 @@ export default function CloudOS() {
 
 
   return (
-    <div className="flex flex-col h-screen w-screen rounded-none overflow-hidden bg-slate-900 animate-in fade-in duration-500 relative">
+    <div className="flex flex-col h-screen w-screen rounded-none bg-slate-900 animate-in fade-in duration-500 relative overflow-hidden">
       
       {/* Cloud OS Header */}
       <div className="min-h-14 py-2 bg-slate-950 border-b border-slate-800 flex flex-col sm:flex-row items-center justify-between px-4 select-none shrink-0 z-20 relative gap-3">
@@ -1250,7 +1256,7 @@ export default function CloudOS() {
     transition: all 0.1s ease-out;
   }
 `}} />
-<div className="flex-1 flex flex-col bg-[#1e1e1e] relative min-w-0 cloudos-scroll overflow-auto h-full min-h-[600px]">
+<div className="flex-1 flex flex-col bg-[#1e1e1e] relative min-w-0 overflow-hidden h-full">
           <div className="flex items-center justify-between bg-slate-900/50 border-b border-slate-800 pr-4">
             <div className="flex overflow-x-auto shrink-0 cloudos-scroll" style={{ scrollbarWidth: 'thin', scrollBehavior: 'smooth' }}>
               <AnimatePresence>
@@ -1400,13 +1406,9 @@ export default function CloudOS() {
             </div>
           </div>
           
-          <div className="flex-1 w-full h-full relative flex flex-col">
-            <div 
-              className="flex-1 relative flex"
-              style={{
-                /* CSS-in-JS custom scrollbar for the container */
-                minHeight: '600px',
-              }}
+          <div className="flex-1 w-full h-full relative flex flex-col overflow-hidden cloudos-editor-area">
+            <div
+              className="flex-1 relative flex overflow-hidden"
             >
               <AnimatePresence mode="wait">
                 <motion.div 

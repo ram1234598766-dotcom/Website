@@ -54,10 +54,17 @@ export default function Home({ setCurrentView, onSignIn, onSignUp }: HomeProps) 
   ];
 
   return (
-    <div ref={containerRef} className="relative min-h-screen pt-12 pb-8 flex flex-col items-center">
-      
+    <div ref={containerRef} className="relative min-h-screen pt-12 pb-8 flex flex-col items-center overflow-hidden">
+
+      {/* Animated gradient background */}
+      <div className="fixed inset-0 pointer-events-none">
+        <div className="absolute top-[-20%] left-[-10%] w-[60%] h-[60%] rounded-full bg-indigo-500/5 blur-[120px] animate-pulse" style={{ animationDuration: '8s' }} />
+        <div className="absolute bottom-[-20%] right-[-10%] w-[50%] h-[50%] rounded-full bg-purple-500/5 blur-[100px] animate-pulse" style={{ animationDuration: '10s', animationDelay: '2s' }} />
+        <div className="absolute top-[40%] right-[20%] w-[30%] h-[30%] rounded-full bg-emerald-500/3 blur-[80px] animate-pulse" style={{ animationDuration: '12s', animationDelay: '4s' }} />
+      </div>
+
       {/* 1. Hero Section */}
-      <motion.section 
+      <motion.section
         style={{ y: yHero, opacity: opacityFade }}
         initial="hidden"
         animate="visible"
@@ -70,10 +77,19 @@ export default function Home({ setCurrentView, onSignIn, onSignUp }: HomeProps) 
         }}
         className="text-center max-w-4xl mx-auto space-y-8 mt-12 sm:mt-24 mb-32 px-4"
       >
-        <motion.div variants={{ hidden: { opacity: 0, y: 20 }, visible: { opacity: 1, y: 0, transition: { duration: 0.8, ease: "easeOut" } } }} className="flex justify-center mb-8">
-            <div className="w-20 h-20 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-indigo-400 shadow-[0_0_30px_rgba(99,102,241,0.2)]">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.5 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.8, ease: "easeOut" }}
+          className="flex justify-center mb-8"
+        >
+            <motion.div
+              animate={{ y: [0, -8, 0] }}
+              transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+              className="w-20 h-20 rounded-2xl bg-gradient-to-br from-indigo-500/10 to-purple-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 shadow-[0_0_40px_rgba(99,102,241,0.25)]"
+            >
                 <Logo className="w-12 h-12" />
-            </div>
+            </motion.div>
         </motion.div>
 
         <motion.div variants={{ hidden: { opacity: 0, y: 20 }, visible: { opacity: 1, y: 0, transition: { duration: 0.8, ease: "easeOut" } } }}>

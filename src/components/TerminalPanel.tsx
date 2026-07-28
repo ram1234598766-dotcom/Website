@@ -192,6 +192,8 @@ export default function TerminalPanel({ fontSize = 13, theme = 'dark' }: Termina
 
   useEffect(() => {
     if (!mounted || !terminalRef.current) return;
+    // Focus terminal on mount
+    setTimeout(() => { try { (terminalRef.current as any)?.querySelector(".xterm-helper-textarea")?.focus(); } catch(e) {} }, 500);
 
     const term = new Terminal({
       theme: THEMES[theme] || THEMES.dark,

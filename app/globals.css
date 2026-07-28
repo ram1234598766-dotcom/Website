@@ -231,3 +231,35 @@ html, body {
     transition-duration: 0.001ms !important;
   }
 }
+
+/* VantaOS Premium Animations */
+@keyframes vanta-spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+@keyframes vanta-glow {
+  0%, 100% { box-shadow: 0 0 20px rgba(99, 102, 241, 0.2); }
+  50% { box-shadow: 0 0 40px rgba(99, 102, 241, 0.4); }
+}
+@keyframes vanta-shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.animate-vanta-spin {
+  animation: vanta-spin 1s linear infinite;
+}
+.animate-vanta-glow {
+  animation: vanta-glow 3s ease-in-out infinite;
+}
+.animate-vanta-shimmer {
+  background: linear-gradient(90deg, transparent 0%, rgba(99, 102, 241, 0.1) 50%, transparent 100%);
+  background-size: 200% 100%;
+  animation: vanta-shimmer 3s ease-in-out infinite;
+}
+
+/* Remote cursor for collaboration (legacy) */
+.remote-cursor-collab {
+  border-left: 2px solid #10b981;
+  position: absolute;
+  z-index: 10;
+}
