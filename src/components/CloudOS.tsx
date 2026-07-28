@@ -132,39 +132,14 @@ export default function CloudOS() {
     }
   }, [terminalOutput]);
 
-  const handleRun = async () => {
+    const handleRun = () => {
     setIsTerminalOpen(true);
-    const file = files.find(f => f.id === activeFileId);
-    if (!file) return;
-    
-    try {
-        // Execute in local terminal
-        let cmd = '';
-        if (file.language === 'javascript' || file.name.endsWith('.js')) {
-            cmd = `js ${file.content.slice(0, 300)}\n`;
-        } else if (file.language === 'typescript' || file.name.endsWith('.ts')) {
-            cmd = `npx tsx "${file.name}"\n`;
-        } else if (file.language === 'python' || file.name.endsWith('.py')) {
-            cmd = `python3 "${file.name}"\n`;
-        } else if (file.language === 'cpp' || file.name.endsWith('.cpp')) {
-            cmd = `g++ "${file.name}" -o "${file.name}.out" && ./"${file.name}.out"\n`;
-        } else if (file.language === 'c' || file.name.endsWith('.c')) {
-            cmd = `gcc "${file.name}" -o "${file.name}.out" && ./"${file.name}.out"\n`;
-        } else if (file.language === 'rust' || file.name.endsWith('.rs')) {
-            cmd = `rustc "${file.name}" && ./"${file.name.replace('.rs', '')}"\n`;
-        } else if (file.language === 'go' || file.name.endsWith('.go')) {
-            cmd = `go run "${file.name}"\n`;
-        } else if (file.language === 'java' || file.name.endsWith('.java')) {
-            cmd = `javac "${file.name}" && java "${file.name.replace('.java', '')}"\n`;
-        } else if (file.name.endsWith('.sh')) {
-            cmd = `bash "${file.name}"\n`;
-        } else {
-            cmd = `echo "File saved. Execute manually. Unrecognized language: ${file.language}"\n`;
-        }
-        window.dispatchEvent(new CustomEvent('terminal-send', { detail: cmd }));
-    } catch (err) {
-        console.error("Failed to run", err);
-    }
+    setTimeout(() => {
+      const file = files.find(f => f.id === activeFileId);
+      if (!file) return;
+      const code = file.content.slice(0, 500);
+      window.dispatchEvent(new CustomEvent("terminal-send", { detail: "js " + JSON.stringify(code) + "\\n" }));
+    }, 100);
   };
 
   const [dirtyTabs, setDirtyTabs] = useState<string[]>([]);
@@ -669,35 +644,17 @@ export default function CloudOS() {
   };
 
   
-  const handleFormat = async () => {
-    
-    
+    const handleFormat = () => {
     try {
-      let formatted = activeFile.content;
-      if (activeFile.language === 'javascript' || activeFile.language === 'typescript') {
-        formatted = await prettier.format(activeFile.content, {
-          parser: 'babel',
-          plugins: [prettierPluginBabel, prettierPluginEstree]
-        });
-      } else if (activeFile.language === 'html') {
-        formatted = await prettier.format(activeFile.content, {
-          parser: 'html',
-          plugins: [prettierPluginHtml]
-        });
-      } else if (activeFile.language === 'css') {
-        formatted = await prettier.format(activeFile.content, {
-          parser: 'css',
-          plugins: [prettierPluginCss]
-        });
-      } else if (activeFile.language === 'json') {
-        formatted = JSON.stringify(JSON.parse(activeFile.content), null, 2);
+      const file = files.find(f => f.id === activeFileId);
+      if (!file) return;
+      let formatted = file.content;
+      if (file.language === "json") {
+        formatted = JSON.stringify(JSON.parse(file.content), null, 2);
       }
-      
-      const updatedFiles = files.map(f => f.id === activeFileId ? { ...f, content: formatted } : f);
-      setFiles(updatedFiles);
-    } catch (e: any) {
-      console.error('Format error:', e);
-      alert('Format error: ' + e.message);
+      setFiles(prev => prev.map(f => f.id === activeFileId ? { ...f, content: formatted } : f));
+    } catch (e) {
+      console.warn("Format error:", e);
     }
   };
 
