@@ -225,7 +225,7 @@ export default function Home({ setCurrentView, onSignIn, onSignUp }: HomeProps) 
         
         <div className="mt-8 pt-8 border-t border-white/5 flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-slate-500">
             <p>&copy; {new Date().getFullYear()} VantaOS. All rights reserved.</p>
-            <p className="flex items-center gap-1">Built with <Logo className="w-3 h-3 text-indigo-400 mx-1"/> VantaOS</p>
+            <p className="flex items-center gap-1 text-slate-600">Designed &amp; Architected by <span className="text-indigo-400 font-medium">Mrityunjay K</span></p>
         </div>
       </footer>
     </div>

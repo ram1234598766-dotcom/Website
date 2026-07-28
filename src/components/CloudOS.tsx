@@ -844,7 +844,7 @@ export default function CloudOS() {
           </button>
           <div className="flex items-center gap-2 text-slate-300 font-mono text-sm">
             <Terminal className="w-4 h-4 text-indigo-400" />
-            <span>VantaOS CLOUD OS IDE</span>
+            <span>VantaOS Cloud IDE · by Mrityunjay K</span>
             {isSynced && (
                <div className="ml-3 flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-xs">
                  {syncStatus === 'syncing' ? (
