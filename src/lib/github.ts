@@ -9,10 +9,10 @@ async function fetchGitHub(endpoint: string, options: RequestInit = {}) {
   const token = localStorage.getItem('github_token');
   if (!token) throw new GitHubError('No GitHub token found. Please sign in with GitHub.', 401);
 
-  const res = await fetch(`https://api.github.com\${endpoint}`, {
+  const res = await fetch(`https://api.github.com${endpoint}`, {
     ...options,
     headers: {
-      'Authorization': `Bearer \${token}`,
+      'Authorization': `Bearer ${token}`,
       'Accept': 'application/vnd.github.v3+json',
       'X-GitHub-Api-Version': '2022-11-28',
       ...options.headers,
@@ -28,7 +28,7 @@ async function fetchGitHub(endpoint: string, options: RequestInit = {}) {
     if (rateLimit === '0') {
       const reset = res.headers.get('X-RateLimit-Reset');
       const time = reset ? new Date(parseInt(reset) * 1000).toLocaleTimeString() : 'later';
-      throw new GitHubError(`GitHub API rate limit exceeded. Try again at \${time}.`, 403);
+      throw new GitHubError(`GitHub API rate limit exceeded. Try again at ${time}.`, 403);
     }
     let errorMsg = 'GitHub API Error';
     try {
@@ -45,11 +45,11 @@ export async function getUserRepos() {
 }
 
 export async function getRepoTree(owner: string, repo: string, branch: string) {
-  return fetchGitHub(`/repos/\${owner}/\${repo}/git/trees/\${branch}?recursive=1`);
+  return fetchGitHub(`/repos/${owner}/${repo}/git/trees/${branch}?recursive=1`);
 }
 
 export async function getFileContent(owner: string, repo: string, path: string) {
-  const data = await fetchGitHub(`/repos/\${owner}/\${repo}/contents/\${path}`);
+  const data = await fetchGitHub(`/repos/${owner}/${repo}/contents/${path}`);
   if (data.content && data.encoding === 'base64') {
     return decodeURIComponent(escape(atob(data.content)));
   }
@@ -57,22 +57,22 @@ export async function getFileContent(owner: string, repo: string, path: string) 
 }
 
 export async function getDefaultBranch(owner: string, repo: string) {
-  const data = await fetchGitHub(`/repos/\${owner}/\${repo}`);
+  const data = await fetchGitHub(`/repos/${owner}/${repo}`);
   return data.default_branch;
 }
 
 export async function getLatestCommit(owner: string, repo: string, branch: string) {
-  const data = await fetchGitHub(`/repos/\${owner}/\${repo}/git/ref/heads/\${branch}`);
+  const data = await fetchGitHub(`/repos/${owner}/${repo}/git/ref/heads/${branch}`);
   return data.object.sha;
 }
 
 export async function getCommitTree(owner: string, repo: string, commitSha: string) {
-  const data = await fetchGitHub(`/repos/\${owner}/\${repo}/git/commits/\${commitSha}`);
+  const data = await fetchGitHub(`/repos/${owner}/${repo}/git/commits/${commitSha}`);
   return data.tree.sha;
 }
 
 export async function createBlob(owner: string, repo: string, content: string) {
-  const data = await fetchGitHub(`/repos/\${owner}/\${repo}/git/blobs`, {
+  const data = await fetchGitHub(`/repos/${owner}/${repo}/git/blobs`, {
     method: 'POST',
     body: JSON.stringify({
       content: btoa(unescape(encodeURIComponent(content))),
@@ -83,7 +83,7 @@ export async function createBlob(owner: string, repo: string, content: string) {
 }
 
 export async function createTree(owner: string, repo: string, baseTreeSha: string, tree: any[]) {
-  const data = await fetchGitHub(`/repos/\${owner}/\${repo}/git/trees`, {
+  const data = await fetchGitHub(`/repos/${owner}/${repo}/git/trees`, {
     method: 'POST',
     body: JSON.stringify({
       base_tree: baseTreeSha,
@@ -94,7 +94,7 @@ export async function createTree(owner: string, repo: string, baseTreeSha: strin
 }
 
 export async function createCommit(owner: string, repo: string, message: string, treeSha: string, parentSha: string) {
-  const data = await fetchGitHub(`/repos/\${owner}/\${repo}/git/commits`, {
+  const data = await fetchGitHub(`/repos/${owner}/${repo}/git/commits`, {
     method: 'POST',
     body: JSON.stringify({
       message,
@@ -106,7 +106,7 @@ export async function createCommit(owner: string, repo: string, message: string,
 }
 
 export async function updateRef(owner: string, repo: string, branch: string, commitSha: string) {
-  return fetchGitHub(`/repos/\${owner}/\${repo}/git/refs/heads/\${branch}`, {
+  return fetchGitHub(`/repos/${owner}/${repo}/git/refs/heads/${branch}`, {
     method: 'PATCH',
     body: JSON.stringify({
       sha: commitSha,

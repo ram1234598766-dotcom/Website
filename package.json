@@ -7,7 +7,9 @@
     "dev": "next dev",
     "build": "next build",
     "lint": "tsc --noEmit",
-    "start": "npx serve out"
+    "start": "npx serve out",
+    "deploy": "npm run build && npx wrangler deploy",
+    "cf-preview": "npm run build && npx wrangler dev"
   },
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",

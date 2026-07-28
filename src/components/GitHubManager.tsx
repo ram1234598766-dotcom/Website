@@ -68,7 +68,7 @@ export default function GitHubManager({ files, setFiles, originalFiles, setOrigi
       
       for (const item of blobItems) {
         const content = await github.getFileContent(repo.owner.login, repo.name, item.path);
-        const id = `\${idCounter++}`;
+        const id = `${idCounter++}`;
         
         let language = 'plaintext';
         if (item.path.endsWith('.ts') || item.path.endsWith('.tsx')) language = 'typescript';
@@ -221,7 +221,7 @@ export default function GitHubManager({ files, setFiles, originalFiles, setOrigi
                  <div className="pt-4 border-t border-slate-700/50">
                     <div className="flex items-center justify-between text-sm mb-3">
                        <span className="text-slate-300">Uncommitted Changes</span>
-                       <span className={`font-mono font-bold \${changedFilesCount > 0 ? 'text-amber-400' : 'text-emerald-400'}`}>
+                       <span className={`font-mono font-bold ${changedFilesCount > 0 ? 'text-amber-400' : 'text-emerald-400'}`}>
                          {changedFilesCount} files
                        </span>
                     </div>
@@ -257,7 +257,7 @@ export default function GitHubManager({ files, setFiles, originalFiles, setOrigi
                  <div className="flex items-center justify-between mb-3">
                    <h4 className="text-sm font-bold text-slate-300">Your Repositories</h4>
                    <button onClick={loadRepos} className="text-slate-500 hover:text-slate-300" disabled={loading}>
-                     <RefreshCw className={`w-4 h-4 \${loading ? 'animate-spin' : ''}`} />
+                     <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
                    </button>
                  </div>
                  

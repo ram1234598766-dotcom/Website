@@ -3,7 +3,7 @@
  *
  * This Worker runs when using `npx wrangler deploy`. The [assets] config in
  * wrangler.toml serves the static export (out/) automatically. This Worker
- * only intercepts requests to /api/* paths.
+ * only intercepts requests to /api/* paths and handles SPA fallback.
  */
 
 export interface Env {
@@ -20,6 +20,7 @@ export default {
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+      'Access-Control-Max-Age': '86400',
     };
 
     // Handle CORS preflight
@@ -34,6 +35,7 @@ export default {
           ok: true,
           uptimeSeconds: 0,
           environment: 'cloudflare-worker',
+          version: '2.0.0',
           timestamp: new Date().toISOString(),
         }, { headers: corsHeaders });
       }
@@ -53,9 +55,17 @@ export default {
         return handleAuthSync(request);
       }
 
-      // If no API route matches, let the static assets handle it
-      return new Response('Not found', { status: 404 });
+      // If no API route matches, return 404
+      return new Response(JSON.stringify({ 
+        error: 'Not found',
+        path: path,
+        message: 'The requested API endpoint does not exist.'
+      }), { 
+        status: 404,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
     } catch (err: any) {
+      console.error('Worker error:', err);
       return Response.json(
         { error: err.message || 'Internal error' },
         { status: 500, headers: corsHeaders }
@@ -65,50 +75,58 @@ export default {
 };
 
 async function handleAiGenerate(request: Request, env: Env): Promise<Response> {
-  const { prompt, messages } = await request.json() as any;
-  const apiKey = env.GEMINI_API_KEY;
+  try {
+    const body = await request.json() as any;
+    const { prompt, messages } = body;
+    const apiKey = env.GEMINI_API_KEY;
 
-  if (!apiKey) {
+    if (!apiKey) {
+      return Response.json(
+        { error: 'GEMINI_API_KEY not configured on server. Set it via: wrangler secret put GEMINI_API_KEY' },
+        { status: 503 }
+      );
+    }
+
+    let contents: { role: string; parts: { text: string }[] }[];
+    if (messages && Array.isArray(messages)) {
+      contents = messages.map((m: any) => ({
+        role: m.role === 'user' ? 'user' : 'model',
+        parts: [{ text: m.content }],
+      }));
+    } else {
+      contents = [{ role: 'user', parts: [{ text: prompt || '' }] }];
+    }
+
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contents }),
+      }
+    );
+
+    if (!res.ok) {
+      const text = await res.text();
+      return Response.json(
+        { error: `Gemini request failed (${res.status})`, details: text },
+        { status: res.status }
+      );
+    }
+
+    const data = await res.json() as any;
+    const text =
+      data?.candidates?.[0]?.content?.parts
+        ?.map((p: any) => p.text)
+        .join('') || 'No response generated.';
+
+    return Response.json({ text, model: 'gemini-2.5-flash' });
+  } catch (err: any) {
     return Response.json(
-      { error: 'GEMINI_API_KEY not configured on server' },
+      { error: 'Failed to process AI request', details: err.message },
       { status: 500 }
     );
   }
-
-  let contents: { role: string; parts: { text: string }[] }[];
-  if (messages && Array.isArray(messages)) {
-    contents = messages.map((m: any) => ({
-      role: m.role === 'user' ? 'user' : 'model',
-      parts: [{ text: m.content }],
-    }));
-  } else {
-    contents = [{ role: 'user', parts: [{ text: prompt }] }];
-  }
-
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ contents }),
-    }
-  );
-
-  if (!res.ok) {
-    const text = await res.text();
-    return Response.json(
-      { error: text || `Gemini request failed (${res.status})` },
-      { status: res.status }
-    );
-  }
-
-  const data = await res.json() as any;
-  const text =
-    data?.candidates?.[0]?.content?.parts
-      ?.map((p: any) => p.text)
-      .join('') || 'No response generated.';
-
-  return Response.json({ text });
 }
 
 async function handleSecurityScan(env: Env): Promise<Response> {
@@ -117,8 +135,8 @@ async function handleSecurityScan(env: Env): Promise<Response> {
 
   if (!geminiKey || geminiKey === 'MY_GEMINI_API_KEY') {
     findings.push({
-      severity: 'high',
-      message: 'GEMINI_API_KEY is unset or a placeholder (AI endpoints will not work).',
+      severity: 'medium',
+      message: 'GEMINI_API_KEY is unset or a placeholder. Omni-AI will not work.',
     });
   }
 

@@ -1,6 +1,7 @@
 'use client';
 
 import dynamic from 'next/dynamic';
+import ErrorBoundary from '../src/components/ErrorBoundary';
 
 const VantaApp = dynamic(() => import('../src/App'), {
   ssr: false,
@@ -18,10 +19,7 @@ const VantaApp = dynamic(() => import('../src/App'), {
         zIndex: 9999,
       }}
     >
-      <div
-        style={{ position: 'relative', width: 80, height: 80 }}
-        aria-hidden
-      >
+      <div style={{ position: 'relative', width: 80, height: 80 }} aria-hidden>
         <div
           style={{
             position: 'absolute',
@@ -64,10 +62,24 @@ const VantaApp = dynamic(() => import('../src/App'), {
       >
         VANTA.OS
       </div>
+      <div
+        style={{
+          color: '#646a80',
+          fontFamily: 'system-ui, sans-serif',
+          fontSize: 12,
+          letterSpacing: 2,
+        }}
+      >
+        Loading cloud environment...
+      </div>
     </div>
   ),
 });
 
 export default function Page() {
-  return <VantaApp />;
+  return (
+    <ErrorBoundary>
+      <VantaApp />
+    </ErrorBoundary>
+  );
 }

@@ -210,8 +210,8 @@ const categories = ["All Topics", "General", "AI Research", "Announcements", "He
       alert('Please log in to upvote');
       return;
     }
-    const { error } = await supabase
-      .from('upvotes')
+    const { error } = await (supabase
+      .from('upvotes') as any)
       .insert([
         {
           user_id: session.user.id,

@@ -1,6 +1,11 @@
 name = "website"
-compatibility_date = "2025-07-01"
+compatibility_date = "2026-07-28"
 main = "workers/worker.ts"
 
 [assets]
 directory = "out"
+not_found_handling = "404.html"
+
+[env]
+# Environment variables for the Worker
+# Set GEMINI_API_KEY via: wrangler secret put GEMINI_API_KEY

@@ -6,8 +6,6 @@ import { useState, useEffect } from 'react';
 import { ShieldCheck, ShieldAlert, Loader2 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { ViewState } from './types';
-import { signInAnonymously } from 'firebase/auth';
-import { auth } from './lib/firebase';
 import Navigation from './components/Navigation';
 import CommandPalette from './components/CommandPalette';
 import Home from './components/Home';
@@ -34,8 +32,9 @@ export default function App() {
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin');
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
-  const [securityStatus, setSecurityStatus] = useState<'checking' | 'secure' | 'threat' | 'offline'>('checking');
+  const [securityStatus, setSecurityStatus] = useState<'checking' | 'secure' | 'threat' | 'offline'>('offline');
   const [securityFindings, setSecurityFindings] = useState<string[]>([]);
+  const [appReady, setAppReady] = useState(false);
   const isAdmin = !!session && (session.user?.app_metadata?.role === 'admin' || session.user?.user_metadata?.role === 'admin');
   
   useEffect(() => {
@@ -67,27 +66,32 @@ export default function App() {
         setSecurityFindings(['Security watchdog is unreachable — server may be offline.']);
       }
     };
-    checkSecurity();
-    const interval = setInterval(checkSecurity, 30000);
-    return () => clearInterval(interval);
+    // Defer security check to avoid blocking initial render
+    const timer = setTimeout(() => {
+      checkSecurity();
+    }, 3000);
+    const interval = setInterval(checkSecurity, 60000);
+    return () => {
+      clearTimeout(timer);
+      clearInterval(interval);
+    };
   }, []);
 
   useEffect(() => {
-    // Firebase anonymous sign-in for Firestore features
-    signInAnonymously(auth).catch(err => {
-      console.warn("Firebase anonymous sign-in failed:", err);
-    });
-
     checkSupabaseConfig();
     
     supabase.auth.getSession().then(({ data: { session }, error }) => {
       setSession(session);
+      setAppReady(true);
       if (session?.provider_token) {
          localStorage.setItem('github_token', session.provider_token);
       }
       if (error) {
         console.error("Session error:", error);
       }
+    }).catch(err => {
+      console.warn('Supabase init failed:', err);
+      setAppReady(true);
     });
 
     const {
@@ -138,6 +142,38 @@ export default function App() {
     
     return () => clearTimeout(timeoutId);
   }, [session]);
+
+  if (!appReady) {
+    return (
+      <div style={{
+        position: 'fixed', inset: 0, background: '#07070b',
+        display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center', gap: 24, zIndex: 9999
+      }}>
+        <div style={{ position: 'relative', width: 80, height: 80 }} aria-hidden>
+          <div style={{
+            position: 'absolute', inset: 0,
+            border: '2px solid transparent', borderTopColor: '#6366f1',
+            borderRadius: '50%', animation: 'spin 1.2s cubic-bezier(0.5,0,0.5,1) infinite'
+          }} />
+          <div style={{
+            position: 'absolute', inset: 10,
+            border: '2px solid transparent', borderRightColor: '#818cf8',
+            borderRadius: '50%', animation: 'spin 1.8s cubic-bezier(0.5,0,0.5,1) infinite reverse'
+          }} />
+          <div style={{
+            position: 'absolute', inset: 20,
+            border: '2px solid transparent', borderBottomColor: '#a5b4fc',
+            borderRadius: '50%', animation: 'spin 2.4s cubic-bezier(0.5,0,0.5,1) infinite'
+          }} />
+        </div>
+        <div style={{
+          color: '#818cf8', fontFamily: 'system-ui, sans-serif',
+          fontWeight: 900, letterSpacing: 6, fontSize: 14
+        }}>VANTA.OS</div>
+      </div>
+    );
+  }
 
   return (
     <AnimatePresence mode="wait">

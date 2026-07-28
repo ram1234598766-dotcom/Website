@@ -4,8 +4,9 @@ const nextConfig = {
   output: 'export',
   eslint: { ignoreDuringBuilds: true },
   images: { unoptimized: true },
+  trailingSlash: true,
   experimental: {
-    optimizePackageImports: ['lucide-react', '@monaco-editor/react', 'date-fns'],
+    optimizePackageImports: ['lucide-react', 'date-fns'],
   },
 };
 
