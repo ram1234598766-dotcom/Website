@@ -8,8 +8,13 @@ import TerminalPanel from './TerminalPanel';
 import GitHubManager from './GitHubManager';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
-import { auth, db } from '../lib/firebase';
-import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
+// Firebase removed — safe stubs so existing guards work
+const auth: any = { currentUser: null };
+const db: any = null;
+const doc = (..._: any[]) => ({}) as any;
+const getDoc = async (..._: any[]) => ({ exists: () => false, data: () => null });
+const setDoc = async (..._: any[]) => {};
+const onSnapshot = (..._: any[]) => { const fn = () => {}; fn.unsubscribe = fn; return fn; };
 import { supabase } from '../lib/supabase';
 
 interface PluginMeta {
