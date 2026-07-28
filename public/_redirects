@@ -1,2 +1,2 @@
-# Client-side routing fallback for static export
-/ /index.html 200
+# No redirects needed — Cloudflare Worker assets serve static export natively
+# with not_found_handling = "404-page" for unknown routes.
