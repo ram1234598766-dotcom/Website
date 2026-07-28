@@ -1,5 +1,5 @@
 import { ViewState } from '../types';
-import { Box, Menu, X, FileText, Code2, UserPlus, LogIn } from 'lucide-react';
+import { Box, Menu, X, FileText, Code2, BrainCircuit, MessageSquare, TerminalSquare, ShieldAlert, UserPlus, LogIn } from 'lucide-react';
 import React, { useState, useEffect } from 'react';
 import Logo from './Logo';
 
@@ -29,9 +29,16 @@ export default function Navigation({ currentView, setCurrentView, userEmail, isS
 
   const navItems: { view: ViewState; label: string | React.ReactNode; icon: React.ReactNode }[] = [
     { view: 'ide', label: 'Cloud OS IDE', icon: <Code2 className="w-4 h-4" /> },
+    { view: 'omni-ai', label: 'Omni-AI', icon: <BrainCircuit className="w-4 h-4" /> },
+    { view: 'forum', label: 'Forum', icon: <MessageSquare className="w-4 h-4" /> },
+    { view: 'ollama', label: 'Ollama', icon: <TerminalSquare className="w-4 h-4" /> },
     { view: 'showcase', label: 'Models', icon: <Box className="w-4 h-4" /> },
     { view: 'privacy', label: 'Privacy', icon: <FileText className="w-4 h-4" /> },
   ];
+
+  if (isAdmin) {
+    navItems.push({ view: 'admin', label: 'Admin', icon: <ShieldAlert className="w-4 h-4" /> });
+  }
 
   return (
     <nav className="h-16 border-b border-white/10 bg-black/40 backdrop-blur-xl px-4 sm:px-8 flex items-center justify-between z-50 sticky top-0 shrink-0">

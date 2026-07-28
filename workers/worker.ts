@@ -77,53 +77,78 @@ export default {
 async function handleAiGenerate(request: Request, env: Env): Promise<Response> {
   try {
     const body = await request.json() as any;
-    const { prompt, messages } = body;
-    const apiKey = env.GEMINI_API_KEY;
+    const { provider, model, apiKey, messages } = body;
 
-    if (!apiKey) {
+    if (!provider || !apiKey) {
       return Response.json(
-        { error: 'GEMINI_API_KEY not configured on server. Set it via: wrangler secret put GEMINI_API_KEY' },
-        { status: 503 }
+        { error: 'Missing required fields: provider, apiKey, and messages or prompt' },
+        { status: 400 }
       );
     }
 
-    let contents: { role: string; parts: { text: string }[] }[];
-    if (messages && Array.isArray(messages)) {
-      contents = messages.map((m: any) => ({
-        role: m.role === 'user' ? 'user' : 'model',
-        parts: [{ text: m.content }],
-      }));
-    } else {
-      contents = [{ role: 'user', parts: [{ text: prompt || '' }] }];
-    }
-
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contents }),
+    switch (provider) {
+      case 'openrouter': {
+        const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`,
+            'HTTP-Referer': 'https://website.vasudevaya.workers.dev',
+            'X-Title': 'VantaOS',
+          },
+          body: JSON.stringify({
+            model: model || 'openai/gpt-4o',
+            messages: messages.map((m: any) => ({ role: m.role, content: m.content })),
+          }),
+        });
+        const data = await res.json() as any;
+        if (!res.ok) throw new Error(data.error?.message || `OpenRouter error (${res.status})`);
+        return Response.json({ text: data.choices?.[0]?.message?.content || '', model });
       }
-    );
 
-    if (!res.ok) {
-      const text = await res.text();
-      return Response.json(
-        { error: `Gemini request failed (${res.status})`, details: text },
-        { status: res.status }
-      );
+      case 'gemini': {
+        const geminiModel = model || 'gemini-2.5-flash';
+        const contents = messages.map((m: any) => ({
+          role: m.role === 'user' ? 'user' : 'model',
+          parts: [{ text: m.content }],
+        }));
+        const res = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent?key=${apiKey}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ contents }),
+          }
+        );
+        const data = await res.json() as any;
+        if (!res.ok) throw new Error(data.error?.message || `Gemini error (${res.status})`);
+        const text = data?.candidates?.[0]?.content?.parts?.map((p: any) => p.text).join('') || '';
+        return Response.json({ text, model: geminiModel });
+      }
+
+      case 'openai': {
+        const res = await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`,
+          },
+          body: JSON.stringify({
+            model: model || 'gpt-4o-mini',
+            messages: messages.map((m: any) => ({ role: m.role, content: m.content })),
+          }),
+        });
+        const data = await res.json() as any;
+        if (!res.ok) throw new Error(data.error?.message || `OpenAI error (${res.status})`);
+        return Response.json({ text: data.choices?.[0]?.message?.content || '', model });
+      }
+
+      default:
+        return Response.json({ error: `Unsupported provider: ${provider}` }, { status: 400 });
     }
-
-    const data = await res.json() as any;
-    const text =
-      data?.candidates?.[0]?.content?.parts
-        ?.map((p: any) => p.text)
-        .join('') || 'No response generated.';
-
-    return Response.json({ text, model: 'gemini-2.5-flash' });
   } catch (err: any) {
     return Response.json(
-      { error: 'Failed to process AI request', details: err.message },
+      { error: err.message || 'AI request failed' },
       { status: 500 }
     );
   }
