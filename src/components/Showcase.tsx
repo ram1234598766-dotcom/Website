@@ -122,7 +122,7 @@ const ModelCard: React.FC<{ model: ModelFile }> = ({ model }) => {
     setErrorMsg('');
     try {
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 5000);
+      const timeout = setTimeout(() => controller.abort(), 3000);
       const res = await fetch('http://localhost:11434/api/pull', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -131,29 +131,19 @@ const ModelCard: React.FC<{ model: ModelFile }> = ({ model }) => {
         mode: 'cors',
       });
       clearTimeout(timeout);
-
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
       setPullStatus('success');
       setTimeout(() => setPullStatus('idle'), 3000);
-    } catch (e: any) {
-      setPullStatus('error');
-      const curlCmd = `curl -X POST http://localhost:11434/api/pull -d '{"name":"${model.ollamaTag}","stream":false}'`;
-      setErrorMsg(
-        e.name === 'AbortError'
-          ? 'Connection timed out. Make sure Ollama is running.'
-          : 'Browser cannot directly reach Ollama due to CORS. Run this in your terminal:'
-      );
-      // Store curl command for copy
+    } catch {
       setPullStatus('error');
     }
   };
 
-  const copyCurlCommand = () => {
-    const curlCmd = `curl -X POST http://localhost:11434/api/pull -d '{"name":"${model.ollamaTag}","stream":false}'`;
-    navigator.clipboard.writeText(curlCmd);
-    setErrorMsg('curl command copied! Paste and run in your terminal.');
-    setTimeout(() => setPullStatus('idle'), 2000);
+  const copyPullCommand = () => {
+    const cmd = `ollama pull ${model.ollamaTag}`;
+    navigator.clipboard.writeText(cmd);
+    setErrorMsg(`Copied! Run in terminal: ${cmd}`);
+    setTimeout(() => { setPullStatus('idle'); setErrorMsg(''); }, 2500);
   };
 
   return (
@@ -188,17 +178,15 @@ const ModelCard: React.FC<{ model: ModelFile }> = ({ model }) => {
           
           {pullStatus === 'error' && (
             <div className="flex flex-col gap-2 mt-2">
-              <div className="flex items-start gap-2 text-rose-400 text-xs">
+              <div className="flex items-start gap-2 text-amber-400 text-xs">
                 <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                <span>{errorMsg}</span>
+                <span>Run this in your terminal:</span>
               </div>
-              <button
-                onClick={copyCurlCommand}
-                className="text-[10px] px-2 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 flex items-center gap-1.5 transition-colors"
-              >
-                <Cpu className="w-3 h-3" />
-                Copy curl command
-              </button>
+              <div className="flex items-center gap-2 bg-black/40 p-2 rounded-lg border border-slate-700">
+                <code className="text-emerald-400 text-[11px] font-mono flex-1 truncate">ollama pull {model.ollamaTag}</code>
+                <button onClick={copyPullCommand} className="shrink-0 px-2 py-1 bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] font-bold rounded transition-colors">Copy</button>
+              </div>
+              <p className="text-[10px] text-slate-500">Enable CORS first: <code className="text-amber-400">OLLAMA_ORIGINS=* ollama serve</code></p>
             </div>
           )}
           {pullStatus === 'success' && (

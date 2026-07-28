@@ -9,10 +9,8 @@ import Navigation from './components/Navigation';
 import CommandPalette from './components/CommandPalette';
 import Home from './components/Home';
 import Showcase from './components/Showcase';
-import PrivacyPolicy from './components/PrivacyPolicy';
 import CloudOS from './components/CloudOS';
 import OmniAI from './components/OmniAI';
-import Forum from './components/Forum';
 import AdminPanel from './components/AdminPanel';
 import OllamaLocal from './components/OllamaLocal';
 import AuthModal from './components/AuthModal';
@@ -129,10 +127,8 @@ export default function App() {
                 />
               )}
               {currentView === 'showcase' && <Showcase />}
-              {currentView === 'privacy' && <PrivacyPolicy />}
               {currentView === 'ide' && <CloudOS />}
               {currentView === 'omni-ai' && <OmniAI />}
-              {currentView === 'forum' && <Forum />}
               {currentView === 'admin' && <AdminPanel />}
               {currentView === 'ollama' && <OllamaLocal />}
             </motion.div>
