@@ -36,8 +36,11 @@ export default function OllamaLocal() {
   };
 
   const copySetupCmd = () => {
-    navigator.clipboard.writeText('OLLAMA_ORIGINS=* ollama serve');
-    setError('Command copied! Run it in your terminal, then click Retry.');
+    const cmd = navigator.userAgent.includes('Windows')
+      ? 'set OLLAMA_ORIGINS=* && ollama serve'
+      : 'OLLAMA_ORIGINS=* ollama serve';
+    navigator.clipboard.writeText(cmd);
+    setError('Command copied! ' + (navigator.userAgent.includes('Windows') ? 'Run in Command Prompt as Admin' : 'Run in your terminal') + ', then click Retry.');
     setTimeout(() => setError(''), 3000);
   };
 
@@ -115,9 +118,9 @@ export default function OllamaLocal() {
                     <span>{error}</span>
                   </div>
                   <div className="space-y-1.5 pt-1">
-                    <p className="text-slate-400 text-[10px]">1. Enable CORS and start Ollama:</p>
+                    <p className="text-slate-400 text-[10px]">1. Enable CORS and restart Ollama:</p>
                     <div className="flex items-center gap-2 bg-black/40 p-2 rounded border border-slate-700">
-                      <code className="text-emerald-400 font-mono text-[11px] flex-1">OLLAMA_ORIGINS=* ollama serve</code>
+                      <code className="text-emerald-400 font-mono text-[11px] flex-1">set OLLAMA_ORIGINS=* && ollama serve</code>
                       <button onClick={copySetupCmd} className="shrink-0 p-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded transition-colors">
                         <Copy className="w-3 h-3" />
                       </button>
