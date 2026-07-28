@@ -4,7 +4,7 @@ main = "workers/worker.ts"
 
 [assets]
 directory = "out"
-not_found_handling = "404.html"
+not_found_handling = "404-page"
 
 [env]
 # Environment variables for the Worker
