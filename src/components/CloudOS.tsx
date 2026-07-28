@@ -138,17 +138,10 @@ export default function CloudOS() {
     if (!file) return;
     
     try {
-        // Save to real disk for execution
-        await fetch('/api/fs/write', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ filename: file.name, content: file.content })
-        });
-
-        // Send to integrated terminal
+        // Execute in local terminal
         let cmd = '';
         if (file.language === 'javascript' || file.name.endsWith('.js')) {
-            cmd = `node "${file.name}"\n`;
+            cmd = `js ${file.content.slice(0, 300)}\n`;
         } else if (file.language === 'typescript' || file.name.endsWith('.ts')) {
             cmd = `npx tsx "${file.name}"\n`;
         } else if (file.language === 'python' || file.name.endsWith('.py')) {
@@ -880,7 +873,7 @@ export default function CloudOS() {
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full bg-transparent border-none outline-none text-slate-200 text-lg"
                 />
-                <button onClick={() => setIsSearchOpen(false)} className="text-slate-500 hover:text-slate-300">
+                <button onClick={() => setIsSearchOpen(false)} className="text-slate-500 hover:text-slate-300 cursor-pointer">
                   <span className="text-xs font-bold uppercase tracking-widest">Esc</span>
                 </button>
               </div>
@@ -921,14 +914,14 @@ export default function CloudOS() {
         <div className="flex items-center gap-2 sm:gap-3 flex-wrap w-full sm:w-auto sm:justify-end shrink-0 py-1">
           <button 
             onClick={() => setIsSearchOpen(!isSearchOpen)}
-            className="flex whitespace-nowrap items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border bg-slate-800/50 text-slate-400 border-slate-700/50 hover:bg-slate-800 hover:text-slate-300"
+            className="flex whitespace-nowrap items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border bg-slate-800/50 text-slate-400 border-slate-700/50 hover:bg-slate-800 hover:text-slate-300 cursor-pointer"
           >
             Search <span className="opacity-50 text-xs">Ctrl+K</span>
           </button>
 
           <button 
             onClick={() => setShowShortcuts(!showShortcuts)}
-            className="flex whitespace-nowrap items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border bg-slate-800/50 text-slate-400 border-slate-700/50 hover:bg-slate-800 hover:text-slate-300"
+            className="flex whitespace-nowrap items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border bg-slate-800/50 text-slate-400 border-slate-700/50 hover:bg-slate-800 hover:text-slate-300 cursor-pointer"
           >
             <Keyboard className="w-4 h-4" />
             <span className="hidden sm:inline">Shortcuts</span>
@@ -949,7 +942,7 @@ export default function CloudOS() {
           <button 
             onClick={handleExportProject}
             disabled={isExporting}
-            className="flex whitespace-nowrap items-center gap-2 px-3 py-1.5 bg-indigo-600/20 text-indigo-400 hover:bg-indigo-600/30 hover:text-indigo-300 rounded-lg text-sm font-medium transition-colors border border-indigo-500/20"
+            className="flex whitespace-nowrap items-center gap-2 px-3 py-1.5 bg-indigo-600/20 text-indigo-400 hover:bg-indigo-600/30 hover:text-indigo-300 rounded-lg text-sm font-medium transition-colors border border-indigo-500/20 cursor-pointer"
           >
             {isExporting ? <CheckCircle2 className="w-4 h-4" /> : <Archive className="w-4 h-4" />}
             {isExporting ? 'Exported!' : 'Export Project'}
@@ -964,14 +957,14 @@ export default function CloudOS() {
           
           <button
             onClick={handleFormat}
-            className="flex whitespace-nowrap items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border bg-slate-800/50 text-slate-400 border-slate-700/50 hover:bg-slate-800 hover:text-slate-300"
+            className="flex whitespace-nowrap items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border bg-slate-800/50 text-slate-400 border-slate-700/50 hover:bg-slate-800 hover:text-slate-300 cursor-pointer"
           >
             <Code2 className="w-4 h-4" />
             <span className="hidden sm:inline">Format</span>
           </button>
           <button
             onClick={handleRun}
-            className="flex whitespace-nowrap items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors bg-emerald-600 hover:bg-emerald-500 text-white shadow shadow-emerald-900/20"
+            className="flex whitespace-nowrap items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors bg-emerald-600 hover:bg-emerald-500 text-white shadow shadow-emerald-900/20 cursor-pointer"
           >
             <Play className="w-4 h-4" />
             <span className="hidden sm:inline">Compile & Run</span>
@@ -1316,7 +1309,7 @@ export default function CloudOS() {
                           setActiveFileId(files[0].id);
                         }
                       }}
-                      className="opacity-0 group-hover:opacity-100 hover:text-rose-400 p-0.5 rounded ml-1"
+                      className="opacity-0 group-hover:opacity-100 hover:text-rose-400 p-0.5 rounded ml-1 cursor-pointer"
                     >
                       <X className="w-3 h-3" />
                     </button>
@@ -1537,12 +1530,12 @@ export default function CloudOS() {
                 />
                 <div className="flex items-center justify-between px-4 py-2 bg-[#252526] border-b border-slate-800">
                   <div className="flex items-center gap-4 text-xs font-medium uppercase tracking-wider text-slate-400">
-                    <button className="text-slate-200 border-b border-blue-500 pb-1">Terminal</button>
+                    <button className="text-slate-200 border-b border-blue-500 pb-1 cursor-pointer">Terminal</button>
                     
                   </div>
                   <div className="flex items-center gap-2 relative">
                     
-                    <button onClick={() => setShowTerminalSettings(!showTerminalSettings)} className="p-1 hover:bg-slate-700 rounded text-slate-400 hover:text-slate-200" title="Terminal Settings">
+                    <button onClick={() => setShowTerminalSettings(!showTerminalSettings)} className="p-1 hover:bg-slate-700 rounded text-slate-400 hover:text-slate-200 cursor-pointer" title="Terminal Settings">
                       <Settings className="w-3.5 h-3.5" />
                     </button>
                     
@@ -1550,7 +1543,7 @@ export default function CloudOS() {
                       <div className="absolute bottom-full right-0 mb-2 w-48 bg-slate-900 border border-slate-700 rounded-lg shadow-xl p-3 z-50">
                         <div className="flex items-center justify-between mb-3">
                           <span className="text-xs font-semibold text-slate-200">Terminal Settings</span>
-                          <button onClick={() => setShowTerminalSettings(false)} className="text-slate-400 hover:text-slate-200"><X className="w-3 h-3" /></button>
+                          <button onClick={() => setShowTerminalSettings(false)} className="text-slate-400 hover:text-slate-200 cursor-pointer"><X className="w-3 h-3" /></button>
                         </div>
                         
                         <div className="mb-3">
@@ -1585,10 +1578,10 @@ export default function CloudOS() {
                       </div>
                     )}
 
-                    <button onClick={() => window.dispatchEvent(new CustomEvent('terminal-send', { detail: 'clear\n' }))} className="p-1 hover:bg-slate-700 rounded text-slate-400 hover:text-slate-200" title="Clear Console">
+                    <button onClick={() => window.dispatchEvent(new CustomEvent('terminal-send', { detail: 'clear\n' }))} className="p-1 hover:bg-slate-700 rounded text-slate-400 hover:text-slate-200 cursor-pointer" title="Clear Console">
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
-                    <button onClick={() => setIsTerminalOpen(false)} className="p-1 hover:bg-slate-700 rounded text-slate-400 hover:text-slate-200" title="Close Panel">
+                    <button onClick={() => setIsTerminalOpen(false)} className="p-1 hover:bg-slate-700 rounded text-slate-400 hover:text-slate-200 cursor-pointer" title="Close Panel">
                       <X className="w-3.5 h-3.5" />
                     </button>
                   </div>
@@ -1629,7 +1622,7 @@ export default function CloudOS() {
                 <Keyboard className="w-5 h-5 text-indigo-400" />
                 Keyboard Shortcuts
               </div>
-              <button onClick={() => setShowShortcuts(false)} className="text-slate-500 hover:text-slate-300 font-bold text-xs uppercase tracking-wider">
+              <button onClick={() => setShowShortcuts(false)} className="text-slate-500 hover:text-slate-300 font-bold text-xs uppercase tracking-wider cursor-pointer">
                 Close
               </button>
             </div>
