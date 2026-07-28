@@ -121,20 +121,39 @@ const ModelCard: React.FC<{ model: ModelFile }> = ({ model }) => {
     setPullStatus('pulling');
     setErrorMsg('');
     try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 5000);
       const res = await fetch('http://localhost:11434/api/pull', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: model.ollamaTag, stream: false })
+        body: JSON.stringify({ name: model.ollamaTag, stream: false }),
+        signal: controller.signal,
+        mode: 'cors',
       });
-      
-      if (!res.ok) throw new Error('Failed to pull from local Ollama');
-      
+      clearTimeout(timeout);
+
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
       setPullStatus('success');
       setTimeout(() => setPullStatus('idle'), 3000);
     } catch (e: any) {
       setPullStatus('error');
-      setErrorMsg(e.message || 'Ensure Ollama is running on localhost:11434 with CORS enabled (OLLAMA_ORIGINS="*")');
+      const curlCmd = `curl -X POST http://localhost:11434/api/pull -d '{"name":"${model.ollamaTag}","stream":false}'`;
+      setErrorMsg(
+        e.name === 'AbortError'
+          ? 'Connection timed out. Make sure Ollama is running.'
+          : 'Browser cannot directly reach Ollama due to CORS. Run this in your terminal:'
+      );
+      // Store curl command for copy
+      setPullStatus('error');
     }
+  };
+
+  const copyCurlCommand = () => {
+    const curlCmd = `curl -X POST http://localhost:11434/api/pull -d '{"name":"${model.ollamaTag}","stream":false}'`;
+    navigator.clipboard.writeText(curlCmd);
+    setErrorMsg('curl command copied! Paste and run in your terminal.');
+    setTimeout(() => setPullStatus('idle'), 2000);
   };
 
   return (
@@ -168,9 +187,18 @@ const ModelCard: React.FC<{ model: ModelFile }> = ({ model }) => {
           </div>
           
           {pullStatus === 'error' && (
-            <div className="flex items-start gap-2 text-rose-400 text-xs mt-2">
-              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-              <span>{errorMsg}</span>
+            <div className="flex flex-col gap-2 mt-2">
+              <div className="flex items-start gap-2 text-rose-400 text-xs">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                <span>{errorMsg}</span>
+              </div>
+              <button
+                onClick={copyCurlCommand}
+                className="text-[10px] px-2 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 flex items-center gap-1.5 transition-colors"
+              >
+                <Cpu className="w-3 h-3" />
+                Copy curl command
+              </button>
             </div>
           )}
           {pullStatus === 'success' && (
@@ -179,8 +207,8 @@ const ModelCard: React.FC<{ model: ModelFile }> = ({ model }) => {
               <span>Model pulled successfully!</span>
             </div>
           )}
-          
-          <button 
+
+          <button
             onClick={pullModel}
             disabled={pullStatus === 'pulling'}
             className="w-full mt-2 py-2 bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-300 text-sm font-bold rounded-lg flex items-center justify-center gap-2 transition-colors disabled:opacity-50"

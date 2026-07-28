@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
-import { BrainCircuit, Send, Settings, Key, Globe, Zap, Bot, Trash2 } from 'lucide-react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { BrainCircuit, Send, Settings, Key, Globe, Zap, Bot, Trash2, Code, Search, Loader2 } from 'lucide-react';
 
 type AIProvider = 'local' | 'openrouter' | 'gemini' | 'openai';
 
@@ -15,65 +15,27 @@ interface ProviderConfig {
 }
 
 const PROVIDERS: ProviderConfig[] = [
-  {
-    id: 'local',
-    name: 'Local AI',
-    icon: Zap,
-    models: [{ id: 'local', name: 'Built-in Assistant' }],
-    defaultModel: 'local',
-    description: 'Works offline. Web search + built-in knowledge. No API key needed.',
-  },
-  {
-    id: 'openrouter',
-    name: 'OpenRouter',
-    icon: Globe,
-    models: [
-      { id: 'openai/gpt-4o', name: 'GPT-4o' },
-      { id: 'google/gemini-2.5-flash', name: 'Gemini 2.5 Flash' },
-      { id: 'anthropic/claude-3.5-sonnet', name: 'Claude 3.5 Sonnet' },
-      { id: 'meta-llama/llama-3.3-70b', name: 'Llama 3.3 70B' },
-    ],
-    defaultModel: 'openai/gpt-4o',
-    description: '200+ models, one API key. Get yours at openrouter.ai/keys',
-  },
-  {
-    id: 'gemini',
-    name: 'Gemini',
-    icon: BrainCircuit,
-    models: [
-      { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash (free)' },
-      { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro' },
-    ],
-    defaultModel: 'gemini-2.5-flash',
-    description: 'Google AI. Free API key at aistudio.google.com',
-  },
-  {
-    id: 'openai',
-    name: 'OpenAI',
-    icon: Bot,
-    models: [
-      { id: 'gpt-4o', name: 'GPT-4o' },
-      { id: 'gpt-4o-mini', name: 'GPT-4o Mini (cheap)' },
-    ],
-    defaultModel: 'gpt-4o-mini',
-    description: 'OpenAI models. Get your key at platform.openai.com/api-keys',
-  },
+  { id: 'local', name: 'Local AI', icon: Zap,
+    models: [{ id: 'local', name: 'Omni-Engine v2' }], defaultModel: 'local',
+    description: 'No API key needed. Web search, code execution, math, knowledge base. Private & powerful.' },
+  { id: 'openrouter', name: 'OpenRouter', icon: Globe,
+    models: [{ id: 'openai/gpt-4o', name: 'GPT-4o' }, { id: 'google/gemini-2.5-flash', name: 'Gemini 2.5 Flash' }, { id: 'anthropic/claude-3.5-sonnet', name: 'Claude 3.5 Sonnet' }],
+    defaultModel: 'openai/gpt-4o', description: '200+ models. Get a key at openrouter.ai/keys' },
+  { id: 'gemini', name: 'Gemini', icon: BrainCircuit,
+    models: [{ id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash (free)' }, { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro' }],
+    defaultModel: 'gemini-2.5-flash', description: 'Google AI. Free key at aistudio.google.com' },
+  { id: 'openai', name: 'OpenAI', icon: Bot,
+    models: [{ id: 'gpt-4o', name: 'GPT-4o' }, { id: 'gpt-4o-mini', name: 'GPT-4o Mini' }],
+    defaultModel: 'gpt-4o-mini', description: 'OpenAI. Key at platform.openai.com/api-keys' },
 ];
 
 const SETTINGS_KEY = 'vantaos_omni_settings';
 const HISTORY_KEY = 'vantaos_omni_history';
 
-interface StoredSettings {
-  provider: AIProvider;
-  model: string;
-  apiKey: string;
-}
+interface StoredSettings { provider: AIProvider; model: string; apiKey: string; }
 
 function loadSettings(): StoredSettings {
-  try {
-    const data = localStorage.getItem(SETTINGS_KEY);
-    if (data) return JSON.parse(data);
-  } catch {}
+  try { const d = localStorage.getItem(SETTINGS_KEY); if (d) return JSON.parse(d); } catch {}
   return { provider: 'local', model: 'local', apiKey: '' };
 }
 
@@ -81,63 +43,193 @@ function saveSettings(s: StoredSettings) {
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(s));
 }
 
-// ====== Local fallback AI with web search ======
-async function localQuery(messages: { role: string; content: string }[]): Promise<string> {
-  const lastMsg = messages[messages.length - 1]?.content || '';
-  const q = lastMsg.toLowerCase();
-
-  if (q.includes('weather') || q.includes('temperature')) {
+// ====== LOCAL AI ENGINE ======
+const localEngine = {
+  async searchWeb(query: string): Promise<string> {
     try {
-      const cityMatch = q.match(/(?:in|at|for)\s+([a-z\s-]+)/i);
-      const city = cityMatch ? cityMatch[1].trim() : 'London';
+      const res = await fetch(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(query.slice(0, 300))}`,
+        { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; VantaOS/1.0)' } });
+      const html = await res.text();
+      const results: { title: string; snippet: string; url: string }[] = [];
+
+      // Extract result blocks
+      const blocks = html.match(/<div class="result[^"]*"[^>]*>[\s\S]*?<\/div>\s*<\/div>\s*<\/div>/gi) || [];
+      for (const block of blocks.slice(0, 5)) {
+        const titleMatch = block.match(/<a[^>]+class="result__a"[^>]*>([\s\S]*?)<\/a>/i);
+        const snippetMatch = block.match(/<a[^>]+class="result__snippet"[^>]*>([\s\S]*?)<\/a>/i);
+        const urlMatch = block.match(/href="(https?:\/\/[^"]+)"/);
+        if (titleMatch) {
+          results.push({
+            title: titleMatch[1].replace(/<[^>]*>/g, '').trim(),
+            snippet: snippetMatch ? snippetMatch[1].replace(/<[^>]*>/g, '').trim() : '',
+            url: urlMatch ? urlMatch[1] : '',
+          });
+        }
+      }
+
+      if (results.length > 0) {
+        return results.map((r, i) =>
+          `${i + 1}. **${r.title}**${r.snippet ? ': ' + r.snippet : ''}`
+        ).join('\n');
+      }
+      return '';
+    } catch { return ''; }
+  },
+
+  async executeJS(code: string): Promise<string> {
+    try {
+      const fn = new Function(code);
+      const result = fn();
+      return String(result ?? 'undefined');
+    } catch (e: any) {
+      return `Error: ${e.message}`;
+    }
+  },
+
+  async fetchURL(url: string): Promise<string> {
+    try {
+      const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+      const text = await res.text();
+      // Extract readable content
+      const title = text.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]?.trim() || '';
+      const body = text.replace(/<script[\s\S]*?<\/script>/gi, '')
+                       .replace(/<style[\s\S]*?<\/style>/gi, '')
+                       .replace(/<[^>]+>/g, ' ')
+                       .replace(/\s+/g, ' ')
+                       .trim()
+                       .slice(0, 2000);
+      return `Title: ${title}\n\n${body}`;
+    } catch (e: any) {
+      return `Failed to fetch URL: ${e.message}`;
+    }
+  },
+
+  async getWeather(city: string): Promise<string> {
+    try {
       const res = await fetch(`https://wttr.in/${encodeURIComponent(city)}?format=j1`);
       const data = await res.json();
       const c = data.current_condition?.[0];
-      if (c) return `Weather in ${city}: ${c.temp_C}°C (${c.temp_F}°F), ${c.weatherDesc?.[0]?.value || 'clear'}. Humidity: ${c.humidity}%. Wind: ${c.windspeedKmph} km/h.`;
-    } catch {}
-  }
+      if (c) return `**Weather in ${city}**\n• Temperature: ${c.temp_C}°C / ${c.temp_F}°F\n• Conditions: ${c.weatherDesc?.[0]?.value || 'N/A'}\n• Humidity: ${c.humidity}%\n• Wind: ${c.windspeedKmph} km/h\n• Feels like: ${c.FeelsLikeC}°C`;
+      return `Weather data for "${city}" not found.`;
+    } catch { return `Could not fetch weather for "${city}".`; }
+  },
 
-  // Web search for anything query-like
-  try {
-    const query = encodeURIComponent(lastMsg.slice(0, 200));
-    const res = await fetch(`https://html.duckduckgo.com/html/?q=${query}`, {
-      headers: { 'User-Agent': 'Mozilla/5.0' },
-    });
-    const html = await res.text();
-    const snippets = html.match(/<a[^>]+class="result__snippet"[^>]*>([\s\S]*?)<\/a>/gi) || [];
-    const titles = html.match(/<a[^>]+class="result__a"[^>]*>([\s\S]*?)<\/a>/gi) || [];
+  knowledge: `VantaOS is an open-source browser-based cloud IDE.
+It features a Monaco code editor, Omni-AI assistant, file management, and GitHub sync.
+VantaOS is built with Next.js, React, TypeScript, and Tailwind CSS.
+It deploys on Cloudflare Workers as a static export.
+Supabase provides authentication, database, and real-time subscriptions.
+The Omni-AI supports multiple AI providers: OpenRouter, Gemini, and OpenAI.
+Ollama local integration allows running models on your own machine.
+All data is stored locally via IndexedDB or synced to Supabase when configured.
+The platform emphasizes privacy, data ownership, and zero tracking.`,
 
-    if (titles.length > 0) {
-      const results = titles.slice(0, 4).map((t, i) => {
-        const title = t.replace(/<[^>]*>/g, '').trim();
-        const snippet = snippets[i] ? snippets[i].replace(/<[^>]*>/g, '').trim() : '';
-        return `• ${title}${snippet ? ': ' + snippet : ''}`;
-      });
-      return `**Web search results:**\n\n${results.join('\n')}\n\n---\n*I'm in offline mode. Add an API key (⚙️) for full AI responses including code, analysis, and more.*`;
+  async query(messages: { role: string; content: string }[]): Promise<string> {
+    const lastMsg = messages[messages.length - 1]?.content || '';
+    const q = lastMsg.trim();
+    const ql = q.toLowerCase();
+
+    // Help
+    if (ql.startsWith('help') || q === '?' || ql.includes('what can you do')) {
+      return `## Omni-AI Local Engine v2
+
+I can help you with:
+
+**🌐 Web Search** — Ask any question and I'll search the web
+**📊 Math & Calculations** — Try: \`calc 2 + 2\` or \`math sqrt(144)\`
+**💻 Code Execution** — Try: \`js 2 + 2\` or \`run console.log("hello")\`
+**🌤️ Weather** — Try: \`weather in Tokyo\`
+**📄 URL Fetch** — Try: \`fetch https://example.com\`
+**🧠 Knowledge** — Ask about VantaOS, programming, or general topics
+
+For full AI power, add an API key in Settings (⚙️) to use GPT-4o, Claude, or Gemini.`;
     }
-  } catch {}
 
-  if (q.includes('hello') || q.includes('hi ')) {
-    return 'Hello! I\'m VantaOS Omni-AI. To use my full AI capabilities, add your API key in settings (⚙️). Otherwise, ask me anything and I\'ll search the web for answers.';
+    // Weather
+    if (ql.includes('weather') || ql.includes('temperature')) {
+      const match = q.match(/(?:in|at|for)\s+([a-z\s-]+)/i);
+      return await this.getWeather(match ? match[1].trim() : 'your area');
+    }
+
+    // JavaScript execution
+    if (ql.startsWith('js ') || ql.startsWith('run ') || ql.startsWith('exec ')) {
+      const code = q.replace(/^(js|run|exec)\s+/i, '').trim();
+      const result = await this.executeJS(code);
+      return `**Result:**\n\`\`\`\n${result}\n\`\`\``;
+    }
+
+    // Math
+    if (ql.startsWith('calc') || ql.startsWith('math') || ql.startsWith('calculate')) {
+      const expr = q.replace(/^(calc|math|calculate)\s+/i, '').trim();
+      try {
+        const result = Function('"use strict"; return (' + expr + ')')();
+        return `**=${expr}**\n\`\`\`\n${result}\n\`\`\``;
+      } catch (e: any) {
+        return `Could not calculate: ${e.message}. Try: \`calc 2 * (3 + 5)\``;
+      }
+    }
+
+    // URL fetch
+    if (ql.startsWith('fetch ') || ql.startsWith('get url ') || ql.startsWith('read ')) {
+      const url = q.replace(/^(fetch|get url|read)\s+/i, '').trim();
+      if (url.startsWith('http')) {
+        const content = await this.fetchURL(url);
+        return `**Fetched from:** ${url}\n\n${content}`;
+      }
+      return 'Please provide a valid URL starting with http:// or https://';
+    }
+
+    // Time/date
+    if (ql.includes('time') && (ql.includes('current') || ql.includes('now') || ql.includes('what'))) {
+      return `**Current time:** ${new Date().toLocaleString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZoneName: 'short' })}`;
+    }
+
+    // Code generation (simple patterns)
+    if (ql.includes('function') && (ql.includes('javascript') || ql.includes('js')) && (ql.includes('write') || ql.includes('create') || ql.includes('generate'))) {
+      const desc = q.slice(0, 200);
+      const results = await this.searchWeb(`javascript ${desc} example code`);
+      if (results) return `I searched the web for code examples:\n\n${results}\n\n---\n*For more accurate code generation, add an API key in Settings.*`;
+    }
+
+    // Programming questions
+    if (ql.includes('python') || ql.includes('react') || ql.includes('typescript') || ql.includes('javascript')) {
+      const results = await this.searchWeb(q.slice(0, 300));
+      if (results) return `**Web search results for:** "${q}"\n\n${results}\n\n---\n*For detailed explanations, add an API key in Settings.*`;
+    }
+
+    // Web search (catch-all)
+    const results = await this.searchWeb(q.slice(0, 300));
+    if (results) {
+      return `**Search results for:** "${q}"\n\n${results}\n\n---\n*I'm in offline mode. Add an API key (⚙️) for full AI responses including code generation, analysis, and more.*`;
+    }
+
+    // Knowledge base fallback
+    const kb = this.knowledge.toLowerCase();
+    const keywords = ql.split(' ').filter(w => w.length > 3);
+    const matched = keywords.filter(w => kb.includes(w));
+    if (matched.length >= 2) {
+      return `**Based on my knowledge:**\n\n${this.knowledge}\n\n*For more details, try asking more specifically or add an API key.*`;
+    }
+
+    return `I couldn't find a specific answer to "${q}". Here's what I can do:
+
+• **Search the web** — Try rephrasing your question
+• **Calculate math** — \`calc 2 + 2\`
+• **Run JavaScript** — \`js console.log("hello")\`
+• **Check weather** — \`weather in Paris\`
+• **Fetch a URL** — \`fetch https://example.com\`
+
+Or add an API key in Settings (⚙️) for full AI capabilities.`;
   }
-  if (q.includes('help') || q.includes('what can you')) {
-    return `I can help with:\n• Web search — ask any question\n• Weather — "weather in Paris"\n• General knowledge\n\nFor real AI power, add a key from OpenRouter, Gemini, or OpenAI in ⚙️ settings.`;
-  }
+};
 
-  return `I searched for that but didn't find a great result. Try asking more specifically, or add an API key (⚙️) for full AI capabilities.
-
-You can also try:\n• "weather in Tokyo"\n• "Search for ..."\n• "What is ..."`;
-}
-
-// ====== Provider API via Worker proxy ======
+// ====== Provider API ======
 async function queryProvider(
-  provider: AIProvider,
-  model: string,
-  apiKey: string,
+  provider: AIProvider, model: string, apiKey: string,
   messages: { role: string; content: string }[]
 ): Promise<string> {
-  if (provider === 'local') return localQuery(messages);
-  if (!apiKey) throw new Error('Please add your API key in settings (⚙️) to use this provider.');
+  if (provider === 'local') return localEngine.query(messages);
+  if (!apiKey) throw new Error('Add your API key in Settings (⚙️) to use this provider.');
 
   const res = await fetch('/api/ai/generate', {
     method: 'POST',
@@ -199,8 +291,8 @@ export default function OmniAI() {
       {/* Header */}
       <div className="bg-[#161B22] border-b border-slate-800 p-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
-          <div className={`w-12 h-12 rounded-xl border flex items-center justify-center shadow-lg ${isOnline ? 'bg-emerald-900/40 border-emerald-500/20' : 'bg-slate-800/40 border-slate-700/30'}`}>
-            {isOnline ? <BrainCircuit className="w-6 h-6 text-emerald-400" /> : <Zap className="w-6 h-6 text-amber-400" />}
+          <div className={`w-12 h-12 rounded-xl border flex items-center justify-center shadow-lg ${isOnline ? 'bg-emerald-900/40 border-emerald-500/20' : 'bg-indigo-900/40 border-indigo-500/20'}`}>
+            {isOnline ? <BrainCircuit className="w-6 h-6 text-emerald-400" /> : <Zap className="w-6 h-6 text-indigo-400" />}
           </div>
           <div>
             <h1 className="text-2xl font-bold text-white tracking-tight">Omni-AI</h1>
@@ -208,13 +300,14 @@ export default function OmniAI() {
               {isOnline ? (
                 <><span className="w-2 h-2 rounded-full bg-emerald-500 shadow-lg"></span><span className="text-xs font-mono text-emerald-400 uppercase tracking-widest">{provider.name}</span></>
               ) : (
-                <><span className="w-2 h-2 rounded-full bg-amber-500"></span><span className="text-xs font-mono text-amber-400 uppercase tracking-widest">Offline Mode</span></>
+                <><span className="w-2 h-2 rounded-full bg-indigo-500"></span><span className="text-xs font-mono text-indigo-400 uppercase tracking-widest">Omni-Engine v2 · Offline</span></>
               )}
             </div>
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <button onClick={clearHistory} disabled={messages.length === 0} className="p-2.5 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-xl transition-colors disabled:opacity-30" title="Clear history">
+          <button onClick={clearHistory} disabled={messages.length === 0}
+            className="p-2.5 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-xl transition-colors disabled:opacity-30" title="Clear history">
             <Trash2 className="w-5 h-5" />
           </button>
           <button onClick={() => { setShowSettings(!showSettings); setTempApiKey(settings.apiKey); }}
@@ -264,10 +357,9 @@ export default function OmniAI() {
               </div>
             </>
           )}
-
           <div className="flex justify-end gap-3 pt-2">
             <button onClick={() => setShowSettings(false)} className="px-4 py-2 text-sm text-slate-400 hover:text-white transition-colors">Cancel</button>
-            <button onClick={saveApiSettings} className="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold rounded-xl transition-colors">Save Settings</button>
+            <button onClick={saveApiSettings} className="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold rounded-xl transition-colors">Save</button>
           </div>
         </div>
       )}
@@ -277,13 +369,29 @@ export default function OmniAI() {
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
           {messages.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-slate-500">
-              <div className={`w-16 h-16 rounded-2xl border flex items-center justify-center mb-4 ${isOnline ? 'bg-emerald-900/20 border-emerald-500/20' : 'bg-amber-900/20 border-amber-500/20'}`}>
-                {isOnline ? <BrainCircuit className="w-8 h-8 text-emerald-400" /> : <Zap className="w-8 h-8 text-amber-400" />}
+              <div className="w-16 h-16 rounded-2xl border bg-indigo-900/20 border-indigo-500/20 flex items-center justify-center mb-4">
+                <Zap className="w-8 h-8 text-indigo-400" />
               </div>
-              <p className="text-lg font-medium text-slate-400 mb-2">How can I help you?</p>
-              <p className="text-sm text-slate-500 max-w-md text-center">
-                {isOnline ? `Connected via ${provider.name}. Ask me anything!` : 'Add an API key in settings (⚙️) for full AI capabilities.'}
+              <p className="text-lg font-medium text-slate-400 mb-1">Omni-Engine v2 Ready</p>
+              <p className="text-sm text-slate-500 max-w-md text-center mb-6">
+                Web search, code execution, math, weather, knowledge base — no API key needed.
               </p>
+              <div className="grid grid-cols-2 gap-2 max-w-sm w-full">
+                {[
+                  { label: 'Search web', cmd: 'What is quantum computing?' },
+                  { label: 'Calculate', cmd: 'calc 2^10 + 5*3' },
+                  { label: 'Run JS', cmd: 'js [1,2,3].map(x => x*2)' },
+                  { label: 'Weather', cmd: 'weather in London' },
+                  { label: 'Fetch URL', cmd: 'fetch https://example.com' },
+                  { label: 'Help', cmd: 'help' },
+                ].map(s => (
+                  <button key={s.label} onClick={() => setInput(s.cmd)}
+                    className="p-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-xs text-slate-400 hover:text-slate-200 transition-colors text-left">
+                    <span className="font-medium text-indigo-400">{s.label}</span>
+                    <br /><span className="opacity-70">{s.cmd}</span>
+                  </button>
+                ))}
+              </div>
             </div>
           ) : messages.map((msg, idx) => (
             <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
@@ -295,9 +403,8 @@ export default function OmniAI() {
           {isGenerating && (
             <div className="flex justify-start">
               <div className="bg-[#161B22] border border-slate-700/50 rounded-2xl rounded-tl-sm p-4 flex items-center gap-2">
-                <span className="w-2 h-2 bg-emerald-500 rounded-full animate-bounce"></span>
-                <span className="w-2 h-2 bg-emerald-500 rounded-full animate-bounce delay-75"></span>
-                <span className="w-2 h-2 bg-emerald-500 rounded-full animate-bounce delay-150"></span>
+                <Loader2 className="w-4 h-4 text-indigo-400 animate-spin" />
+                <span className="text-xs text-slate-400">Processing...</span>
               </div>
             </div>
           )}
@@ -307,16 +414,18 @@ export default function OmniAI() {
         <div className="p-4 sm:p-6 bg-[#161B22] border-t border-slate-800">
           <form onSubmit={handleSend} className="relative flex items-center">
             <input type="text" value={input} onChange={(e) => setInput(e.target.value)}
-              placeholder={isOnline ? 'Ask anything...' : 'Ask a question or search the web...'}
+              placeholder={isOnline ? 'Ask anything...' : 'Search, calculate, run code, ask anything...'}
               disabled={isGenerating}
-              className="w-full bg-[#0a0d12] border border-slate-700 text-white text-sm md:text-base rounded-2xl pl-5 pr-14 py-4 focus:outline-none focus:border-indigo-500 shadow-inner disabled:opacity-50 transition-colors" />
+              className="w-full bg-[#0a0d12] border border-slate-700 text-white text-sm md:text-base rounded-2xl pl-5 pr-14 py-4 focus:outline-none focus:border-indigo-500 shadow-inner disabled:opacity-50 transition-colors placeholder-slate-600" />
             <button type="submit" disabled={!input.trim() || isGenerating}
               className="absolute right-2 p-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl disabled:bg-slate-700 disabled:text-slate-500 transition-colors">
               <Send className="w-5 h-5" />
             </button>
           </form>
-          <div className="text-[10px] text-slate-500 mt-3 px-2">
-            {isOnline ? `Using ${settings.model}` : 'Offline — web search + built-in knowledge'}
+          <div className="text-[10px] text-slate-500 mt-3 px-2 flex items-center gap-3">
+            <span>{isOnline ? `Using ${settings.model}` : '🧠 Web + Math + Code + Weather + Knowledge'}</span>
+            <span className="opacity-50">·</span>
+            <span className="opacity-70">Type <code className="text-indigo-400">help</code> for commands</span>
           </div>
         </div>
       </div>

@@ -31,8 +31,7 @@
     "react": "^19.0.1",
     "react-dom": "^19.0.1",
     "react-simple-code-editor": "^0.13.1",
-    "react-virtuoso": "^4.12.4",
-    "socket.io-client": "^4.8.1"
+    "react-virtuoso": "^4.12.4"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
