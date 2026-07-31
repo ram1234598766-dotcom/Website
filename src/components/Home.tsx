@@ -104,7 +104,7 @@ export default function Home({ setCurrentView, onSignIn, onSignUp }: HomeProps) 
         </motion.h1>
         
         <motion.p variants={{ hidden: { opacity: 0, y: 20 }, visible: { opacity: 1, y: 0, transition: { duration: 0.8, ease: "easeOut" } } }} className="text-lg sm:text-xl text-slate-400 max-w-2xl mx-auto leading-relaxed font-medium">
-          Write, build, and deploy full-stack applications entirely in the browser. Powered by an omnipresent AI layer and zero-trust security.
+          Write, build, and deploy full-stack applications entirely in the browser. An in-browser IDE, AI assistant, terminal, and model hub — all in one workspace.
         </motion.p>
 
         <motion.div variants={{ hidden: { opacity: 0, y: 20 }, visible: { opacity: 1, y: 0, transition: { duration: 0.8, ease: "easeOut" } } }} className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-8">
