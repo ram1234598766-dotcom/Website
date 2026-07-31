@@ -208,7 +208,60 @@ export default function Home({ setCurrentView, onSignIn, onSignUp }: HomeProps) 
         </div>
       </motion.section>
 
-      {/* 5. Footer */}
+      {/* 4. Tech Stack Section */}
+      <motion.section
+        initial={{ opacity: 0, y: 40 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true, margin: "-100px" }}
+        transition={{ duration: 0.8, ease: "easeOut" }}
+        className="w-full max-w-6xl mx-auto mb-32 px-4 z-10 relative text-center"
+      >
+        <div className="mb-12">
+          <h2 className="text-3xl md:text-5xl font-black text-white tracking-tight mb-4">Powered by a modern stack</h2>
+          <p className="text-slate-400 text-lg max-w-2xl mx-auto">Built on battle-tested open-source technology, engineered to run entirely in your browser.</p>
+        </div>
+        <div className="flex flex-wrap items-center justify-center gap-3">
+          {['React 19', 'TypeScript', 'Next.js', 'Monaco', 'Tailwind CSS', 'Motion', 'Supabase', 'Ollama', 'Cloudflare'].map((tech) => (
+            <span
+              key={tech}
+              className="px-4 py-2 rounded-full bg-white/5 border border-white/10 text-sm font-semibold text-slate-300 hover:border-indigo-500/40 hover:text-white transition-colors"
+            >
+              {tech}
+            </span>
+          ))}
+        </div>
+      </motion.section>
+
+      {/* 5. CTA Section */}
+      <motion.section
+        initial={{ opacity: 0, y: 40 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true, margin: "-100px" }}
+        transition={{ duration: 0.8, ease: "easeOut" }}
+        className="w-full max-w-4xl mx-auto mb-32 px-4 z-10 relative"
+      >
+        <div className="relative rounded-3xl border border-white/10 bg-gradient-to-br from-indigo-600/10 to-purple-600/10 p-10 md:p-16 text-center overflow-hidden">
+          <div className="absolute -top-24 left-1/2 -translate-x-1/2 w-96 h-96 bg-indigo-500/20 rounded-full blur-[120px]" aria-hidden></div>
+          <h2 className="text-3xl md:text-5xl font-black text-white tracking-tight mb-4 relative">Ready to build in the cloud?</h2>
+          <p className="text-slate-400 text-lg mb-8 max-w-xl mx-auto relative">Spin up your workspace in seconds. No installs, no setup — just your browser.</p>
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 relative">
+            <button
+              onClick={onSignUp}
+              className="w-full sm:w-auto px-8 py-4 text-base font-bold bg-indigo-600/90 text-white rounded-full shadow-[0_0_20px_rgba(79,70,229,0.4)] hover:bg-indigo-500 hover:shadow-[0_0_30px_rgba(79,70,229,0.6)] transition-all flex items-center justify-center gap-2 group"
+            >
+              Launch VantaOS <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+            </button>
+            <button
+              onClick={() => setCurrentView('ide')}
+              className="w-full sm:w-auto px-8 py-4 text-base font-bold bg-white/5 text-slate-200 border border-white/10 rounded-full hover:bg-white/10 transition-colors"
+            >
+              Open the IDE
+            </button>
+          </div>
+        </div>
+      </motion.section>
+
+      {/* 6. Footer */}
       <footer className="w-full max-w-6xl mx-auto border-t border-white/10 pt-12 pb-8 px-4 z-10 relative">
         <div className="flex flex-col md:flex-row items-center justify-between gap-6">
             <div className="flex items-center gap-3">

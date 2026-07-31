@@ -12,22 +12,15 @@ import { demoSupabase, DemoUser as DemoUserType, isSupabaseConfigured as checkSu
 const rawUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseUrl = rawUrl.replace(/\/rest\/v1\/?$/, '');
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-const supabaseConfigured = checkSupabaseEnv();
+// Build-time inlined in static export — reliable on the client, unlike a
+// runtime process.env read (which is undefined in the browser bundle).
+const hasSupabase = checkSupabaseEnv() || !!(rawUrl && !rawUrl.includes('placeholder') && !rawUrl.includes('YOUR_'));
 
-// Determine if supabase is actually available
-const hasSupabase = supabaseConfigured;
-
-// Create supabase client (placeholder if not configured)
-let supabaseClient: ReturnType<typeof createClient>;
-try {
-  if (hasSupabase) {
-    supabaseClient = createClient(supabaseUrl, supabaseKey);
-  } else {
-    supabaseClient = createClient('https://placeholder.supabase.co', 'placeholder-key');
-  }
-} catch {
-  supabaseClient = createClient('https://placeholder.supabase.co', 'placeholder-key');
-}
+// Create supabase client (placeholder if not configured — only ever reached
+// by the demo auth fall-through paths, never used for real network calls).
+const supabaseClient: ReturnType<typeof createClient> = hasSupabase
+  ? createClient(supabaseUrl, supabaseKey)
+  : createClient('https://placeholder.supabase.co', 'placeholder-key');
 
 // Demo auth instance
 let demoAuthInstance: Awaited<ReturnType<typeof demoSupabase>> | null = null;
@@ -82,9 +75,38 @@ export const supabase = new Proxy(supabaseClient, {
             }
             if (authProp === 'onAuthStateChange') {
               return (callback: any) => {
-                getDemoAuth().then(demo => demo.auth.onAuthStateChange(callback));
-                return { data: { subscription: { unsubscribe: () => {} } } };
+                let realUnsubscribe: (() => void) | null = null;
+                getDemoAuth().then(demo => {
+                  const sub = demo.auth.onAuthStateChange(callback);
+                  realUnsubscribe = sub.data.subscription.unsubscribe;
+                });
+                return {
+                  data: {
+                    subscription: {
+                      unsubscribe: () => realUnsubscribe?.(),
+                    },
+                  },
+                };
               };
+            }
+            if (authProp === 'getUser') {
+              return async () => {
+                const demo = await getDemoAuth();
+                const session = await demo.auth.getSession();
+                return { data: { user: session.data.session }, error: session.error };
+              };
+            }
+            if (authProp === 'refreshSession') {
+              return async () => {
+                const demo = await getDemoAuth();
+                return demo.auth.getSession();
+              };
+            }
+            if (authProp === 'signInWithOAuth') {
+              return async () => ({
+                data: null,
+                error: { message: 'GitHub OAuth requires a configured Supabase project.' },
+              });
             }
             if (authProp === 'resetPasswordForEmail') {
               return async ({ email }: any) => {

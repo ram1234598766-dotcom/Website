@@ -39,17 +39,18 @@ export default function Navigation({ currentView, setCurrentView, userEmail, isS
   }
 
   return (
-    <nav className="h-16 border-b border-white/10 bg-black/40 backdrop-blur-xl px-4 sm:px-8 flex items-center justify-between z-50 sticky top-0 shrink-0">
+    <nav aria-label="Primary" className="h-16 border-b border-white/10 bg-black/40 backdrop-blur-xl px-4 sm:px-8 flex items-center justify-between z-50 sticky top-0 shrink-0">
       <div className="flex items-center gap-8">
-        <div 
-          className="flex items-center gap-2 cursor-pointer group" 
+        <button
+          className="flex items-center gap-2 cursor-pointer group"
           onClick={() => setCurrentView('home')}
+          aria-label="Go to Home"
         >
           <div className="w-8 h-8 rounded-lg flex items-center justify-center overflow-hidden text-indigo-400">
             <Logo className="w-8 h-8" />
           </div>
           <span className="text-xl font-bold tracking-tight text-white group-hover:text-indigo-400 transition-colors">VantaOS</span>
-        </div>
+        </button>
         
         {/* Desktop Nav */}
         <div className="hidden lg:flex gap-1 items-center overflow-x-auto overflow-y-auto whitespace-nowrap scroll-smooth max-w-[50vw] px-2" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none', scrollBehavior: 'smooth' }}>
@@ -57,9 +58,10 @@ export default function Navigation({ currentView, setCurrentView, userEmail, isS
             <button
               key={item.view}
               onClick={() => setCurrentView(item.view)}
+              aria-current={currentView === item.view ? 'page' : undefined}
               className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors shrink-0 ${
-                currentView === item.view 
-                  ? 'bg-indigo-500/20 text-indigo-300' 
+                currentView === item.view
+                  ? 'bg-indigo-500/20 text-indigo-300'
                   : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
               }`}
             >
@@ -98,9 +100,12 @@ export default function Navigation({ currentView, setCurrentView, userEmail, isS
         )}
         
         {/* Mobile Menu Toggle */}
-        <button 
+        <button
           className="lg:hidden p-2 text-slate-400 hover:bg-white/10 rounded-md"
           onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+          aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'}
+          aria-expanded={mobileMenuOpen}
+          aria-controls="mobile-nav-menu"
         >
           {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
         </button>
@@ -108,7 +113,7 @@ export default function Navigation({ currentView, setCurrentView, userEmail, isS
 
       {/* Mobile Nav Dropdown */}
       {mobileMenuOpen && (
-        <div className="absolute top-16 left-0 right-0 bg-[#0a0a0c]/95 backdrop-blur-xl border-b border-white/10 shadow-2xl lg:hidden flex flex-col p-4 gap-2 max-h-[calc(100vh-4rem)] overflow-y-auto overscroll-contain scroll-smooth z-50" style={{ scrollBehavior: 'smooth' }}>
+        <div id="mobile-nav-menu" className="absolute top-16 left-0 right-0 bg-[#0a0a0c]/95 backdrop-blur-xl border-b border-white/10 shadow-2xl lg:hidden flex flex-col p-4 gap-2 max-h-[calc(100vh-4rem)] overflow-y-auto overscroll-contain scroll-smooth z-50" style={{ scrollBehavior: 'smooth' }}>
           {navItems.map((item) => (
             <button
               key={item.view}
@@ -127,18 +132,29 @@ export default function Navigation({ currentView, setCurrentView, userEmail, isS
             </button>
           ))}
           <div className="h-px bg-white/10 my-2"></div>
-          <button 
-            onClick={() => { if (onSignIn) onSignIn(); setMobileMenuOpen(false); }}
-            className="px-4 py-3 text-sm font-semibold text-slate-300 bg-white/5 rounded-lg text-center"
-          >
-            <LogIn className="w-4 h-4 inline-block mr-2 mb-0.5"/> Sign In
-          </button>
-          <button 
-            onClick={() => { if (onSignUp) onSignUp(); setMobileMenuOpen(false); }}
-            className="px-4 py-3 text-sm font-semibold bg-indigo-600/90 text-white rounded-lg text-center shadow-[0_0_15px_rgba(79,70,229,0.3)]"
-          >
-            <UserPlus className="w-4 h-4 inline-block mr-2 mb-0.5"/> Sign Up
-          </button>
+          {userEmail ? (
+            <div className="flex items-center gap-2 px-4 py-3 bg-white/5 text-slate-300 rounded-lg">
+              <div className="w-7 h-7 rounded-full bg-indigo-500/20 text-indigo-300 flex items-center justify-center text-sm font-bold">
+                {userEmail.charAt(0).toUpperCase()}
+              </div>
+              <span className="text-sm font-medium truncate">{userEmail}</span>
+            </div>
+          ) : (
+            <>
+              <button
+                onClick={() => { if (onSignIn) onSignIn(); setMobileMenuOpen(false); }}
+                className="px-4 py-3 text-sm font-semibold text-slate-300 bg-white/5 rounded-lg text-center"
+              >
+                <LogIn className="w-4 h-4 inline-block mr-2 mb-0.5"/> Sign In
+              </button>
+              <button
+                onClick={() => { if (onSignUp) onSignUp(); setMobileMenuOpen(false); }}
+                className="px-4 py-3 text-sm font-semibold bg-indigo-600/90 text-white rounded-lg text-center shadow-[0_0_15px_rgba(79,70,229,0.3)]"
+              >
+                <UserPlus className="w-4 h-4 inline-block mr-2 mb-0.5"/> Sign Up
+              </button>
+            </>
+          )}
         </div>
       )}
     </nav>

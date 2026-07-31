@@ -4,5 +4,14 @@
   Referrer-Policy: strict-origin-when-cross-origin
   X-XSS-Protection: 1; mode=block
   Permissions-Policy: camera=(), microphone=(), geolocation=()
+
 /*
   Cache-Control: public, max-age=0, must-revalidate
+
+# Hashed static bundles (/_next/static/...) are immutable — cache aggressively.
+/_next/static/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# Hashed OG/site images are also immutable.
+/og-image.png
+  Cache-Control: public, max-age=31536000, immutable

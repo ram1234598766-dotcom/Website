@@ -3,11 +3,16 @@ import { motion } from 'motion/react';
 import { supabase, hasSupabase } from '../lib/supabase';
 import Logo from './Logo';
 
-export default function AuthForm() {
+interface AuthFormProps {
+  initialMode?: 'signin' | 'signup';
+}
+
+export default function AuthForm({ initialMode = 'signin' }: AuthFormProps) {
   const [isForgotPassword, setIsForgotPassword] = useState(false);
-  const [isSignUp, setIsSignUp] = useState(false);
+  const [isSignUp, setIsSignUp] = useState(initialMode === 'signup');
   const [resetSent, setResetSent] = useState(false);
   const [authError, setAuthError] = useState('');
+  const [authSuccess, setAuthSuccess] = useState('');
   const [loading, setLoading] = useState(false);
 
   return (
@@ -20,8 +25,14 @@ export default function AuthForm() {
       </h2>
 
       {authError && (
-        <div className="bg-red-500/10 text-red-400 p-3 rounded-xl text-sm mb-6 border border-red-500/20 text-center">
+        <div role="alert" className="bg-red-500/10 text-red-400 p-3 rounded-xl text-sm mb-6 border border-red-500/20 text-center">
           {authError}
+        </div>
+      )}
+
+      {authSuccess && (
+        <div role="status" className="bg-emerald-500/10 text-emerald-400 p-3 rounded-xl text-sm mb-6 border border-emerald-500/20 text-center">
+          {authSuccess}
         </div>
       )}
 
@@ -54,6 +65,7 @@ export default function AuthForm() {
           <form onSubmit={async (e) => {
             e.preventDefault();
             setAuthError('');
+            setAuthSuccess('');
             setLoading(true);
             const form = e.target as HTMLFormElement;
             const email = (form.elements.namedItem('email') as HTMLInputElement).value;
@@ -62,23 +74,24 @@ export default function AuthForm() {
 
             try {
               if (isSignUp) {
-                const { error } = await supabase.auth.signUp({ email, password, options: { data: { username } } });
+                const { error, data } = await supabase.auth.signUp({ email, password, options: { data: { username } } });
                 if (error) setAuthError(error.message);
-                else setAuthError('Account created! You are now signed in.');
+                else if (data?.session || !hasSupabase) setAuthSuccess('Account created! You are now signed in.');
+                else setAuthSuccess('Account created! Check your email to confirm your account.');
               } else {
                 const { error } = await supabase.auth.signInWithPassword({ email, password });
                 if (error) setAuthError(error.message);
               }
-            } catch (err: any) {
-              setAuthError(err.message || 'An unexpected error occurred. Please try again.');
+            } catch (err) {
+              setAuthError(err instanceof Error ? err.message : 'An unexpected error occurred. Please try again.');
             }
             setLoading(false);
           }} className="space-y-4">
             {isSignUp && (
-              <input type="text" name="username" placeholder="Username" className="w-full px-4 py-3 vanta-input" required />
+              <input type="text" name="username" aria-label="Username" autoComplete="username" placeholder="Username" className="w-full px-4 py-3 vanta-input" required />
             )}
-            <input type="email" name="email" placeholder="Email address" className="w-full px-4 py-3 vanta-input" required />
-            <input type="password" name="password" placeholder="Password" className="w-full px-4 py-3 vanta-input" required minLength={6} />
+            <input type="email" name="email" aria-label="Email address" autoComplete="email" placeholder="Email address" className="w-full px-4 py-3 vanta-input" required />
+            <input type="password" name="password" aria-label="Password" autoComplete={isSignUp ? 'new-password' : 'current-password'} placeholder="Password" className="w-full px-4 py-3 vanta-input" required minLength={6} />
 
             <div className="flex justify-between items-center text-sm px-1">
               <button type="button" onClick={() => { setIsSignUp(!isSignUp); setAuthError(''); }} className="text-indigo-400 hover:text-indigo-300 font-medium transition-colors">
@@ -117,7 +130,7 @@ export default function AuthForm() {
               <p className="text-sm text-slate-400 text-center mb-6 leading-relaxed">
                 Enter your email address and we'll send you a link to reset your password.
               </p>
-              <input type="email" name="email" placeholder="Email address" className="w-full px-4 py-3 vanta-input" required />
+              <input type="email" name="email" aria-label="Email address" autoComplete="email" placeholder="Email address" className="w-full px-4 py-3 vanta-input" required />
               <button type="submit" disabled={loading} className="w-full vanta-btn vanta-btn-primary w-full py-3 mt-2 disabled:opacity-50">
                 {loading ? 'Sending...' : 'Send Reset Link'}
               </button>

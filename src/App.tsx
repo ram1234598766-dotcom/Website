@@ -72,7 +72,7 @@ export default function App() {
 
   if (!appReady) {
     return (
-      <div style={{ position: 'fixed', inset: 0, background: '#07070b', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 24, zIndex: 9999 }}>
+      <div role="status" aria-live="polite" style={{ position: 'fixed', inset: 0, background: '#07070b', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 24, zIndex: 9999 }}>
         <div style={{ position: 'relative', width: 80, height: 80 }} aria-hidden>
           <div style={{ position: 'absolute', inset: 0, border: '2px solid transparent', borderTopColor: '#6366f1', borderRadius: '50%', animation: 'spin 1.2s cubic-bezier(0.5,0,0.5,1) infinite' }} />
           <div style={{ position: 'absolute', inset: 10, border: '2px solid transparent', borderRightColor: '#818cf8', borderRadius: '50%', animation: 'spin 1.8s cubic-bezier(0.5,0,0.5,1) infinite reverse' }} />
@@ -94,7 +94,7 @@ export default function App() {
         className="w-full min-h-screen bg-[#0a0a0c] text-slate-300 flex flex-col font-sans relative"
       >
         {sessionWarning && (
-          <div className="bg-amber-500/20 border-b border-amber-500/50 px-4 py-2 text-center text-sm font-medium text-amber-200 z-50 relative">
+          <div role="alert" className="bg-amber-500/20 border-b border-amber-500/50 px-4 py-2 text-center text-sm font-medium text-amber-200 z-50 relative">
             Your session is about to expire.{' '}
             <button onClick={() => supabase.auth.refreshSession?.()} className="underline font-bold hover:text-amber-100">Click here to refresh</button>
           </div>

@@ -1,21 +1,12 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Virtuoso } from 'react-virtuoso';
 import Editor, { DiffEditor, useMonaco } from '@monaco-editor/react';
-import { Download, Play, Terminal, Code2, FolderTree, Settings, FileJson, FileType, CheckCircle2, Plus, Trash2, Edit2, File as FileIcon, Archive, ChevronDown, ChevronRight, Folder, FolderOpen, ArrowRight, Cloud, CloudOff, FileCode2, Database, FileTerminal, Puzzle, X, Activity, Columns, Rows } from 'lucide-react';
-import { Keyboard, GitMerge, Github } from 'lucide-react';
+import { Play, Terminal, Code2, FolderTree, Settings, FileJson, FileType, CheckCircle2, Plus, Trash2, Edit2, File as FileIcon, Archive, ChevronDown, ChevronRight, Folder, FolderOpen, ArrowRight, X, Activity, Columns, Rows, FileCode2, FileTerminal, Database } from 'lucide-react';
+import { Keyboard, Github } from 'lucide-react';
 import TerminalPanel from './TerminalPanel';
 import GitHubManager from './GitHubManager';
-import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
-// Firebase removed — safe stubs so existing guards work
-const auth: any = { currentUser: null };
-const db: any = null;
-const doc = (..._: any[]) => ({}) as any;
-const getDoc = async (..._: any[]) => ({ exists: () => false, data: () => null });
-const setDoc = async (..._: any[]) => {};
-const onSnapshot = (..._: any[]) => { const fn = () => {}; fn.unsubscribe = fn; return fn; };
-import { supabase } from '../lib/supabase';
 
 interface PluginMeta {
   name: string;
@@ -28,12 +19,6 @@ const DEFAULT_PLUGINS: Record<string, PluginMeta> = {
   prettier: { name: 'Prettier', description: 'Auto-formatter for JS, HTML, CSS', active: true },
   eslint: { name: 'ESLint', description: 'JavaScript Linter', active: false }
 };
-import * as prettier from 'prettier/standalone';
-import * as prettierPluginBabel from 'prettier/plugins/babel';
-import * as prettierPluginEstree from 'prettier/plugins/estree';
-import * as prettierPluginHtml from 'prettier/plugins/html';
-import * as prettierPluginCss from 'prettier/plugins/postcss';
-
 interface FileNode {
   id: string;
   name: string;
@@ -101,8 +86,13 @@ export default function CloudOS() {
   const [terminalFontSize, setTerminalFontSize] = useState<number>(13);
   const [showTerminalSettings, setShowTerminalSettings] = useState(false);
   const [isResizingTerminal, setIsResizingTerminal] = useState(false);
-  const [terminalOutput, setTerminalOutput] = useState<string>('VantaOS Terminal\n$ ');
-  const terminalRef = useRef<HTMLDivElement>(null);
+  const terminalReadyRef = useRef(false);
+
+  useEffect(() => {
+    const onReady = () => { terminalReadyRef.current = true; };
+    window.addEventListener('terminal-ready', onReady);
+    return () => window.removeEventListener('terminal-ready', onReady);
+  }, []);
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -126,20 +116,28 @@ export default function CloudOS() {
     };
   }, [isResizingTerminal]);
 
-  useEffect(() => {
-    if (terminalRef.current) {
-      terminalRef.current.scrollTop = terminalRef.current.scrollHeight;
-    }
-  }, [terminalOutput]);
+  const dispatchRun = () => {
+    const file = files.find(f => f.id === activeFileId);
+    if (!file) return;
+    const code = file.content.slice(0, 500);
+    // Send the raw code (not JSON.stringify) — the terminal's `js` command
+    // takes everything after the command verbatim, so quotes/newlines survive.
+    window.dispatchEvent(new CustomEvent("terminal-send", { detail: "js " + code }));
+  };
 
-    const handleRun = () => {
+  const handleRun = () => {
     setIsTerminalOpen(true);
-    setTimeout(() => {
-      const file = files.find(f => f.id === activeFileId);
-      if (!file) return;
-      const code = file.content.slice(0, 500);
-      window.dispatchEvent(new CustomEvent("terminal-send", { detail: "js " + JSON.stringify(code) + "\\n" }));
-    }, 100);
+    // The terminal is mounted on demand — wait for it to signal it is ready
+    // before sending the command so a run is never silently dropped.
+    if (terminalReadyRef.current) {
+      dispatchRun();
+    } else {
+      const onReady = () => {
+        dispatchRun();
+        window.removeEventListener('terminal-ready', onReady);
+      };
+      window.addEventListener('terminal-ready', onReady);
+    }
   };
 
   const [dirtyTabs, setDirtyTabs] = useState<string[]>([]);
@@ -153,65 +151,13 @@ export default function CloudOS() {
   const [creatingType, setCreatingType] = useState<'file' | 'folder' | null>(null);
   const [movingFileId, setMovingFileId] = useState<string | null>(null);
   const [isExporting, setIsExporting] = useState(false);
-        const [isSynced, setIsSynced] = useState(false);
-  const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'error'>('idle');
-          const [showGithub, setShowGithub] = useState(false);
+  const [showGithub, setShowGithub] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
-  
-  
-  
-  const [remoteCursors, setRemoteCursors] = useState<Record<string, {line: number, column: number, color: string}>>({});
-  const decorationsRef = useRef<string[]>([]);
-  
-  useEffect(() => {
-    if (!auth.currentUser) return;
-    const sessionRef = doc(db, 'collaboration', activeFileId);
-    const unsubscribe = onSnapshot(sessionRef, (docSnap) => {
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        if (data.cursors) {
-          const others = { ...data.cursors };
-          delete others[auth.currentUser.uid];
-          setRemoteCursors(others);
-        }
-      }
-    });
-    return () => unsubscribe();
-  }, [activeFileId]);
-
-  useEffect(() => {
-    if (editorRef.current && monaco) {
-      const decorations = Object.values(remoteCursors).map((cursor: any) => ({
-        range: new monaco.Range(cursor.line, cursor.column, cursor.line, cursor.column),
-        options: {
-          className: 'remote-cursor-collab',
-          hoverMessage: { value: 'Collaborator' }
-        }
-      }));
-      decorationsRef.current = editorRef.current.deltaDecorations(decorationsRef.current, decorations);
-    }
-  }, [remoteCursors, monaco]);
 
   const handleEditorDidMount = (editor: any, monacoInstance: any) => {
     editorRef.current = editor;
     editor.addCommand(monacoInstance.KeyMod.CtrlCmd | monacoInstance.KeyCode.KeyS, () => {
        window.dispatchEvent(new CustomEvent('save-active-file'));
-    });
-    
-    // Listen for cursor changes
-    editor.onDidChangeCursorPosition((e: any) => {
-      if (auth.currentUser) {
-        const sessionRef = doc(db, 'collaboration', activeFileId);
-        setDoc(sessionRef, {
-          cursors: {
-            [auth.currentUser.uid]: {
-              line: e.position.lineNumber,
-              column: e.position.column,
-              color: '#10b981' // Emerald
-            }
-          }
-        }, { merge: true });
-      }
     });
   };
 
@@ -236,66 +182,6 @@ export default function CloudOS() {
   // Editor and terminal states
   const [editorTheme, setEditorTheme] = useState('vs-dark');
 
-  // Firebase syncing logic
-  useEffect(() => {
-    const user = auth.currentUser;
-    if (!user) return;
-    
-    const settingsRef = doc(db, 'user_ide_settings', user.uid);
-    const unsubscribe = onSnapshot(settingsRef, (docSnap) => {
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        if (data.editorTheme) setEditorTheme(data.editorTheme);
-        if (data.openTabs) setOpenTabs(data.openTabs);
-              }
-    });
-    
-    return () => unsubscribe();
-  }, []);
-
-
-  // Auto-save mechanism to Firestore
-  useEffect(() => {
-    const user = auth.currentUser;
-    if (!user) return;
-    
-    const saveToFirestore = async () => {
-      try {
-        setSyncStatus('syncing');
-        await setDoc(doc(db, 'workspaces', user.uid), {
-          files: files,
-          updatedAt: new Date().toISOString()
-        }, { merge: true });
-        setSyncStatus('idle');
-      } catch (err) {
-        console.error('Auto-save failed:', err);
-        setSyncStatus('error');
-      }
-    };
-    
-    const interval = setInterval(() => {
-      saveToFirestore();
-    }, 10000); // Auto-save every 10 seconds
-    
-    return () => clearInterval(interval);
-  }, [files]);
-
-  const saveSettingsToCloud = async (newSettings: any) => {
-    const user = auth.currentUser;
-    if (!user) return;
-    
-    setSyncStatus('syncing');
-    try {
-      const settingsRef = doc(db, 'user_ide_settings', user.uid);
-      await setDoc(settingsRef, newSettings, { merge: true });
-      setSyncStatus('idle');
-    } catch (e) {
-      console.error(e);
-      setSyncStatus('error');
-    }
-  };
-
-
   useEffect(() => {
     const handleSave = () => {
       setDirtyTabs(prev => prev.filter(id => id !== activeFileId && id !== secondaryActiveFileId));
@@ -314,67 +200,58 @@ export default function CloudOS() {
     return () => window.removeEventListener('save-active-file', handleSave as any);
   }, [activeFileId, secondaryActiveFileId, files]);
 
-  // Trigger save on settings change
-  useEffect(() => {
-    saveSettingsToCloud({ editorTheme, openTabs });
-  }, [editorTheme, openTabs]);
-  
   const activeFile = files.find(f => f.id === activeFileId) || files[0];
 
   useEffect(() => {
     const handleKeyDown = async (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && (e.key === 'p' || e.key === 'P')) {
         e.preventDefault();
-        
+        setIsSearchOpen(true);
       } else if ((e.ctrlKey || e.metaKey) && e.key === '/') {
         e.preventDefault();
         setShowShortcuts(prev => !prev);
       } else if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S')) {
         e.preventDefault();
-        
-        // Auto-formatter plugin logic
-        if (true) {
-           const file = files.find(f => f.id === activeFileId);
-           if (file) {
-               try {
-                   let formatted = file.content;
-                   if (file.language === 'javascript' || file.language === 'typescript') {
-                       formatted = await prettier.format(file.content, {
-                           parser: 'babel',
-                           plugins: [prettierPluginBabel, prettierPluginEstree],
-                           singleQuote: true
-                       });
-                   } else if (file.language === 'html') {
-                       formatted = await prettier.format(file.content, {
-                           parser: 'html',
-                           plugins: [prettierPluginHtml]
-                       });
-                   } else if (file.language === 'css') {
-                       formatted = await prettier.format(file.content, {
-                           parser: 'css',
-                           plugins: [prettierPluginCss]
-                       });
-                   }
-                   
-                   if (formatted !== file.content) {
-                       setFiles(prev => prev.map(f => f.id === activeFileId ? { ...f, content: formatted } : f));
-                   }
-               } catch (err) {
-                   console.error("Prettier format failed", err);
-               }
-           }
+
+        // Auto-format with Prettier (lazy-loaded so the ~1MB parser bundle only
+        // ships when the user actually saves).
+        const file = files.find(f => f.id === activeFileId);
+        if (file) {
+          try {
+            let formatted = file.content;
+            if (file.language === 'javascript' || file.language === 'typescript' || file.language === 'html' || file.language === 'css') {
+              const prettier = await import('prettier/standalone');
+              let parser: string;
+              let plugins: any[];
+              if (file.language === 'html') {
+                parser = 'html';
+                plugins = [(await import('prettier/plugins/html')).default];
+              } else if (file.language === 'css') {
+                parser = 'css';
+                plugins = [(await import('prettier/plugins/postcss')).default];
+              } else {
+                parser = 'babel';
+                plugins = [
+                  (await import('prettier/plugins/babel')).default,
+                  (await import('prettier/plugins/estree')).default,
+                ];
+              }
+              formatted = await prettier.format(file.content, { parser, plugins, singleQuote: true });
+            }
+            if (formatted !== file.content) {
+              setFiles(prev => prev.map(f => f.id === activeFileId ? { ...f, content: formatted } : f));
+            }
+          } catch (err) {
+            console.error("Prettier format failed", err);
+          }
         }
-        
+
         window.dispatchEvent(new CustomEvent('save-active-file'));
-      } else if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) {
-        e.preventDefault();
-        setIsSearchOpen(true);
       } else if ((e.ctrlKey || e.metaKey) && e.key === '`') {
         e.preventDefault();
         setIsTerminalOpen(prev => !prev);
       } else if (e.key === 'Escape' && isSearchOpen) {
         setIsSearchOpen(false);
-      
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -408,117 +285,38 @@ export default function CloudOS() {
   }, [searchQuery, files]);
 
   useEffect(() => {
-
-    const loadSettings = async () => {
-      if (auth.currentUser) {
-         try {
-           const docSnap = await getDoc(doc(db, 'workspaces', auth.currentUser.uid));
-           if (docSnap.exists()) {
-             const data = docSnap.data();
-             if (data.settings) {
-                if (data.settings.editorTheme) setEditorTheme(data.settings.editorTheme);
-                
-                if (data.settings.openTabs && data.settings.openTabs.length > 0) setOpenTabs(data.settings.openTabs);
-             }
-           }
-         } catch(e) {}
-      }
-    };
-    loadSettings();
     const loadFiles = async () => {
-      if (auth.currentUser) {
-        try {
-          // Server-side validation via Supabase Edge Functions (Mocked in our server)
-          const token = await auth.currentUser?.getIdToken();
-          const authRes = await fetch('/api/edge-functions/auth-sync', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${token}`
-            },
-            body: JSON.stringify({ action: 'read' })
-          });
-          
-          if (!authRes.ok) {
-            throw new Error('Server-side authentication failed in Edge Function');
-          }
-          const { data, error } = await supabase.from('workspace_files').select('*');
-          const rows = (data || []) as any[];
-          if (rows.length > 0) {
-            setFiles(rows);
-            const orig: Record<string, string> = {};
-            rows.forEach((d: any) => orig[d.id] = d.content);
-            setOriginalFiles(orig);
-            setActiveFileId(rows[0].id);
-            setIsSynced(true);
-            return;
-          }
-        } catch (e) {
-          console.warn("Supabase fetch failed, falling back to local storage");
-        }
-      }
-      
-      // Fallback to local storage
-      const local = localStorage.getItem('vantaos_cloudos_files_v2') || localStorage.getItem('vantaos_cloudos_files_v2');
+      // Restore the workspace from local storage
+      const local = localStorage.getItem('vantaos_cloudos_files_v2');
       if (local) {
         try {
           const parsed = JSON.parse(local);
           if (parsed && parsed.length > 0) {
-             setFiles(parsed);
-             const orig: Record<string, string> = {};
-             parsed.forEach((d: any) => orig[d.id] = d.content);
-             setOriginalFiles(orig);
-             setActiveFileId(parsed[0].id);
+            setFiles(parsed);
+            const orig: Record<string, string> = {};
+            const openIds: string[] = [];
+            parsed.forEach((d: any) => {
+              orig[d.id] = d.content;
+              if (!d.isFolder) openIds.push(d.id);
+            });
+            setOriginalFiles(orig);
+            setOpenTabs(openIds.length > 0 ? openIds : [parsed[0].id]);
+            setActiveFileId(parsed[0].id);
           }
-        } catch(e) {}
+        } catch (e) {}
       }
     };
     loadFiles();
   }, []);
 
   useEffect(() => {
-    // Save to local storage
-    localStorage.setItem('vantaos_cloudos_files_v2', JSON.stringify(files));
-    
-    // Sync to supabase if configured
-    if (auth.currentUser && isSynced) {
-      const syncFiles = async () => {
-        setSyncStatus('syncing');
-        try {
-          // Server-side validation via Supabase Edge Functions (Mocked in our server)
-          const token = await auth.currentUser?.getIdToken();
-          const authRes = await fetch('/api/edge-functions/auth-sync', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${token}`
-            },
-            body: JSON.stringify({ action: 'sync' })
-          });
-          
-          if (!authRes.ok) {
-            throw new Error('Server-side authentication failed in Edge Function');
-          }
-          
-          for (const f of files) {
-             await (supabase.from('workspace_files') as any).upsert({
-                id: f.id,
-                name: f.name,
-                content: f.content,
-                language: f.language
-             });
-          }
-          setSyncStatus('idle');
-        } catch (e) {
-          console.error(e);
-          setSyncStatus('error');
-        }
-      };
-      // Simple debounce
-      const timeoutId = setTimeout(syncFiles, 1000);
-      return () => clearTimeout(timeoutId);
-    }
-  }, [files, isSynced]);
+    // Debounced save to local storage so we don't serialize the whole
+    // workspace on every keystroke.
+    const timeoutId = setTimeout(() => {
+      localStorage.setItem('vantaos_cloudos_files_v2', JSON.stringify(files));
+    }, 300);
+    return () => clearTimeout(timeoutId);
+  }, [files]);
 
     const handleEditorChange = (value: string | undefined, isSecondary: boolean = false) => {
     const fileId = isSecondary ? secondaryActiveFileId : activeFileId;
@@ -661,8 +459,10 @@ export default function CloudOS() {
   
   const handleExportProject = async () => {
     setIsExporting(true);
+    // JSZip is lazy-loaded so the ~100KB library is only fetched on export.
+    const JSZip = (await import('jszip')).default;
     const zip = new JSZip();
-    
+
     // Recursive path solver
     const getVirtualPath = (nodeId: string, allNodes: FileNode[]): string => {
       const node = allNodes.find(n => n.id === nodeId);
@@ -708,18 +508,18 @@ export default function CloudOS() {
     }
   };
 
-  const getVisibleNodes = () => {
+  const visibleNodes = useMemo(() => {
     const list: (FileNode & { depth: number; isPlaceholder?: boolean })[] = [];
-    
+
     const traverse = (parentId: string | null, depth: number) => {
       const levelNodes = files.filter(f => (f.parentId || null) === parentId);
-      
+
       levelNodes.sort((a, b) => {
         if (a.isFolder && !b.isFolder) return -1;
         if (!a.isFolder && b.isFolder) return 1;
         return a.name.localeCompare(b.name);
       });
-      
+
       // Inject placeholder at the top of children under this parent
       if (creatingType && (creatingParentId || null) === parentId) {
         list.push({
@@ -733,7 +533,7 @@ export default function CloudOS() {
           isPlaceholder: true
         });
       }
-      
+
       levelNodes.forEach(node => {
         list.push({ ...node, depth });
         if (node.isFolder && node.isOpen) {
@@ -741,12 +541,10 @@ export default function CloudOS() {
         }
       });
     };
-    
+
     traverse(null, 0);
     return list;
-  };
-
-  const visibleNodes = getVisibleNodes();
+  }, [files, creatingType, creatingParentId]);
   useEffect(() => {
     (window as any).vantaosIDE = {
       files,
@@ -795,20 +593,6 @@ export default function CloudOS() {
           <div className="flex items-center gap-2 text-slate-300 font-mono text-sm">
             <Terminal className="w-4 h-4 text-indigo-400" />
             <span>VantaOS Cloud IDE · by Mrityunjay K</span>
-            {isSynced && (
-               <div className="ml-3 flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-xs">
-                 {syncStatus === 'syncing' ? (
-                   <Cloud className="w-3 h-3 text-amber-400 animate-pulse" />
-                 ) : syncStatus === 'error' ? (
-                   <CloudOff className="w-3 h-3 text-rose-400" />
-                 ) : (
-                   <Cloud className="w-3 h-3 text-emerald-400" />
-                 )}
-                 <span className="text-slate-400">
-                   {syncStatus === 'syncing' ? 'Syncing...' : syncStatus === 'error' ? 'Sync Error' : 'Saved to Cloud'}
-                 </span>
-               </div>
-            )}
           </div>
         </div>
         
@@ -825,7 +609,7 @@ export default function CloudOS() {
                 <input
                   type="text"
                   autoFocus
-                  placeholder="Search files and content (Ctrl+K)..."
+                  placeholder="Search files and content (Ctrl+P)..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full bg-transparent border-none outline-none text-slate-200 text-lg"
@@ -873,7 +657,7 @@ export default function CloudOS() {
             onClick={() => setIsSearchOpen(!isSearchOpen)}
             className="flex whitespace-nowrap items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border bg-slate-800/50 text-slate-400 border-slate-700/50 hover:bg-slate-800 hover:text-slate-300 cursor-pointer"
           >
-            Search <span className="opacity-50 text-xs">Ctrl+K</span>
+            Search <span className="opacity-50 text-xs">Ctrl+P</span>
           </button>
 
           <button 
@@ -1011,6 +795,10 @@ export default function CloudOS() {
                     return (
                       <div className="pr-2 py-0.5" style={{ paddingLeft: `${node.depth * 14}px` }}>
                         <motion.div
+                          role="treeitem"
+                          tabIndex={0}
+                          aria-selected={!node.isFolder && activeFileId === node.id}
+                          aria-expanded={node.isFolder ? node.isOpen : undefined}
                           onClick={() => {
                             if (node.isFolder) {
                               // Toggle folder
@@ -1023,9 +811,15 @@ export default function CloudOS() {
                               }
                             }
                           }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              e.currentTarget.click();
+                            }
+                          }}
                           whileHover={{ scale: 1.01, backgroundColor: "rgba(255, 255, 255, 0.03)" }}
                           whileTap={{ scale: 0.99 }}
-                          className={`w-full group flex items-center justify-between px-2 py-1 rounded-lg text-xs transition-all cursor-pointer relative ${
+                          className={`w-full group flex items-center justify-between px-2 py-1 rounded-lg text-xs transition-all cursor-pointer relative focus-visible:outline-2 focus-visible:outline-indigo-400 ${
                             !node.isFolder && activeFileId === node.id
                               ? 'bg-indigo-600/20 text-indigo-300 border border-indigo-500/30'
                               : 'text-slate-400 hover:bg-slate-800/40 hover:text-slate-200 border border-transparent'
@@ -1292,34 +1086,33 @@ export default function CloudOS() {
               </div>
 
               <div className="flex items-center gap-2">
-                <span className="opacity-60">Language:</span>
-                <div className="relative group cursor-pointer flex items-center gap-1 hover:text-indigo-400 transition-colors">
-                  <span className="font-bold">{activeFile.language}</span>
-                  <ChevronDown className="w-3 h-3" />
-                  
-                  <div className="absolute right-0 top-full mt-1 bg-slate-800 border border-slate-700 rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-10 p-1 min-w-[120px]">
-                    {LANGUAGES.map(lang => (
-                      <div 
-                        key={lang.id}
-                        onClick={() => {
-                          setFiles(prev => prev.map(f => {
-                            if (f.id === activeFile.id) {
-                              let newName = f.name;
-                              if (newName.startsWith('untitled')) {
-                                newName = `untitled.${lang.ext}`;
-                              }
-                              return { ...f, language: lang.id, name: newName };
-                            }
-                            return f;
-                          }));
-                        }}
-                        className="px-3 py-1.5 hover:bg-indigo-500/20 hover:text-indigo-300 rounded text-sm transition-colors"
-                      >
-                        {lang.name}
-                      </div>
-                    ))}
-                  </div>
-                </div>
+                <label htmlFor="cloudos-language" className="opacity-60">Language:</label>
+                <select
+                  id="cloudos-language"
+                  value={activeFile.language}
+                  aria-label="File language"
+                  onChange={(e) => {
+                    const lang = LANGUAGES.find(l => l.id === e.target.value);
+                    if (!lang) return;
+                    setFiles(prev => prev.map(f => {
+                      if (f.id === activeFile.id) {
+                        let newName = f.name;
+                        if (newName.toLowerCase().startsWith('untitled')) {
+                          newName = `untitled.${lang.ext}`;
+                        }
+                        return { ...f, language: lang.id, name: newName };
+                      }
+                      return f;
+                    }));
+                  }}
+                  className="bg-transparent border-none outline-none text-indigo-400 font-bold cursor-pointer"
+                >
+                  {LANGUAGES.map(lang => (
+                    <option key={lang.id} value={lang.id} className="bg-slate-800 text-slate-200">
+                      {lang.name}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div className="flex items-center gap-1 border-l border-slate-800 pl-4 ml-2">
                 <button 

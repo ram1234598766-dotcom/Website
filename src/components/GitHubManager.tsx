@@ -28,6 +28,21 @@ export default function GitHubManager({ files, setFiles, originalFiles, setOrigi
     }
   }, [token]);
 
+  // Capture the GitHub provider token from the Supabase session after OAuth
+  // completes, and persist it so the sync flow is reachable.
+  useEffect(() => {
+    const persistToken = (session: any) => {
+      const tok = session?.provider_token;
+      if (tok) {
+        localStorage.setItem('github_token', tok);
+        setToken(tok);
+      }
+    };
+    supabase.auth.getSession().then(({ data }) => persistToken((data as any)?.session));
+    const sub = supabase.auth.onAuthStateChange((_event, session) => persistToken(session));
+    return () => sub.data.subscription.unsubscribe();
+  }, []);
+
   const loadRepos = async () => {
     try {
       setLoading(true);
@@ -62,11 +77,16 @@ export default function GitHubManager({ files, setFiles, originalFiles, setOrigi
       
       let idCounter = Date.now();
       
-      // For a real app, you might want to load files lazily. Here we load small files eagerly.
-      // But GitHub REST API limits can be hit if tree is huge. Let's just load first 10 files for demo, or all if small.
-      const blobItems = treeData.tree.filter((t: any) => t.type === 'blob').slice(0, 30); // Limiting to 30 files for safety
-      
-      for (const item of blobItems) {
+      // Load all files from the tree so nothing is silently dropped. GitHub's
+      // tree API is paginated; if a repo is huge, we surface a note rather
+      // than truncating without the user's knowledge.
+      const blobItems = treeData.tree.filter((t: any) => t.type === 'blob');
+      if (blobItems.length > 200) {
+        setError(`Repository has ${blobItems.length} files — cloning the first 200. Push operations may be partial.`);
+      }
+      const limitedBlobs = blobItems.slice(0, 200);
+
+      for (const item of limitedBlobs) {
         const content = await github.getFileContent(repo.owner.login, repo.name, item.path);
         const id = `${idCounter++}`;
         
@@ -156,7 +176,7 @@ export default function GitHubManager({ files, setFiles, originalFiles, setOrigi
     if (!activeRepo) {
       const stored = localStorage.getItem('active_github_repo');
       if (stored) {
-        try { setActiveRepo(JSON.parse(stored)); } catch(e){}
+        try { setActiveRepo(JSON.parse(stored)); } catch { localStorage.removeItem('active_github_repo'); }
       }
     }
   }, []);
@@ -174,7 +194,7 @@ export default function GitHubManager({ files, setFiles, originalFiles, setOrigi
         <h3 className="font-bold text-white flex items-center gap-2">
           <Github className="w-5 h-5" /> GitHub Integration
         </h3>
-        <button onClick={onClose} className="p-1 hover:bg-white/10 rounded text-slate-400">
+        <button onClick={onClose} aria-label="Close" className="p-1 hover:bg-white/10 rounded text-slate-400">
           <X className="w-4 h-4" />
         </button>
       </div>
@@ -256,22 +276,21 @@ export default function GitHubManager({ files, setFiles, originalFiles, setOrigi
                <div>
                  <div className="flex items-center justify-between mb-3">
                    <h4 className="text-sm font-bold text-slate-300">Your Repositories</h4>
-                   <button onClick={loadRepos} className="text-slate-500 hover:text-slate-300" disabled={loading}>
+                   <button onClick={loadRepos} aria-label="Refresh repositories" className="text-slate-500 hover:text-slate-300" disabled={loading}>
                      <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
                    </button>
                  </div>
                  
                  <div className="space-y-2 max-h-64 overflow-y-auto pr-1 custom-scrollbar">
                    {repos.map(repo => (
-                     <div key={repo.id} className="flex items-center justify-between p-3 bg-slate-800/30 hover:bg-slate-800/80 border border-slate-700/30 rounded-lg transition-colors group cursor-pointer" onClick={() => handleClone(repo)}>
+                     <button key={repo.id} onClick={() => handleClone(repo)} aria-label={`Clone ${repo.name}`}
+                       className="w-full flex items-center justify-between p-3 bg-slate-800/30 hover:bg-slate-800/80 border border-slate-700/30 rounded-lg transition-colors group cursor-pointer text-left">
                        <div className="overflow-hidden">
                          <div className="text-sm font-medium text-slate-200 truncate">{repo.name}</div>
                          <div className="text-xs text-slate-500 truncate">{repo.full_name}</div>
                        </div>
-                       <button className="opacity-0 group-hover:opacity-100 p-1.5 bg-indigo-500/20 text-indigo-400 rounded transition-all">
-                         <Download className="w-4 h-4" />
-                       </button>
-                     </div>
+                       <Download className="w-4 h-4 opacity-50 group-hover:opacity-100 text-indigo-400 shrink-0 ml-2" />
+                     </button>
                    ))}
                    {!loading && repos.length === 0 && (
                      <div className="text-center py-4 text-sm text-slate-500">No repositories found.</div>

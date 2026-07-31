@@ -25,35 +25,31 @@ export default function CommandPalette({ isOpen, onClose, setCurrentView }: Comm
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
-  
+  const restoreFocusRef = useRef<HTMLElement | null>(null);
+
   // Get IDE state if available
   const ideState = (window as any).vantaosIDE;
-  
+
+  // Capture the previously focused element on open; restore it on close.
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        onClose();
-      }
-    };
     if (isOpen) {
-      window.addEventListener('keydown', handleKeyDown);
-      setQuery(''); // Reset query on open
+      restoreFocusRef.current = document.activeElement as HTMLElement;
+      setQuery('');
       setSelectedIndex(0);
+    } else if (restoreFocusRef.current) {
+      restoreFocusRef.current.focus?.();
+      restoreFocusRef.current = null;
     }
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose]);
-  
+  }, [isOpen]);
+
   const views: { id: ViewState; name: string; icon: any }[] = [
     { id: 'home', name: 'Home', icon: Compass },
     { id: 'ide', name: 'CloudOS IDE', icon: Terminal },
-    { id: 'forum', name: 'Community Forum', icon: Compass },
     { id: 'showcase', name: 'Models Showcase', icon: Compass },
-    { id: 'privacy', name: 'Data Privacy', icon: Compass },
     { id: 'omni-ai', name: 'Omni AI', icon: Compass },
-    { id: 'foundation', name: 'AI Foundation', icon: Compass },
     { id: 'ollama', name: 'Ollama Local', icon: Compass },
   ];
-  
+
   const actions: PaletteItem[] = [
     {
       id: 'action-new-file',
@@ -78,7 +74,6 @@ export default function CommandPalette({ isOpen, onClose, setCurrentView }: Comm
         onClose();
       }
     },
-    
     {
       id: 'action-sign-out',
       type: 'action',
@@ -93,7 +88,7 @@ export default function CommandPalette({ isOpen, onClose, setCurrentView }: Comm
   ];
 
   let items: PaletteItem[] = [];
-  
+
   // 1. Add Views
   views.forEach(v => {
     items.push({
@@ -107,15 +102,15 @@ export default function CommandPalette({ isOpen, onClose, setCurrentView }: Comm
       }
     });
   });
-  
+
   // 2. Add Actions
   items.push(...actions);
-  
+
   // 3. Add IDE Files if available
   if (ideState) {
     const files = ideState.files || [];
     const openTabs = ideState.openTabs || [];
-    
+
     // Open files
     files.filter((f: any) => openTabs.includes(f.id)).forEach((f: any) => {
       items.push({
@@ -130,7 +125,7 @@ export default function CommandPalette({ isOpen, onClose, setCurrentView }: Comm
         }
       });
     });
-    
+
     // File tree
     files.filter((f: any) => !f.isFolder).forEach((f: any) => {
       items.push({
@@ -146,9 +141,7 @@ export default function CommandPalette({ isOpen, onClose, setCurrentView }: Comm
       });
     });
   }
-  
-  
-  
+
   const fuzzyMatch = (str: string, pattern: string) => {
     let i = 0, j = 0;
     const s = str.toLowerCase();
@@ -160,15 +153,16 @@ export default function CommandPalette({ isOpen, onClose, setCurrentView }: Comm
     return j === p.length;
   };
 
-  let filteredItems = items;
+  // De-duplicate file items (if a file is open, it appears in open files and file tree, prefer open-file)
+  let filteredItems: PaletteItem[] = [];
   if (query) {
-    filteredItems = items.filter(item => 
-      fuzzyMatch(item.name, query) || 
+    filteredItems = items.filter(item =>
+      fuzzyMatch(item.name, query) ||
       (item.description && fuzzyMatch(item.description, query))
     );
+  } else {
+    filteredItems = items;
   }
-  
-  // De-duplicate file items (if a file is open, it appears in open files and file tree, prefer open-file)
   const uniqueItems = new Map<string, PaletteItem>();
   filteredItems.forEach(item => {
     if (item.type === 'file') {
@@ -178,30 +172,37 @@ export default function CommandPalette({ isOpen, onClose, setCurrentView }: Comm
     uniqueItems.set(item.id, item);
   });
   filteredItems = Array.from(uniqueItems.values());
-  
-  
+
+  // Refs so the keydown listener subscribes only once per open.
+  const filteredItemsRef = useRef(filteredItems);
+  filteredItemsRef.current = filteredItems;
+  const selectedIndexRef = useRef(selectedIndex);
+  selectedIndexRef.current = selectedIndex;
 
   // Handle keyboard navigation
   useEffect(() => {
     if (!isOpen) return;
     const handleKeyDown = (e: KeyboardEvent) => {
+      const list = filteredItemsRef.current;
       if (e.key === 'ArrowDown') {
         e.preventDefault();
-        setSelectedIndex(prev => (prev + 1) % filteredItems.length);
+        setSelectedIndex(prev => (list.length === 0 ? 0 : (prev + 1) % list.length));
       } else if (e.key === 'ArrowUp') {
         e.preventDefault();
-        setSelectedIndex(prev => (prev - 1 + filteredItems.length) % filteredItems.length);
+        setSelectedIndex(prev => (list.length === 0 ? 0 : (prev - 1 + list.length) % list.length));
       } else if (e.key === 'Enter') {
         e.preventDefault();
-        if (filteredItems[selectedIndex]) {
-          filteredItems[selectedIndex].onSelect();
-        }
+        const item = list[selectedIndexRef.current];
+        if (item) item.onSelect();
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        onClose();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, filteredItems, selectedIndex]);
-  
+  }, [isOpen, onClose]);
+
   // Reset selection when query changes
   useEffect(() => {
     setSelectedIndex(0);
@@ -217,6 +218,8 @@ export default function CommandPalette({ isOpen, onClose, setCurrentView }: Comm
     }
   }, [selectedIndex]);
 
+  const selectedItem = filteredItems[selectedIndex];
+
   return (
     <AnimatePresence>
       {isOpen && (
@@ -229,6 +232,9 @@ export default function CommandPalette({ isOpen, onClose, setCurrentView }: Comm
             className="fixed inset-0 bg-black/60 backdrop-blur-md z-[100]"
           />
           <motion.div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Command palette"
             initial={{ opacity: 0, scale: 0.95, y: -20, x: '-50%' }}
             animate={{ opacity: 1, scale: 1, y: 0, x: '-50%' }}
             exit={{ opacity: 0, scale: 0.95, y: -20, x: '-50%' }}
@@ -239,24 +245,33 @@ export default function CommandPalette({ isOpen, onClose, setCurrentView }: Comm
               <input
                 type="text"
                 autoFocus
+                role="combobox"
+                aria-expanded="true"
+                aria-controls="command-palette-list"
+                aria-label="Search"
+                aria-activedescendant={selectedItem ? `palette-item-${selectedItem.id}` : undefined}
                 placeholder="Search files, views, actions, ..."
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 className="w-full bg-transparent border-none outline-none text-white text-lg placeholder-slate-500"
               />
-              <button onClick={onClose} className="text-slate-400 hover:text-white ml-3">
+              <button onClick={onClose} aria-label="Close command palette" className="text-slate-400 hover:text-white ml-3">
                 <span className="text-[10px] font-bold uppercase tracking-widest bg-white/10 px-1.5 py-0.5 rounded">Esc</span>
               </button>
             </div>
-            
-            <div className="max-h-[60vh] overflow-y-auto p-2" ref={listRef}>
+
+            <div id="command-palette-list" role="listbox" className="max-h-[60vh] overflow-y-auto p-2" ref={listRef}>
               {filteredItems.length > 0 ? (
                 filteredItems.map((item, index) => {
                   const isSelected = index === selectedIndex;
                   return (
                     <button
                       key={item.id}
+                      id={`palette-item-${item.id}`}
+                      role="option"
+                      aria-selected={isSelected}
                       onClick={item.onSelect}
+                      onMouseEnter={() => setSelectedIndex(index)}
                       className={`w-full flex items-center justify-between px-3 py-3 rounded-lg text-left transition-colors ${
                         isSelected ? 'bg-indigo-500/20 text-indigo-300' : 'hover:bg-white/5 text-slate-300'
                       }`}

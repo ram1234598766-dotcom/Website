@@ -10,6 +10,9 @@ dist/
 coverage/
 node_modules/
 
+# TS incremental build artifact
+*.tsbuildinfo
+
 # secrets
 .env*
 !.env.example

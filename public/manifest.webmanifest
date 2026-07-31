@@ -1,0 +1,17 @@
+{
+  "name": "VantaOS — The Intelligent Developer Cloud",
+  "short_name": "VantaOS",
+  "description": "Write, build, and deploy full-stack applications entirely in the browser.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#07070b",
+  "theme_color": "#07070b",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

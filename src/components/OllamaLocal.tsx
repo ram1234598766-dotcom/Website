@@ -1,11 +1,14 @@
 import React, { useState } from 'react';
-import { Server, Play, RefreshCw, AlertTriangle, CheckCircle2, Terminal, Copy, ExternalLink } from 'lucide-react';
+import { Server, Play, RefreshCw, AlertTriangle, CheckCircle2, Terminal, Copy } from 'lucide-react';
+
+interface OllamaModel { name: string; }
 
 export default function OllamaLocal() {
   const [ollamaUrl, setOllamaUrl] = useState('http://localhost:11434');
   const [status, setStatus] = useState<'disconnected' | 'connecting' | 'connected'>('disconnected');
-  const [models, setModels] = useState<any[]>([]);
+  const [models, setModels] = useState<OllamaModel[]>([]);
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
   const [selectedModel, setSelectedModel] = useState('');
   const [prompt, setPrompt] = useState('');
   const [response, setResponse] = useState('');
@@ -24,14 +27,19 @@ export default function OllamaLocal() {
       clearTimeout(timeout);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
-      setModels(data.models || []);
+      const modelList: OllamaModel[] = Array.isArray(data?.models) ? data.models : [];
+      setModels(modelList);
       setStatus('connected');
-      if (data.models && data.models.length > 0) {
-        setSelectedModel(data.models[0].name);
-      }
-    } catch {
+      if (modelList.length > 0) setSelectedModel(modelList[0].name);
+    } catch (err) {
       setStatus('disconnected');
-      setError('To use Ollama, run this in your terminal first:');
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        setError('Connection timed out — Ollama did not respond. Is the server running?');
+      } else if (err instanceof Error && err.message.startsWith('HTTP')) {
+        setError(`Ollama returned ${err.message} — the server may be running without CORS enabled.`);
+      } else {
+        setError('Cannot reach Ollama. To use it, run this in your terminal first:');
+      }
     }
   };
 
@@ -40,14 +48,14 @@ export default function OllamaLocal() {
       ? 'set OLLAMA_ORIGINS=* && ollama serve'
       : 'OLLAMA_ORIGINS=* ollama serve';
     navigator.clipboard.writeText(cmd);
-    setError('Command copied! ' + (navigator.userAgent.includes('Windows') ? 'Run in Command Prompt as Admin' : 'Run in your terminal') + ', then click Retry.');
-    setTimeout(() => setError(''), 3000);
+    setNotice('Command copied! ' + (navigator.userAgent.includes('Windows') ? 'Run in Command Prompt as Admin' : 'Run in your terminal') + ', then click Retry.');
+    setTimeout(() => setNotice(''), 3000);
   };
 
   const copyTestCmd = () => {
     navigator.clipboard.writeText('curl -s http://localhost:11434/api/tags');
-    setError('Test command copied! Paste and run in your terminal.');
-    setTimeout(() => setError(''), 2500);
+    setNotice('Test command copied! Paste and run in your terminal.');
+    setTimeout(() => setNotice(''), 2500);
   };
 
   const runInference = async () => {
@@ -69,8 +77,8 @@ export default function OllamaLocal() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       setResponse(data.response || 'No response.');
-    } catch (err: any) {
-      setError(err.name === 'AbortError' ? 'Request timed out' : err.message || 'Generation failed');
+    } catch (err) {
+      setError(err instanceof DOMException && err.name === 'AbortError' ? 'Request timed out' : err instanceof Error ? err.message : 'Generation failed');
     } finally { setIsGenerating(false); }
   };
 
@@ -92,10 +100,10 @@ export default function OllamaLocal() {
 
             <div className="space-y-4">
               <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Ollama URL</label>
-                <input type="text" value={ollamaUrl}
+                <label htmlFor="ollama-url" className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Ollama URL</label>
+                <input id="ollama-url" type="text" value={ollamaUrl}
                   onChange={(e) => setOllamaUrl(e.target.value)}
-                  className="w-full px-3 py-2 bg-[#0a0a0c] border border-white/10 rounded-lg text-sm focus:outline-none focus:border-indigo-500" />
+                  className="w-full px-3 py-2 bg-[#0a0a0c] border border-white/10 rounded-lg text-sm focus-visible:ring-2 focus-visible:ring-indigo-500" />
               </div>
 
               {status !== 'connected' ? (
@@ -111,6 +119,13 @@ export default function OllamaLocal() {
                 </button>
               )}
 
+              {notice && (
+                <div role="status" className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-xs text-emerald-400 flex items-start gap-2">
+                  <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
+                  <span>{notice}</span>
+                </div>
+              )}
+
               {error && (
                 <div className="p-3 bg-slate-900 border border-slate-700 rounded-xl text-xs space-y-2">
                   <div className="flex items-start gap-2 text-amber-400">
@@ -121,14 +136,14 @@ export default function OllamaLocal() {
                     <p className="text-slate-400 text-[10px]">1. Enable CORS and restart Ollama:</p>
                     <div className="flex items-center gap-2 bg-black/40 p-2 rounded border border-slate-700">
                       <code className="text-emerald-400 font-mono text-[11px] flex-1">set OLLAMA_ORIGINS=* && ollama serve</code>
-                      <button onClick={copySetupCmd} className="shrink-0 p-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded transition-colors">
+                      <button onClick={copySetupCmd} aria-label="Copy setup command" className="shrink-0 p-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded transition-colors">
                         <Copy className="w-3 h-3" />
                       </button>
                     </div>
                     <p className="text-slate-400 text-[10px]">2. In another terminal, test the connection:</p>
                     <div className="flex items-center gap-2 bg-black/40 p-2 rounded border border-slate-700">
                       <code className="text-indigo-400 font-mono text-[11px] flex-1">curl -s http://localhost:11434/api/tags</code>
-                      <button onClick={copyTestCmd} className="shrink-0 p-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded transition-colors">
+                      <button onClick={copyTestCmd} aria-label="Copy test command" className="shrink-0 p-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded transition-colors">
                         <Copy className="w-3 h-3" />
                       </button>
                     </div>
@@ -139,10 +154,10 @@ export default function OllamaLocal() {
 
               {status === 'connected' && (
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Select Model</label>
-                  <select value={selectedModel} onChange={(e) => setSelectedModel(e.target.value)}
-                    className="w-full px-3 py-2 bg-[#0a0a0c] border border-white/10 rounded-lg text-sm focus:outline-none focus:border-indigo-500">
-                    {models.map((m: any) => (
+                  <label htmlFor="ollama-model" className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Select Model</label>
+                  <select id="ollama-model" value={selectedModel} onChange={(e) => setSelectedModel(e.target.value)}
+                    className="w-full px-3 py-2 bg-[#0a0a0c] border border-white/10 rounded-lg text-sm focus-visible:ring-2 focus-visible:ring-indigo-500">
+                    {models.map((m) => (
                       <option key={m.name} value={m.name}>{m.name}</option>
                     ))}
                   </select>
@@ -184,10 +199,11 @@ export default function OllamaLocal() {
             <div className="p-4 bg-[#161b22] border-t border-slate-800">
               <div className="flex gap-2">
                 <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)}
+                  aria-label="Prompt"
                   placeholder="Ask the model..."
                   disabled={status !== 'connected' || isGenerating}
-                  className="flex-1 bg-black/40 border border-slate-700 text-slate-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:border-indigo-500 resize-none h-12 placeholder-slate-600" />
-                <button onClick={runInference}
+                  className="flex-1 bg-black/40 border border-slate-700 text-slate-300 rounded-lg px-4 py-2 text-sm focus-visible:ring-2 focus-visible:ring-indigo-500 resize-none h-12 placeholder-slate-600" />
+                <button onClick={runInference} aria-label="Run inference"
                   disabled={status !== 'connected' || !prompt.trim() || isGenerating}
                   className="px-4 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold transition-colors disabled:opacity-50 disabled:bg-slate-700 flex items-center justify-center">
                   <Play className="w-4 h-4" />

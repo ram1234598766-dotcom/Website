@@ -10,12 +10,13 @@ export type TerminalTheme = 'dark' | 'light' | 'dracula' | 'monokai' | 'ubuntu';
 interface TerminalPanelProps {
   fontSize?: number;
   theme?: TerminalTheme;
-  onCommand?: (command: string) => string[];
 }
 
 const THEMES: Record<string, any> = {
   dark: { background: '#1e1e1e', foreground: '#cccccc', cursor: '#ffffff', black: '#000000', red: '#cd3131', green: '#0dbc79', yellow: '#e5e510', blue: '#2472c8', magenta: '#bc3fbc', cyan: '#11a8cd', white: '#e5e5e5' },
+  light: { background: '#f5f5f5', foreground: '#333333', cursor: '#555555', black: '#000000', red: '#cd3131', green: '#0dbc79', yellow: '#949800', blue: '#0451a5', magenta: '#bc05bc', cyan: '#0598bc', white: '#555555' },
   dracula: { background: '#282a36', foreground: '#f8f8f2', cursor: '#f8f8f0', black: '#21222c', red: '#ff5555', green: '#50fa7b', yellow: '#f1fa8c', blue: '#bd93f9', magenta: '#ff79c6', cyan: '#8be9fd', white: '#f8f8f2' },
+  monokai: { background: '#272822', foreground: '#f8f8f2', cursor: '#f8f8f0', black: '#272822', red: '#f92672', green: '#a6e22e', yellow: '#f4bf75', blue: '#66d9ef', magenta: '#ae81ff', cyan: '#a1efe4', white: '#f9f8f5' },
   ubuntu: { background: '#300a24', foreground: '#eeeeee', cursor: '#bbbbbb', black: '#2e3436', red: '#cc0000', green: '#4e9a06', yellow: '#c4a000', blue: '#3465a4', magenta: '#75507b', cyan: '#06989a', white: '#d3d7cf' },
 };
 
@@ -35,6 +36,21 @@ class LocalShell {
 
   getPrompt(): string {
     return `\r\n[32mvantaos[0m:[34m${this.cwd}[0m$ `;
+  }
+
+  historyPrev(): string | null {
+    if (this.history.length === 0) return null;
+    if (this.historyIdx > 0) this.historyIdx--;
+    return this.history[this.historyIdx] ?? null;
+  }
+
+  historyNext(): string | null {
+    if (this.historyIdx < this.history.length - 1) {
+      this.historyIdx++;
+      return this.history[this.historyIdx] ?? null;
+    }
+    this.historyIdx = this.history.length;
+    return null;
   }
 
   execute(cmd: string): string[] {
@@ -140,7 +156,9 @@ class LocalShell {
       }
       case 'node':
       case 'js': {
-        const code = args.join(' ');
+        // Take everything after the command verbatim so quoted strings,
+        // operators, and newlines survive — splitting on args would mangle them.
+        const code = trimmed.replace(/^(node|js)\s+/, '');
         try {
           const fn = new Function(code);
           const result = fn();
@@ -231,11 +249,31 @@ export default function TerminalPanel({ fontSize = 13, theme = 'dark' }: Termina
     term.write(shell.getPrompt());
 
     let currentLine = '';
+    const clearCurrentLine = () => {
+      while (currentLine.length > 0) {
+        currentLine = currentLine.slice(0, -1);
+        term.write('\b \b');
+      }
+    };
     term.onData((data: string) => {
       const code = data.charCodeAt(0);
 
-      // Handle special keys
-      if (code === 13) { // Enter
+      // Handle arrow-key escape sequences (Up / Down navigate command history)
+      if (data === '[A') { // Up arrow
+        const prev = shell.historyPrev();
+        if (prev !== null) {
+          clearCurrentLine();
+          currentLine = prev;
+          term.write(currentLine);
+        }
+      } else if (data === '[B') { // Down arrow
+        const next = shell.historyNext();
+        clearCurrentLine();
+        if (next !== null) {
+          currentLine = next;
+          term.write(currentLine);
+        }
+      } else if (code === 13) { // Enter
         term.writeln('');
         if (currentLine.trim()) {
           const output = shell.execute(currentLine.trim());
@@ -283,6 +321,7 @@ export default function TerminalPanel({ fontSize = 13, theme = 'dark' }: Termina
     window.addEventListener('terminal-send', handleTerminalSend);
 
     xtermRef.current = term;
+    window.dispatchEvent(new CustomEvent('terminal-ready'));
 
     return () => {
       clearTimeout(resizeTimer);
@@ -295,6 +334,12 @@ export default function TerminalPanel({ fontSize = 13, theme = 'dark' }: Termina
   useEffect(() => {
     if (xtermRef.current) xtermRef.current.options.fontSize = fontSize;
   }, [fontSize]);
+
+  useEffect(() => {
+    if (xtermRef.current) {
+      xtermRef.current.options.theme = THEMES[theme] || THEMES.dark;
+    }
+  }, [theme]);
 
   if (!mounted) {
     return <div className="w-full h-full bg-[#1e1e1e]" />;

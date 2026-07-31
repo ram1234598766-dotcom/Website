@@ -1,4 +1,4 @@
-import { Search, Filter, Download, ExternalLink, Cpu, HardDrive, Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Download, ExternalLink, Cpu, HardDrive, Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
 import React, { useState } from 'react';
 
 interface ModelFile {
@@ -73,7 +73,7 @@ const REAL_MODELS: ModelFile[] = [
     sizeBytes: 4200000000,
     url: 'https://ollama.com/library/codellama',
     architecture: 'Llama2',
-    ollamaTag: 'codellama'
+    ollamaTag: 'codellama:7b'
   },
   {
     id: 'deepseek-coder-v2',
@@ -116,22 +116,51 @@ function formatBytes(bytes: number, decimals = 2) {
 const ModelCard: React.FC<{ model: ModelFile }> = ({ model }) => {
   const [pullStatus, setPullStatus] = useState<'idle' | 'pulling' | 'success' | 'error'>('idle');
   const [errorMsg, setErrorMsg] = useState('');
+  const [progress, setProgress] = useState('');
+  const [runCopied, setRunCopied] = useState(false);
 
   const pullModel = async () => {
     setPullStatus('pulling');
     setErrorMsg('');
+    setProgress('');
     try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 3000);
+      // Stream the pull (stream: true) so the request resolves as soon as the
+      // download starts, not when the multi-GB download finishes. No fixed
+      // timeout — a wall-clock abort would kill every real pull.
       const res = await fetch('http://localhost:11434/api/pull', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: model.ollamaTag, stream: false }),
-        signal: controller.signal,
+        body: JSON.stringify({ name: model.ollamaTag, stream: true }),
         mode: 'cors',
       });
-      clearTimeout(timeout);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const lines = buf.split('\n');
+        buf = lines.pop() || '';
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          try {
+            const obj = JSON.parse(line);
+            if (obj.status === 'success') {
+              setPullStatus('success');
+              setTimeout(() => setPullStatus('idle'), 3000);
+              return;
+            }
+            if (obj.total && obj.completed) {
+              const pct = Math.min(100, Math.round((obj.completed / obj.total) * 100));
+              setProgress(`${obj.status || 'pulling'} ${pct}%`);
+            } else if (obj.status) {
+              setProgress(obj.status);
+            }
+          } catch {}
+        }
+      }
       setPullStatus('success');
       setTimeout(() => setPullStatus('idle'), 3000);
     } catch {
@@ -167,12 +196,17 @@ const ModelCard: React.FC<{ model: ModelFile }> = ({ model }) => {
           <div className="text-xs text-slate-400 font-mono">Terminal Command</div>
           <div className="flex items-center justify-between bg-black/50 p-2 rounded-lg border border-slate-700">
             <code className="text-emerald-400 font-mono text-xs">ollama run {model.ollamaTag}</code>
-            <button 
-              onClick={() => navigator.clipboard.writeText(`ollama run ${model.ollamaTag}`)}
-              className="text-slate-400 hover:text-white transition-colors"
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(`ollama run ${model.ollamaTag}`);
+                setRunCopied(true);
+                setTimeout(() => setRunCopied(false), 1500);
+              }}
+              aria-label={`Copy "ollama run ${model.ollamaTag}"`}
+              className="text-slate-400 hover:text-white transition-colors focus-visible:ring-2 focus-visible:ring-indigo-400"
               title="Copy Command"
             >
-              <Cpu className="w-4 h-4" />
+              {runCopied ? <CheckCircle2 className="w-4 h-4 text-emerald-400" /> : <Cpu className="w-4 h-4" />}
             </button>
           </div>
           
@@ -202,7 +236,7 @@ const ModelCard: React.FC<{ model: ModelFile }> = ({ model }) => {
             className="w-full mt-2 py-2 bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-300 text-sm font-bold rounded-lg flex items-center justify-center gap-2 transition-colors disabled:opacity-50"
           >
              {pullStatus === 'pulling' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-             Pull to Local Ollama
+             {pullStatus === 'pulling' && progress ? progress : 'Pull to Local Ollama'}
           </button>
         </div>
         

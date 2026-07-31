@@ -17,22 +17,6 @@ function loadSettings(): StoredSettings {
 function saveSettings(s: StoredSettings) { localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)); }
 
 // ====== SEARCH ENGINES ======
-async function searchDuckDuckGo(q: string): Promise<string> {
-  try {
-    const res = await fetch(`https://lite.duckduckgo.com/lite/?q=${encodeURIComponent(q.slice(0, 200))}`);
-    const html = await res.text();
-    const results: string[] = [];
-    const rows = html.match(/<tr[^>]*class="[^"]*result[^"]*"[^>]*>[\s\S]*?<\/tr>/gi) || [];
-    for (const row of rows.slice(0, 5)) {
-      const a = row.match(/<a[^>]*href="(https?:\/\/[^"]+)"[^>]*>([\s\S]*?)<\/a>/i);
-      const snip = row.match(/<td[^>]*class="result-snippet"[^>]*>([\s\S]*?)<\/td>/i);
-      if (a) results.push(`• ${a[2].replace(/<[^>]*>/g, '').trim()} — ${a[1].replace(/^https?:\/\//, '')}`);
-      if (snip) results[results.length - 1] += `\n  ${snip[1].replace(/<[^>]*>/g, '').trim()}`;
-    }
-    return results.join('\n');
-  } catch { return ''; }
-}
-
 async function searchWikipedia(q: string): Promise<string> {
   try {
     // Clean query for Wikipedia
@@ -46,13 +30,11 @@ async function searchWikipedia(q: string): Promise<string> {
 }
 
 async function searchWeb(q: string): Promise<string> {
-  // Try Wikipedia first for knowledge queries
-  const wiki = await searchWikipedia(q);
-  if (wiki) return wiki;
-  // Fallback to DuckDuckGo
-  const ddg = await searchDuckDuckGo(q);
-  if (ddg) return `**Web search results for "${q}":**\n\n${ddg}`;
-  return '';
+  // Wikipedia is the one CORS-friendly source that works directly from the
+  // browser. DuckDuckGo's lite endpoint does not send CORS headers, so it
+  // can't be read client-side; full web search is available through the
+  // deployed Cloudflare Worker (/api/ai/generate).
+  return searchWikipedia(q);
 }
 
 async function getWeather(city: string): Promise<string> {
@@ -130,13 +112,14 @@ async function localQuery(msg: string, settings: StoredSettings): Promise<string
   }
 
   // Try local Ollama
+  let webContext = '';
   if (settings.ollamaUrl) {
     try {
       const models = await ollamaListModels(settings.ollamaUrl);
       if (models.length > 0) {
         const model = settings.model !== 'local' ? settings.model : models[0].name;
-        const context = await searchWeb(q);
-        const system = `You are Omni-AI, a helpful assistant. Answer concisely.\n${context ? `Context:\n${context}\n` : ''}Date: ${new Date().toLocaleDateString()}`;
+        webContext = await searchWeb(q);
+        const system = `You are Omni-AI, a helpful assistant. Answer concisely.\n${webContext ? `Context:\n${webContext}\n` : ''}Date: ${new Date().toLocaleDateString()}`;
         try {
           const response = await ollamaGenerate(settings.ollamaUrl, model, `${system}\n\nUser: ${q}\nAnswer:`);
           if (response) return response;
@@ -146,8 +129,8 @@ async function localQuery(msg: string, settings: StoredSettings): Promise<string
   }
 
   // Web search fallback
-  const web = await searchWeb(q);
-  if (web) return web;
+  if (!webContext) webContext = await searchWeb(q);
+  if (webContext) return webContext;
 
   // Knowledge base fallback
   const kb: Record<string, string> = {
@@ -176,7 +159,14 @@ async function cloudQuery(provider: AIProvider, model: string, apiKey: string, m
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ provider, model, apiKey, messages }),
   });
-  if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.error || `Error (${res.status})`); }
+  if (!res.ok) {
+    let message = `Error (${res.status})`;
+    try { const err = await res.json(); if (err?.error) message = err.error; } catch {}
+    if (res.status === 404) {
+      message = 'The AI proxy (/api/ai/generate) is only available when deployed. Run `npm run deploy` to serve it from the Cloudflare Worker, or use a local provider.';
+    }
+    throw new Error(message);
+  }
   const data = await res.json();
   return data.text || 'No response.';
 }
@@ -210,8 +200,6 @@ export default function OmniAI() {
 
   const isOllamaReady = ollamaStatus === 'online';
   const isCloudReady = settings.provider !== 'local' && settings.provider !== 'ollama' && !!settings.apiKey;
-  const isUsingOllama = settings.provider === 'ollama' || (settings.provider === 'local' && isOllamaReady);
-  const isOnline = isOllamaReady || isCloudReady;
 
   const PROVIDERS = [
     { id: 'local' as AIProvider, name: 'Hybrid AI', icon: Zap,
@@ -260,6 +248,15 @@ export default function OmniAI() {
 
   const clearHistory = () => { setMessages([]); localStorage.removeItem(HISTORY_KEY); };
 
+  // Persist any settings change (provider / model) to localStorage.
+  const updateSettings = (updater: (prev: StoredSettings) => StoredSettings) => {
+    setSettings(prev => {
+      const next = updater(prev);
+      saveSettings(next);
+      return next;
+    });
+  };
+
   const saveApiSettings = () => {
     const newSettings = { ...settings, apiKey: tempApiKey, ollamaUrl: tempOllamaUrl };
     setSettings(newSettings);
@@ -297,12 +294,12 @@ export default function OmniAI() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={clearHistory} disabled={messages.length === 0}
-            className="p-2.5 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-xl transition-colors disabled:opacity-30 disabled:pointer-events-none cursor-pointer"
+          <button onClick={clearHistory} disabled={messages.length === 0} aria-label="Clear history"
+            className="p-2.5 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-xl transition-colors disabled:opacity-30 disabled:pointer-events-none cursor-pointer focus-visible:ring-2 focus-visible:ring-indigo-400"
             title="Clear history">
             <Trash2 className="w-5 h-5" />
           </button>
-          <button onClick={() => { setShowSettings(!showSettings); setTempApiKey(settings.apiKey); setTempOllamaUrl(settings.ollamaUrl); }}
+          <button onClick={() => { setShowSettings(!showSettings); setTempApiKey(settings.apiKey); setTempOllamaUrl(settings.ollamaUrl); }} aria-label="Settings"
             className={`p-2.5 rounded-xl transition-colors cursor-pointer ${showSettings ? 'bg-indigo-500/20 text-indigo-300' : 'text-slate-400 hover:bg-white/10 hover:text-white'}`}
             title="Settings">
             <Settings className="w-5 h-5" />
@@ -325,14 +322,14 @@ export default function OmniAI() {
                 {isOllamaReady && <span className="text-xs bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full">● {ollamaModels.length} models</span>}
                 {!isOllamaReady && ollamaStatus !== 'checking' && <span className="text-xs text-slate-500">offline</span>}
               </div>
-              <button onClick={checkOllama} className="p-1.5 bg-slate-800 hover:bg-slate-700 rounded text-slate-400 transition-colors cursor-pointer">
+              <button onClick={checkOllama} aria-label="Refresh Ollama connection" className="p-1.5 bg-slate-800 hover:bg-slate-700 rounded text-slate-400 transition-colors cursor-pointer focus-visible:ring-2 focus-visible:ring-indigo-400">
                 <RefreshCw className="w-3.5 h-3.5" />
               </button>
             </div>
             <div className="flex gap-2">
-              <input type="text" value={tempOllamaUrl} onChange={(e) => setTempOllamaUrl(e.target.value)}
+              <input type="text" value={tempOllamaUrl} onChange={(e) => setTempOllamaUrl(e.target.value)} aria-label="Ollama URL"
                 placeholder="http://localhost:11434"
-                className="flex-1 bg-black/60 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-300 font-mono focus:outline-none focus:border-indigo-500" />
+                className="flex-1 bg-black/60 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-300 font-mono focus-visible:ring-2 focus-visible:ring-indigo-500" />
             </div>
             {!isOllamaReady && ollamaStatus !== 'checking' && (
               <p className="text-[10px] text-amber-400 mt-2">Run in terminal: <code className="bg-black/60 px-1 py-0.5 rounded text-emerald-400">set OLLAMA_ORIGINS=* && ollama serve</code></p>
@@ -342,13 +339,13 @@ export default function OmniAI() {
           {/* Provider Selection */}
           <div>
             <label className="text-xs text-slate-400 font-medium uppercase tracking-wider mb-2 block">AI Provider</label>
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+            <div role="radiogroup" aria-label="AI Provider" className="grid grid-cols-2 sm:grid-cols-5 gap-2">
               {PROVIDERS.map(p => {
                 const Icon = p.icon;
                 const active = settings.provider === p.id;
                 return (
-                  <button key={p.id} onClick={() => setSettings(prev => ({ ...prev, provider: p.id, model: p.defaultModel }))}
-                    className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border text-sm transition-all cursor-pointer ${active ? 'bg-indigo-500/20 border-indigo-500/40 text-indigo-300' : 'bg-black/40 border-slate-800 text-slate-400 hover:border-slate-600 hover:text-slate-200'}`}>
+                  <button key={p.id} role="radio" aria-checked={active} onClick={() => updateSettings(prev => ({ ...prev, provider: p.id, model: p.defaultModel }))}
+                    className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border text-sm transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-indigo-400 ${active ? 'bg-indigo-500/20 border-indigo-500/40 text-indigo-300' : 'bg-black/40 border-slate-800 text-slate-400 hover:border-slate-600 hover:text-slate-200'}`}>
                     <Icon className="w-5 h-5" />
                     <span className="font-medium text-[10px] text-center">{p.name}</span>
                   </button>
@@ -362,7 +359,8 @@ export default function OmniAI() {
           {settings.provider === 'ollama' && isOllamaReady && (
             <div>
               <label className="text-xs text-slate-400 font-medium uppercase tracking-wider mb-2 block">Model</label>
-              <select value={settings.model} onChange={(e) => setSettings(prev => ({ ...prev, model: e.target.value }))}
+              <select value={settings.model} onChange={(e) => updateSettings(prev => ({ ...prev, model: e.target.value }))}
+                aria-label="Ollama model"
                 className="w-full bg-black/40 border border-slate-700 rounded-xl px-4 py-3 text-white text-sm cursor-pointer">
                 {ollamaModels.map(m => <option key={m.name} value={m.name}>{m.name}</option>)}
               </select>
@@ -373,9 +371,9 @@ export default function OmniAI() {
           {(settings.provider === 'openrouter' || settings.provider === 'gemini' || settings.provider === 'openai') && (
             <div>
               <label className="text-xs text-slate-400 font-medium uppercase tracking-wider mb-2 block">API Key</label>
-              <input type="password" value={tempApiKey} onChange={(e) => setTempApiKey(e.target.value)}
+              <input type="password" value={tempApiKey} onChange={(e) => setTempApiKey(e.target.value)} aria-label={`${provider.name} API key`}
                 placeholder={`${provider.name} API key...`}
-                className="w-full bg-black/40 border border-slate-700 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-indigo-500 placeholder-slate-600 font-mono" />
+                className="w-full bg-black/40 border border-slate-700 rounded-xl px-4 py-3 text-white text-sm focus-visible:ring-2 focus-visible:ring-indigo-500 placeholder-slate-600 font-mono" />
             </div>
           )}
 
@@ -388,7 +386,7 @@ export default function OmniAI() {
 
       {/* Chat */}
       <div className="flex-1 flex flex-col overflow-hidden relative">
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
+        <div role="log" aria-live="polite" aria-label="Chat messages" className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
           {messages.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-slate-500">
               <div className="w-16 h-16 rounded-2xl border bg-indigo-900/20 border-indigo-500/20 flex items-center justify-center mb-4">
@@ -441,12 +439,12 @@ export default function OmniAI() {
 
         <div className="p-4 sm:p-6 bg-[#161B22] border-t border-slate-800">
           <form onSubmit={handleSend} className="relative flex items-center">
-            <input type="text" value={input} onChange={(e) => setInput(e.target.value)}
+            <input type="text" value={input} onChange={(e) => setInput(e.target.value)} aria-label="Message"
               placeholder={isOllamaReady ? 'Ask your local AI anything...' : 'Ask a question, search the web...'}
               disabled={isGenerating}
-              className="w-full bg-[#0a0d12] border border-slate-700 text-white text-sm md:text-base rounded-2xl pl-5 pr-14 py-4 focus:outline-none focus:border-indigo-500 shadow-inner disabled:opacity-50 transition-colors placeholder-slate-600" />
-            <button type="submit" disabled={!input.trim() || isGenerating}
-              className="absolute right-2 p-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl disabled:bg-slate-700 disabled:text-slate-500 transition-colors cursor-pointer">
+              className="w-full bg-[#0a0d12] border border-slate-700 text-white text-sm md:text-base rounded-2xl pl-5 pr-14 py-4 focus-visible:ring-2 focus-visible:ring-indigo-400 shadow-inner disabled:opacity-50 transition-colors placeholder-slate-600" />
+            <button type="submit" disabled={!input.trim() || isGenerating} aria-label="Send message"
+              className="absolute right-2 p-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl disabled:bg-slate-700 disabled:text-slate-500 transition-colors cursor-pointer focus-visible:ring-2 focus-visible:ring-indigo-400">
               <Send className="w-5 h-5" />
             </button>
           </form>

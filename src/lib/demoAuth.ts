@@ -38,11 +38,47 @@ function generateId(): string {
 }
 
 async function hashPassword(password: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(password + 'vantaos_salt_v1');
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  const data = password + 'vantaos_salt_v1';
+  try {
+    // crypto.subtle is only available in secure contexts (https / localhost).
+    if (typeof crypto !== 'undefined' && crypto.subtle) {
+      const encoder = new TextEncoder();
+      const hashBuffer = await crypto.subtle.digest('SHA-256', encoder.encode(data));
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+  } catch {
+    // fall through to the simple hash below
+  }
+  // Non-crypto fallback for insecure contexts (demo auth only — not for security).
+  let hash = 0;
+  for (let i = 0; i < data.length; i++) {
+    hash = ((hash << 5) - hash + data.charCodeAt(i)) | 0;
+  }
+  return 'fb_' + (hash >>> 0).toString(16);
+}
+
+/**
+ * Persist the demo session and notify listeners in the SAME tab.
+ * The native `storage` event only fires in other tabs, so we dispatch a
+ * synthetic one here to keep onAuthStateChange subscribers in sync.
+ */
+function setSession(user: Omit<DemoUser, never> | null) {
+  if (user) {
+    localStorage.setItem(SESSION_KEY, JSON.stringify(user));
+  } else {
+    localStorage.removeItem(SESSION_KEY);
+  }
+  try {
+    window.dispatchEvent(
+      new StorageEvent('storage', {
+        key: SESSION_KEY,
+        newValue: user ? JSON.stringify(user) : null,
+      })
+    );
+  } catch {
+    // StorageEvent constructor unavailable — skip the synthetic event.
+  }
 }
 
 export function isSupabaseConfigured(): boolean {
@@ -93,12 +129,12 @@ export async function demoSupabase(): Promise<{
         users.push(newUser);
         saveUsers(users);
         // Auto sign in
-        localStorage.setItem(SESSION_KEY, JSON.stringify({
+        setSession({
           id: newUser.id,
           email: newUser.email,
           username: newUser.username,
           createdAt: newUser.createdAt,
-        }));
+        });
         return { error: null };
       },
 
@@ -109,18 +145,18 @@ export async function demoSupabase(): Promise<{
         if (!user) {
           return { error: 'Invalid login credentials.' };
         }
-        localStorage.setItem(SESSION_KEY, JSON.stringify({
+        setSession({
           id: user.id,
           email: user.email,
           username: user.username,
           createdAt: user.createdAt,
           role: user.role,
-        }));
+        });
         return { error: null };
       },
 
       async signOut() {
-        localStorage.removeItem(SESSION_KEY);
+        setSession(null);
       },
 
       async getSession() {
