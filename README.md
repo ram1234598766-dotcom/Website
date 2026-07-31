@@ -2,34 +2,31 @@
 
 **The intelligent developer cloud.** Write, build, and deploy full-stack applications entirely in the browser.
 
-VantaOS is a browser-based development environment — a zero-config web IDE (powered by Monaco Editor), an Omni-AI assistant, a local model hub, and a real-time community forum, all in one cohesive workspace.
+VantaOS is a browser-based development environment — a zero-config web IDE (powered by Monaco Editor), an Omni-AI assistant, a local model hub, GitHub integration, and a built-in terminal, all in one cohesive workspace.
 
-Deployed as a static site on Cloudflare Pages, with lightweight serverless functions for the AI proxy, health checks, and security monitoring.
+Deployed as a static Next.js export served from Cloudflare, with a lightweight Workers proxy for AI API calls.
 
 ---
 
 ## Features
 
 ### ☁️ Cloud OS Web IDE
-A full in-browser code editor (Monaco) with file explorer, split views, diff editor, code formatting (Prettier), and GitHub sync. Create, edit, rename, delete, and organize files in a virtual workspace. Export your entire workspace as a ZIP.
+A full in-browser code editor (Monaco) with a file explorer, tabs, split views, a diff editor, code formatting (Prettier on save), and a virtual workspace that persists to `localStorage`. Create, edit, rename, delete, and organize files and folders. Export the entire workspace as a ZIP archive.
+
+### ⌨️ Built-in Terminal
+An xterm.js terminal with a virtual file system and command history. Run JavaScript inline (`js <code>`), navigate directories, create and edit files, and test code as you write. Toggle it with `` Ctrl+` ``.
 
 ### 🧠 Omni-AI Assistant
-A chat interface that connects to a server-side LLM endpoint. Supports "Deep Thinking" and "Quick Reply" modes. Conversation history is persisted in IndexedDB.
+A chat interface that connects to the AI provider of your choice — **local Ollama models** or **cloud APIs** (OpenRouter, Gemini, OpenAI). Online-only: if no provider is connected, Omni-AI tells you how to connect one instead of faking offline answers. Includes live tool commands like `calc`, `js`, `weather`, and `fetch`.
 
 ### 🤖 Local Model Hub
-Browse real open-source models (Llama 3, Phi-3, Gemma 2, Mistral, Qwen 2, and more). Each card shows the true model size. Pull models from a local Ollama daemon at `http://localhost:11434`.
+Browse real open-source models (Llama 3, Phi-3, Gemma 2, Mistral, Qwen 2, and more) with their actual sizes. Pull models to a local Ollama daemon at `http://localhost:11434` and run them with one command.
 
-### 💬 Community Forum
-A real-time discussion board backed by Supabase Postgres with row-level security and live subscriptions. Create threads, post replies, and upvote content.
+### 🔗 GitHub Synchronization
+Sign in with a GitHub token (or Supabase OAuth when configured), clone any of your repositories into the workspace, edit files, and commit & push your changes back to the branch — without leaving the IDE.
 
-### 🔐 Privacy & Data Ownership
-Your data remains yours. Zero-trust architecture, TLS in transit, RLS-protected storage, no advertising, no telemetry resale.
-
-### 🛡️ Security Watchdog
-Live security monitoring in the footer. The watchdog checks for misconfigured API keys and server vulnerabilities.
-
-### ⌨️ Command Palette
-Press `Ctrl+K` (or `Cmd+K`) for fast navigation between all views and actions.
+### 🔐 Privacy
+Your workspace data stays in your browser by default. Demo auth accounts are stored locally (passwords hashed with SHA-256). When Supabase is configured, auth and storage move to your own Supabase project with row-level security. No tracking scripts, no telemetry resale.
 
 ---
 
@@ -38,12 +35,13 @@ Press `Ctrl+K` (or `Cmd+K`) for fast navigation between all views and actions.
 | Layer | Technology |
 |-------|------------|
 | UI | React 19, TypeScript, Tailwind CSS v4 |
+| Framework | Next.js 15 (static export) |
 | Animation | Motion (`motion/react`) |
 | Editor | `@monaco-editor/react` |
-| AI Proxy | Cloudflare Pages Function → Gemini REST API |
-| Database / Auth | Supabase (Postgres + Auth + Realtime) — optional |
-| Terminal | xterm.js with optional Socket.io backend |
-| Deployment | Cloudflare Pages (static export) |
+| Terminal | xterm.js |
+| AI | Ollama, OpenRouter, Gemini, OpenAI |
+| Auth / DB | Supabase (optional) |
+| Deployment | Cloudflare Workers + static assets |
 
 ---
 
@@ -51,9 +49,9 @@ Press `Ctrl+K` (or `Cmd+K`) for fast navigation between all views and actions.
 
 ### Prerequisites
 - Node.js 20+ and npm
-- (Optional) A Supabase project for forum, auth, and admin features
+- (Optional) A Supabase project for real auth
 - (Optional) A local [Ollama](https://ollama.com) install for the model hub
-- (Optional) A Gemini API key for the Omni-AI assistant
+- (Optional) API keys for OpenRouter / Gemini / OpenAI to use cloud AI
 
 ### Install & Run
 
@@ -75,18 +73,23 @@ npm run dev
 npm run build
 ```
 
-The production build produces a static export in `out/` plus Cloudflare Pages Functions in `functions/`. Deploy both to Cloudflare Pages.
+The production build produces a static export in `out/`.
 
-### Configure Cloudflare Pages Deployment
+### Deploy to Cloudflare
 
-Connect your GitHub repo to Cloudflare Pages and set:
-- **Build command**: `npm run build`
-- **Build output**: `out/` (functions auto-detected from `functions/`)
+This project uses a Cloudflare Worker (`workers/worker.ts`) that serves the static export and proxies `/api/*` AI calls.
 
-Set these environment variables in the Cloudflare dashboard:
+```bash
+# Authenticate once
+npx wrangler login
+
+# Deploy
+npm run build && npx wrangler deploy
+```
+
+Set environment variables / secrets in the Cloudflare dashboard or via `wrangler secret put`:
 - `GEMINI_API_KEY` — for Omni-AI (optional)
-- `NEXT_PUBLIC_SUPABASE_URL` — for forum/auth (optional)
-- `NEXT_PUBLIC_SUPABASE_ANON_KEY` — for forum/auth (optional)
+- `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` — for real auth (optional)
 
 ---
 
@@ -94,29 +97,17 @@ Set these environment variables in the Cloudflare dashboard:
 
 ```
 .
-├── app/                   # Next.js app router (layout, page, globals)
-├── functions/             # Cloudflare Pages Functions (API endpoints)
-│   └── api/
-│       ├── ai/generate.ts         # AI proxy (Gemini)
-│       ├── health.ts              # Health check
-│       └── security/scan.ts       # Security audit
-├── public/
-│   └── favicon.svg
+├── app/                   # Next.js app router (layout, page, robots, sitemap)
+├── public/                # Static assets, _headers, manifest, OG image
+├── workers/
+│   └── worker.ts          # Cloudflare Worker (assets + AI API proxy)
 └── src/
-    ├── App.tsx            # Root shell — view routing, auth, security
-    ├── components/        # UI surfaces
-    │   ├── Home.tsx       # Landing page
-    │   ├── CloudOS.tsx    # Cloud IDE workspace
-    │   ├── OmniAI.tsx     # AI chat assistant
-    │   ├── Forum.tsx      # Community discussion board
-    │   ├── Showcase.tsx   # AI model gallery
-    │   ├── AdminPanel.tsx # Admin dashboard
-    │   ├── AuthModal.tsx  # Sign in / sign up
-    │   ├── TerminalPanel.tsx # xterm.js terminal
-    │   └── ...
-    ├── lib/               # Supabase, Firebase, GitHub helpers
-    ├── types.ts           # Shared TypeScript types
-    └── utils/             # Activity logging, astrology service
+    ├── App.tsx            # Root shell — view routing, auth, keyboard shortcuts
+    ├── components/        # Home, CloudOS (IDE), TerminalPanel, OmniAI,
+    │                      # OllamaLocal, Showcase (model hub), GitHubManager,
+    │                      # AuthModal, CommandPalette, AdminPanel, ...
+    ├── lib/               # supabase (unified client), demoAuth, github, sanitize
+    └── types.ts           # Shared TypeScript types
 ```
 
 ---
@@ -125,20 +116,10 @@ Set these environment variables in the Cloudflare dashboard:
 
 | Variable | Purpose | Required? |
 |----------|---------|-----------|
-| `GEMINI_API_KEY` | Server-side LLM calls for Omni-AI | No (AI disabled without it) |
-| `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL | No (forum/auth disabled) |
+| `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL | No (falls back to demo auth) |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon key | No |
 | `NEXT_PUBLIC_APP_URL` | Public URL (for OAuth callbacks) | No |
-
----
-
-## Security
-
-The footer shows a live threat watchdog status driven by `POST /api/security/scan`. The endpoint performs real checks:
-- Validates that `GEMINI_API_KEY` is set and not a placeholder
-- Checks if the server is running as root
-
-The UI reflects three honest states: **Secure Runtime**, **Review Recommended**, or **Watchdog Offline**.
+| `GEMINI_API_KEY` | Worker-side secret for Omni-AI | No |
 
 ---
 

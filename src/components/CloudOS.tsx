@@ -146,7 +146,10 @@ export default function CloudOS() {
   
   
 
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  // Sidebar auto-collapses on small screens so the editor stays usable on phones.
+  const [sidebarOpen, setSidebarOpen] = useState(
+    () => typeof window === 'undefined' || window.innerWidth >= 1024
+  );
   const [creatingParentId, setCreatingParentId] = useState<string | null>(null);
   const [creatingType, setCreatingType] = useState<'file' | 'folder' | null>(null);
   const [movingFileId, setMovingFileId] = useState<string | null>(null);
@@ -603,7 +606,7 @@ export default function CloudOS() {
               initial={{ opacity: 0, y: -20, x: '-50%' }}
               animate={{ opacity: 1, y: 0, x: '-50%' }}
               exit={{ opacity: 0, y: -20, x: '-50%' }}
-              className="absolute top-2 left-1/2 w-[600px] bg-slate-800 border border-slate-700 rounded-xl shadow-2xl overflow-hidden z-50 flex flex-col"
+              className="absolute top-2 left-1/2 w-[min(600px,92vw)] bg-slate-800 border border-slate-700 rounded-xl shadow-2xl overflow-hidden z-50 flex flex-col"
             >
               <div className="flex items-center px-4 py-3 border-b border-slate-700">
                 <input
@@ -665,7 +668,7 @@ export default function CloudOS() {
             className="flex whitespace-nowrap items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border bg-slate-800/50 text-slate-400 border-slate-700/50 hover:bg-slate-800 hover:text-slate-300 cursor-pointer"
           >
             <Keyboard className="w-4 h-4" />
-            <span className="hidden sm:inline">Shortcuts</span>
+            <span>Shortcuts</span>
           </button>
           
           <button 
@@ -690,10 +693,10 @@ export default function CloudOS() {
           </button>
           <button
               onClick={() => setShowDiff(!showDiff)}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border ${showDiff ? 'bg-indigo-600/20 text-indigo-400 border-indigo-500/50' : 'bg-slate-800/50 text-slate-400 border-slate-700/50 hover:bg-slate-800 hover:text-slate-300'}`}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border cursor-pointer ${showDiff ? 'bg-indigo-600/20 text-indigo-400 border-indigo-500/50' : 'bg-slate-800/50 text-slate-400 border-slate-700/50 hover:bg-slate-800 hover:text-slate-300'}`}
             >
               <Code2 className="w-4 h-4" />
-              <span className="hidden sm:inline">Diff</span>
+              <span>Diff</span>
             </button>
           
           <button
@@ -701,14 +704,14 @@ export default function CloudOS() {
             className="flex whitespace-nowrap items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border bg-slate-800/50 text-slate-400 border-slate-700/50 hover:bg-slate-800 hover:text-slate-300 cursor-pointer"
           >
             <Code2 className="w-4 h-4" />
-            <span className="hidden sm:inline">Format</span>
+            <span>Format</span>
           </button>
           <button
             onClick={handleRun}
             className="flex whitespace-nowrap items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors bg-emerald-600 hover:bg-emerald-500 text-white shadow shadow-emerald-900/20 cursor-pointer"
           >
             <Play className="w-4 h-4" />
-            <span className="hidden sm:inline">Compile & Run</span>
+            <span>Compile & Run</span>
           </button>
                   </div>
       </div>
@@ -1001,8 +1004,8 @@ export default function CloudOS() {
   }
 `}} />
 <div className="flex-1 flex flex-col bg-[#1e1e1e] relative min-w-0 overflow-hidden h-full">
-          <div className="flex items-center justify-between bg-slate-900/50 border-b border-slate-800 pr-4">
-            <div className="flex overflow-x-auto shrink-0 cloudos-scroll" style={{ scrollbarWidth: 'thin', scrollBehavior: 'smooth' }}>
+          <div className="flex flex-wrap items-center justify-between bg-slate-900/50 border-b border-slate-800 pr-4">
+            <div className="flex overflow-x-auto shrink-0 max-w-full cloudos-scroll" style={{ scrollbarWidth: 'thin', scrollBehavior: 'smooth' }}>
               <AnimatePresence>
               {openTabs.map((tabId, index) => {
                 const tabFile = files.find(f => f.id === tabId);
@@ -1071,7 +1074,7 @@ export default function CloudOS() {
             </div>
             
             {/* Language Selector */}
-            <div className="flex items-center gap-4 text-xs font-mono text-slate-400">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-xs font-mono text-slate-400">
               <div className="flex items-center gap-2">
                  <span className="opacity-60">Theme:</span>
                  <select 
@@ -1365,7 +1368,7 @@ export default function CloudOS() {
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.95 }}
-            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[400px] bg-slate-900 border border-slate-700 rounded-xl shadow-2xl overflow-hidden z-50 flex flex-col"
+            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[min(400px,92vw)] bg-slate-900 border border-slate-700 rounded-xl shadow-2xl overflow-hidden z-50 flex flex-col"
           >
             <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800 bg-slate-950">
               <div className="flex items-center gap-2 text-slate-200 font-bold">

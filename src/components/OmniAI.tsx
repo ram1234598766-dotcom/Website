@@ -3,7 +3,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { BrainCircuit, Send, Settings, Key, Globe, Zap, Bot, Trash2, Server, RefreshCw, Loader2 } from 'lucide-react';
 
-type AIProvider = 'local' | 'ollama' | 'openrouter' | 'gemini' | 'openai';
+type AIProvider = 'ollama' | 'openrouter' | 'gemini' | 'openai';
 
 const SETTINGS_KEY = 'vantaos_omni_settings';
 const HISTORY_KEY = 'vantaos_omni_history';
@@ -11,31 +11,18 @@ const HISTORY_KEY = 'vantaos_omni_history';
 interface StoredSettings { provider: AIProvider; model: string; apiKey: string; ollamaUrl: string; }
 
 function loadSettings(): StoredSettings {
-  try { const d = localStorage.getItem(SETTINGS_KEY); if (d) return JSON.parse(d); } catch {}
-  return { provider: 'local', model: 'local', apiKey: '', ollamaUrl: 'http://localhost:11434' };
+  try {
+    const d = localStorage.getItem(SETTINGS_KEY);
+    if (d) {
+      const parsed = JSON.parse(d);
+      // The old 'local' offline provider was removed — migrate to Ollama.
+      if (parsed.provider === 'local') parsed.provider = 'ollama';
+      return parsed;
+    }
+  } catch {}
+  return { provider: 'ollama', model: 'llama3', apiKey: '', ollamaUrl: 'http://localhost:11434' };
 }
 function saveSettings(s: StoredSettings) { localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)); }
-
-// ====== SEARCH ENGINES ======
-async function searchWikipedia(q: string): Promise<string> {
-  try {
-    // Clean query for Wikipedia
-    const topic = q.replace(/^(what is|who is|what are|what was|tell me about|explain)\s+/i, '').trim();
-    const res = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(topic)}`);
-    if (!res.ok) return '';
-    const data = await res.json();
-    if (data.extract) return `📖 **${data.title}** — ${data.extract.slice(0, 1500)}`;
-    return '';
-  } catch { return ''; }
-}
-
-async function searchWeb(q: string): Promise<string> {
-  // Wikipedia is the one CORS-friendly source that works directly from the
-  // browser. DuckDuckGo's lite endpoint does not send CORS headers, so it
-  // can't be read client-side; full web search is available through the
-  // deployed Cloudflare Worker (/api/ai/generate).
-  return searchWikipedia(q);
-}
 
 async function getWeather(city: string): Promise<string> {
   try {
@@ -68,12 +55,16 @@ async function ollamaGenerate(url: string, model: string, prompt: string): Promi
   return data.response || '';
 }
 
-// ====== LOCAL QUERY ======
+// ====== LOCAL/ONLINE QUERY ======
+// Omni-AI is online-only. `localQuery` handles explicit tool commands that
+// run against live services (weather, fetch), and routes everything else
+// through a connected AI provider (Ollama or a cloud API). There is no
+// offline knowledge-base fallback — if no provider is connected, we say so.
 async function localQuery(msg: string, settings: StoredSettings): Promise<string> {
   const q = msg.trim();
   const ql = q.toLowerCase();
 
-  // Commands
+  // Explicit tool commands (still work without an LLM, but they hit live APIs)
   if (ql === 'help' || q === '?') {
     return `## 🤖 Omni-AI Commands
 
@@ -83,7 +74,8 @@ async function localQuery(msg: string, settings: StoredSettings): Promise<string
 • **💻 Code** — \`js [1,2,3].map(x=>x*2)\`
 • **🔗 Fetch** — \`fetch https://...\`
 • **⏰ Time** — \`what time is it\`
-• **🧠 Local AI** — install Ollama, run \`set OLLAMA_ORIGINS=* && ollama serve\`, then enable in ⚙️`;
+
+For AI answers, connect a provider in ⚙️ Settings — local Ollama, or a cloud API (OpenRouter, Gemini, OpenAI).`;
   }
   if (ql.startsWith('weather') || ql.startsWith('temperature')) {
     const match = q.match(/(?:in|at|for)\s+([a-z\s-]+)/i);
@@ -111,46 +103,28 @@ async function localQuery(msg: string, settings: StoredSettings): Promise<string
     return `🕐 **${new Date().toLocaleString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZoneName: 'short' })}**`;
   }
 
-  // Try local Ollama
-  let webContext = '';
+  // AI answers require a connected provider (Ollama or cloud). No offline fallback.
   if (settings.ollamaUrl) {
     try {
       const models = await ollamaListModels(settings.ollamaUrl);
       if (models.length > 0) {
-        const model = settings.model !== 'local' ? settings.model : models[0].name;
-        webContext = await searchWeb(q);
-        const system = `You are Omni-AI, a helpful assistant. Answer concisely.\n${webContext ? `Context:\n${webContext}\n` : ''}Date: ${new Date().toLocaleDateString()}`;
+        const model = settings.model !== '' ? settings.model : models[0].name;
+        const system = `You are Omni-AI, a helpful assistant. Answer concisely.\nDate: ${new Date().toLocaleDateString()}`;
         try {
           const response = await ollamaGenerate(settings.ollamaUrl, model, `${system}\n\nUser: ${q}\nAnswer:`);
           if (response) return response;
-        } catch { /* fall through */ }
+        } catch { /* fall through to provider-unavailable message */ }
       }
-    } catch {}
+    } catch { /* Ollama unreachable */ }
   }
 
-  // Web search fallback
-  if (!webContext) webContext = await searchWeb(q);
-  if (webContext) return webContext;
+  return `⚠️ **No AI provider is connected.**
 
-  // Knowledge base fallback
-  const kb: Record<string, string> = {
-    vantaos: 'VantaOS is an open-source cloud IDE with Monaco editor, Omni-AI, and GitHub sync. Built with Next.js + TypeScript, deployed on Cloudflare Workers.',
-    quantum: 'Quantum computing uses qubits that can be in superposition states (0 and 1 simultaneously), enabling parallel computation on certain problems.',
-    ai: 'Artificial Intelligence (AI) refers to machines that can simulate human intelligence. Machine learning is a subset that learns from data.',
-    js: 'JavaScript is a programming language for the web. It runs in browsers and on servers via Node.js.',
-  };
-  for (const [key, val] of Object.entries(kb)) {
-    if (ql.includes(key)) return `📚 **Quick Answer:**\n${val}\n\n*For more details, try "search for..." or enable Ollama in ⚙️ settings.*`;
-  }
+Connect one in ⚙️ Settings to get AI answers:
+• **Local Ollama** — install it, run \`set OLLAMA_ORIGINS=* && ollama serve\` (Windows) or \`OLLAMA_ORIGINS=* ollama serve\` (Mac/Linux), then press refresh in settings.
+• **Cloud provider** — pick OpenRouter, Gemini, or OpenAI and paste your API key.
 
-  return `I searched for "${q}" but couldn't find a specific answer.
-
-Here's what I can do:
-• **Search the web** — try \`search for ${q}\`
-• **Wikipedia lookup** — try \`what is ${q.split(' ').slice(0, 3).join(' ')}\`
-• **Enable Ollama** — run \`set OLLAMA_ORIGINS=* && ollama serve\` in your terminal, then refresh this page
-
-Or add an API key (⚙️) for GPT-4o, Claude, Gemini, etc.`;
+You can still use the tools above (weather, calc, js, fetch) anytime.`;
 }
 
 // ====== CLOUD PROVIDER ======
@@ -199,12 +173,9 @@ export default function OmniAI() {
   }
 
   const isOllamaReady = ollamaStatus === 'online';
-  const isCloudReady = settings.provider !== 'local' && settings.provider !== 'ollama' && !!settings.apiKey;
+  const isCloudReady = settings.provider !== 'ollama' && !!settings.apiKey;
 
   const PROVIDERS = [
-    { id: 'local' as AIProvider, name: 'Hybrid AI', icon: Zap,
-      models: [{ id: 'local', name: 'Smart Auto' }], defaultModel: 'local',
-      desc: isOllamaReady ? 'Using local Ollama + web search' : 'Web search + tools. Enable Ollama in settings.' },
     { id: 'ollama' as AIProvider, name: 'Local Ollama', icon: Server,
       models: ollamaModels.length > 0 ? ollamaModels.map(m => ({ id: m.name, name: m.name })) : [{ id: 'llama3', name: 'llama3' }],
       defaultModel: ollamaModels[0]?.name || 'llama3',
@@ -232,7 +203,7 @@ export default function OmniAI() {
     setIsGenerating(true);
     try {
       let text: string;
-      if (settings.provider === 'local' || settings.provider === 'ollama') {
+      if (settings.provider === 'ollama') {
         text = await localQuery(input.trim(), settings);
       } else {
         if (!settings.apiKey) throw new Error('Add your API key in Settings (⚙️)');
@@ -288,7 +259,7 @@ export default function OmniAI() {
                 <span className="text-xs font-mono text-blue-400 uppercase tracking-widest">{provider.name}</span></>
               ) : (
                 <><span className="w-2 h-2 rounded-full bg-amber-500"></span>
-                <span className="text-xs font-mono text-amber-400 uppercase tracking-widest">Offline · Web + Tools</span></>
+                <span className="text-xs font-mono text-amber-400 uppercase tracking-widest">No provider connected</span></>
               )}
             </div>
           </div>
@@ -390,20 +361,22 @@ export default function OmniAI() {
           {messages.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-slate-500">
               <div className="w-16 h-16 rounded-2xl border bg-indigo-900/20 border-indigo-500/20 flex items-center justify-center mb-4">
-                {isOllamaReady ? <Server className="w-8 h-8 text-emerald-400" /> : <Zap className="w-8 h-8 text-indigo-400" />}
+                {isOllamaReady ? <Server className="w-8 h-8 text-emerald-400" /> : isCloudReady ? <BrainCircuit className="w-8 h-8 text-blue-400" /> : <Zap className="w-8 h-8 text-indigo-400" />}
               </div>
               <p className="text-lg font-medium text-slate-400 mb-1">
-                {isOllamaReady ? '🧠 Local AI Ready' : 'Omni-AI Ready'}
+                {isOllamaReady ? '🧠 Local AI Ready' : isCloudReady ? `${provider.name} connected` : 'Connect an AI provider'}
               </p>
               <p className="text-sm text-slate-500 max-w-md text-center mb-6">
                 {isOllamaReady
                   ? `Connected to Ollama (${ollamaModels.length} models). Ask anything!`
-                  : 'Web search + Wikipedia + tools.'}
+                  : isCloudReady
+                    ? 'Your AI provider is connected. Ask anything!'
+                    : 'Omni-AI is online-only — connect a provider in ⚙️ Settings (Ollama, OpenRouter, Gemini, or OpenAI) to get AI answers.'}
               </p>
               <div className="grid grid-cols-2 gap-2 max-w-sm w-full">
                 {[
                   { label: 'Ask a question', cmd: 'What is quantum computing?' },
-                  { label: 'Wikipedia', cmd: 'what is machine learning' },
+                  { label: 'Explain a concept', cmd: 'explain how HTTPS works' },
                   { label: 'Calculate', cmd: 'calc 2^10' },
                   { label: 'Run JS', cmd: 'js [1,2,3].map(x=>x*2)' },
                   { label: 'Weather', cmd: 'weather in London' },
@@ -452,7 +425,7 @@ export default function OmniAI() {
             {isOllamaReady ? (
               <span>🧠 Local Ollama · <button onClick={() => setShowSettings(true)} className="text-indigo-400 hover:underline cursor-pointer">Change model</button></span>
             ) : (
-              <span>🔍 Web + Wikipedia · Type <span className="text-indigo-400">help</span> for commands</span>
+              <span>⚡ Online only · <button onClick={() => setShowSettings(true)} className="text-indigo-400 hover:underline cursor-pointer">Connect a provider</button> · Type <span className="text-indigo-400">help</span> for commands</span>
             )}
           </div>
         </div>

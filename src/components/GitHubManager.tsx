@@ -188,7 +188,7 @@ export default function GitHubManager({ files, setFiles, originalFiles, setOrigi
       initial={{ opacity: 0, x: 20 }}
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: 20 }}
-      className="absolute top-16 right-4 w-96 bg-[#0a0a0c]/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl z-50 flex flex-col overflow-hidden max-h-[80vh]"
+      className="absolute top-16 right-4 w-[min(24rem,calc(100vw-2rem))] bg-[#0a0a0c]/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl z-50 flex flex-col overflow-hidden max-h-[80vh]"
     >
       <div className="flex items-center justify-between p-4 border-b border-white/10">
         <h3 className="font-bold text-white flex items-center gap-2">
