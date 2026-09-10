@@ -24,7 +24,7 @@ export default function Home({ setCurrentView, onSignIn, onSignUp }: HomeProps) 
     {
       icon: <Terminal className="w-6 h-6 text-indigo-400" />,
       title: "Cloud OS Web IDE",
-      description: "A full-featured, zero-config development environment running entirely in your browser with a Monaco editor, file explorer, split views, and a live diff."
+      description: "A full-featured, zero-config development environment running entirely in your browser with a CodeMirror-based editor, file explorer, split views, and a live diff."
     },
     {
       icon: <GitBranch className="w-6 h-6 text-purple-400" />,
@@ -221,7 +221,7 @@ export default function Home({ setCurrentView, onSignIn, onSignUp }: HomeProps) 
           <p className="text-slate-400 text-lg max-w-2xl mx-auto">Built on battle-tested open-source technology, engineered to run entirely in your browser.</p>
         </div>
         <div className="flex flex-wrap items-center justify-center gap-3">
-          {['React 19', 'TypeScript', 'Next.js', 'Monaco', 'Tailwind CSS', 'Motion', 'Supabase', 'Ollama', 'Cloudflare'].map((tech) => (
+          {['React 19', 'TypeScript', 'Next.js', 'CodeMirror', 'Tailwind CSS', 'Motion', 'Supabase', 'Ollama', 'Cloudflare'].map((tech) => (
             <span
               key={tech}
               className="px-4 py-2 rounded-full bg-white/5 border border-white/10 text-sm font-semibold text-slate-300 hover:border-indigo-500/40 hover:text-white transition-colors"
@@ -261,7 +261,7 @@ export default function Home({ setCurrentView, onSignIn, onSignUp }: HomeProps) 
             </div>
             <h3 className="text-xl font-bold text-white tracking-tight">What VantaOS actually does</h3>
             <ul className="text-slate-400 text-sm leading-relaxed space-y-2.5">
-              <li className="flex gap-2"><span className="text-indigo-400 font-bold">•</span> <span><strong className="text-slate-200">Cloud OS IDE</strong> — edit code in a Monaco editor with 35+ languages, folder tree, tabbed files, split views, and a diff view against your saved version.</span></li>
+              <li className="flex gap-2"><span className="text-indigo-400 font-bold">•</span> <span><strong className="text-slate-200">Cloud OS IDE</strong> — edit code in a CodeMirror-based editor with 35+ languages, folder tree, tabbed files, split views, and a diff view against your saved version.</span></li>
               <li className="flex gap-2"><span className="text-indigo-400 font-bold">•</span> <span><strong className="text-slate-200">Built-in Terminal</strong> — a working xterm.js shell with a virtual file system, command history, and inline JavaScript execution.</span></li>
               <li className="flex gap-2"><span className="text-indigo-400 font-bold">•</span> <span><strong className="text-slate-200">Omni-AI Assistant</strong> — chat with local Ollama models or cloud providers (OpenRouter, Gemini, OpenAI).</span></li>
               <li className="flex gap-2"><span className="text-indigo-400 font-bold">•</span> <span><strong className="text-slate-200">GitHub Sync</strong> — clone a repo, edit, and push commits directly from the IDE using your GitHub token.</span></li>
@@ -278,7 +278,7 @@ export default function Home({ setCurrentView, onSignIn, onSignUp }: HomeProps) 
             <ul className="text-slate-400 text-sm leading-relaxed space-y-2.5">
               <li className="flex gap-2"><span className="text-emerald-400 font-bold">•</span> <span><strong className="text-slate-200">Next.js 15 + React 19</strong> with static export for fast, cacheable deployment.</span></li>
               <li className="flex gap-2"><span className="text-emerald-400 font-bold">•</span> <span><strong className="text-slate-200">TypeScript</strong> across the whole codebase.</span></li>
-              <li className="flex gap-2"><span className="text-emerald-400 font-bold">•</span> <span><strong className="text-slate-200">Monaco Editor</strong> — the same engine that powers VS Code.</span></li>
+              <li className="flex gap-2"><span className="text-emerald-400 font-bold">•</span> <span><strong className="text-slate-200">CodeMirror 6</strong> — a fast, dependency-light editor core that ships in the bundle (no CDN, no ~3MB runtime).</span></li>
               <li className="flex gap-2"><span className="text-emerald-400 font-bold">•</span> <span><strong className="text-slate-200">xterm.js</strong> for the terminal with a virtual file system.</span></li>
               <li className="flex gap-2"><span className="text-emerald-400 font-bold">•</span> <span><strong className="text-slate-200">Supabase</strong> (optional) for real auth and forum when configured.</span></li>
               <li className="flex gap-2"><span className="text-emerald-400 font-bold">•</span> <span><strong className="text-slate-200">Deployed on Cloudflare</strong> as a static export with a Workers proxy for AI calls.</span></li>

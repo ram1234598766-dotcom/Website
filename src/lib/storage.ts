@@ -1,12 +1,27 @@
 /**
  * VantaOS Storage — IndexedDB-based file persistence for the CloudOS IDE.
  * Files survive page refreshes without any server-side storage.
+ *
+ * Phase 1: Added migration support for the workspace oplog. Legacy files
+ * stored in this DB are automatically imported into the workspace oplog on
+ * first boot.
  */
 
 const DB_NAME = 'VantaOSFileSystem';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const FILES_STORE = 'files';
 const META_STORE = 'metadata';
+
+/** Check if the legacy file store has been migrated to the workspace oplog. */
+export async function isLegacyMigrated(): Promise<boolean> {
+  const val = await getMeta('_workspace_migrated');
+  return val === true;
+}
+
+/** Mark the legacy migration as complete. */
+export async function markLegacyMigrated(): Promise<void> {
+  await saveMeta('_workspace_migrated', true);
+}
 
 export interface StoredFile {
   id: string;
@@ -25,12 +40,17 @@ function openDB(): Promise<IDBDatabase> {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
     request.onupgradeneeded = (event) => {
       const db = (event.target as IDBOpenDBRequest).result;
-      if (!db.objectStoreNames.contains(FILES_STORE)) {
-        db.createObjectStore(FILES_STORE, { keyPath: 'id' });
+      const oldVersion = event.oldVersion;
+      // Version 0 → 1: create stores
+      if (oldVersion < 1) {
+        if (!db.objectStoreNames.contains(FILES_STORE)) {
+          db.createObjectStore(FILES_STORE, { keyPath: 'id' });
+        }
+        if (!db.objectStoreNames.contains(META_STORE)) {
+          db.createObjectStore(META_STORE, { keyPath: 'key' });
+        }
       }
-      if (!db.objectStoreNames.contains(META_STORE)) {
-        db.createObjectStore(META_STORE, { keyPath: 'key' });
-      }
+      // Version 1 → 2: no schema change, just bump version for migration flag
     };
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);

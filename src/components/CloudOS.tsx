@@ -1,12 +1,21 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Virtuoso } from 'react-virtuoso';
-import Editor, { DiffEditor, useMonaco } from '@monaco-editor/react';
+import dynamic from 'next/dynamic';
+import CloudCodeEditor from './CloudCodeEditor';
+const CloudDiffEditor = dynamic(() => import('./CloudDiffEditor'), {
+  ssr: false,
+  loading: () => <div className="h-full w-full bg-[#1e1e1e]" />,
+});
+import { formatWithPrettier, isPrettierFormattable } from '../lib/editor/prettier';
+import { EDITOR_THEMES, type EditorTheme } from '../lib/editor/settings';
 import { Play, Terminal, Code2, FolderTree, Settings, FileJson, FileType, CheckCircle2, Plus, Trash2, Edit2, File as FileIcon, Archive, ChevronDown, ChevronRight, Folder, FolderOpen, ArrowRight, X, Activity, Columns, Rows, FileCode2, FileTerminal, Database } from 'lucide-react';
-import { Keyboard, Github } from 'lucide-react';
+import { Keyboard, Github, HardDrive } from 'lucide-react';
 import TerminalPanel from './TerminalPanel';
 import GitHubManager from './GitHubManager';
+import DriveManager from './DriveManager';
 import { saveAs } from 'file-saver';
+import { useWorkspace } from '../lib/workspace/workspace';
 
 interface PluginMeta {
   name: string;
@@ -74,8 +83,7 @@ const DEFAULT_FILES: FileNode[] = [
 
 
 export default function CloudOS() {
-  const monaco = useMonaco();
-  const editorRef = useRef<any>(null);
+  const ws = useWorkspace();
   const [files, setFiles] = useState<FileNode[]>(DEFAULT_FILES);
   const [originalFiles, setOriginalFiles] = useState<Record<string, string>>({});
   const [showDiff, setShowDiff] = useState(false);
@@ -155,14 +163,12 @@ export default function CloudOS() {
   const [movingFileId, setMovingFileId] = useState<string | null>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [showGithub, setShowGithub] = useState(false);
+  const [showDrive, setShowDrive] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
 
-  const handleEditorDidMount = (editor: any, monacoInstance: any) => {
-    editorRef.current = editor;
-    editor.addCommand(monacoInstance.KeyMod.CtrlCmd | monacoInstance.KeyCode.KeyS, () => {
-       window.dispatchEvent(new CustomEvent('save-active-file'));
-    });
-  };
+  // Editor themes are applied through CodeMirror compartments in the editor
+  // components; Ctrl+S is handled by the global keydown handler below, so no
+  // editor-level save binding is needed here.
 
 
   
@@ -183,10 +189,24 @@ export default function CloudOS() {
   const [renameValue, setRenameValue] = useState('');
 
   // Editor and terminal states
-  const [editorTheme, setEditorTheme] = useState('vs-dark');
+  const [editorTheme, setEditorTheme] = useState<EditorTheme>('vs-dark');
 
   useEffect(() => {
-    const handleSave = () => {
+    const handleSave = async () => {
+      // Flush any pending debounced content update through the oplog
+      if (contentSaveTimerRef.current) {
+        clearTimeout(contentSaveTimerRef.current);
+        contentSaveTimerRef.current = null;
+      }
+      const persistIds = [activeFileId];
+      if (secondaryActiveFileId) persistIds.push(secondaryActiveFileId);
+      for (const pid of persistIds) {
+        const f = files.find(ff => ff.id === pid);
+        if (f) {
+          await ws.updateContent(pid, f.content).catch(console.error);
+        }
+      }
+
       setDirtyTabs(prev => prev.filter(id => id !== activeFileId && id !== secondaryActiveFileId));
       setOriginalFiles(prev => {
          const newOrig = { ...prev };
@@ -201,7 +221,7 @@ export default function CloudOS() {
     };
     window.addEventListener('save-active-file', handleSave);
     return () => window.removeEventListener('save-active-file', handleSave as any);
-  }, [activeFileId, secondaryActiveFileId, files]);
+  }, [activeFileId, secondaryActiveFileId, files, ws]);
 
   const activeFile = files.find(f => f.id === activeFileId) || files[0];
 
@@ -222,27 +242,12 @@ export default function CloudOS() {
         if (file) {
           try {
             let formatted = file.content;
-            if (file.language === 'javascript' || file.language === 'typescript' || file.language === 'html' || file.language === 'css') {
-              const prettier = await import('prettier/standalone');
-              let parser: string;
-              let plugins: any[];
-              if (file.language === 'html') {
-                parser = 'html';
-                plugins = [(await import('prettier/plugins/html')).default];
-              } else if (file.language === 'css') {
-                parser = 'css';
-                plugins = [(await import('prettier/plugins/postcss')).default];
-              } else {
-                parser = 'babel';
-                plugins = [
-                  (await import('prettier/plugins/babel')).default,
-                  (await import('prettier/plugins/estree')).default,
-                ];
-              }
-              formatted = await prettier.format(file.content, { parser, plugins, singleQuote: true });
+            if (isPrettierFormattable(file.language)) {
+              formatted = await formatWithPrettier(file.content, file.language);
             }
             if (formatted !== file.content) {
               setFiles(prev => prev.map(f => f.id === activeFileId ? { ...f, content: formatted } : f));
+              ws.updateContent(activeFileId, formatted).catch(console.error);
             }
           } catch (err) {
             console.error("Prettier format failed", err);
@@ -288,29 +293,112 @@ export default function CloudOS() {
   }, [searchQuery, files]);
 
   useEffect(() => {
+    if (!ws.ready) return;
+
     const loadFiles = async () => {
-      // Restore the workspace from local storage
+      const nodes = ws.getAllNodes();
+      if (nodes.length > 0) {
+        // Hydrate from workspace oplog
+        const hydrated: FileNode[] = nodes.map((n) => ({
+          id: n.id,
+          name: n.name,
+          content: n.kind === 'file' ? (ws.getContent(n.id) ?? '') : '',
+          language: n.language || 'plaintext',
+          isFolder: n.kind === 'folder',
+          parentId: n.parentId,
+        }));
+        setFiles(hydrated);
+        const orig: Record<string, string> = {};
+        const openIds: string[] = [];
+        hydrated.forEach((d) => {
+          orig[d.id] = d.content;
+          if (!d.isFolder) openIds.push(d.id);
+        });
+        setOriginalFiles(orig);
+        setOpenTabs(openIds.length > 0 ? openIds : [hydrated[0].id]);
+        setActiveFileId(hydrated[0].id);
+        return;
+      }
+
+      // Empty workspace — migrate legacy localStorage files if present,
+      // otherwise seed the default starter file through the oplog.
+      let migrated = false;
       const local = localStorage.getItem('vantaos_cloudos_files_v2');
       if (local) {
         try {
           const parsed = JSON.parse(local);
-          if (parsed && parsed.length > 0) {
-            setFiles(parsed);
-            const orig: Record<string, string> = {};
-            const openIds: string[] = [];
-            parsed.forEach((d: any) => {
-              orig[d.id] = d.content;
-              if (!d.isFolder) openIds.push(d.id);
-            });
-            setOriginalFiles(orig);
-            setOpenTabs(openIds.length > 0 ? openIds : [parsed[0].id]);
-            setActiveFileId(parsed[0].id);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            const legacyFiles = parsed as any[];
+            const idMap = new Map<string, string>(); // legacyId → new workspaceId
+
+            // Order folders so parents are created before children.
+            const orderedFolders = legacyFiles
+              .filter((d) => d && d.isFolder)
+              .sort((a, b) => {
+                const depthOf = (node: any): number => {
+                  let depth = 0;
+                  let cur = node;
+                  while (cur && cur.parentId != null) {
+                    depth++;
+                    cur = legacyFiles.find((f) => f.id === cur.parentId);
+                  }
+                  return depth;
+                };
+                return depthOf(a) - depthOf(b);
+              });
+
+            for (const folder of orderedFolders) {
+              if (!folder || typeof folder.name !== 'string') continue;
+              const newId = (
+                await ws.createFolder(
+                  folder.name,
+                  folder.name,
+                  folder.parentId ? (idMap.get(folder.parentId) ?? null) : null
+                )
+              ).id;
+              if (folder.id) idMap.set(folder.id, newId);
+            }
+
+            for (const d of legacyFiles) {
+              if (!d) continue;
+              if (d.isFolder) continue;
+              if (typeof d.name !== 'string') continue;
+              await ws.createFile(
+                d.name,
+                d.name,
+                typeof d.content === 'string' ? d.content : '',
+                d.parentId ? (idMap.get(d.parentId) ?? null) : null
+              );
+            }
+            migrated = true;
           }
-        } catch (e) {}
+        } catch (e) {
+          console.warn('[CloudOS] localStorage migration failed:', e);
+        }
+      }
+      if (!migrated) {
+        for (const df of DEFAULT_FILES) {
+          await ws.createFile(df.name, df.name, df.content, null);
+        }
+      }
+      // Re-read after migration/seed
+      const seeded2 = ws.getAllNodes();
+      const hydrated: FileNode[] = seeded2.map((n) => ({
+        id: n.id,
+        name: n.name,
+        content: n.kind === 'file' ? (ws.getContent(n.id) ?? '') : '',
+        language: n.language || 'plaintext',
+        isFolder: n.kind === 'folder',
+        parentId: n.parentId,
+      }));
+      setFiles(hydrated);
+      if (hydrated.length > 0) {
+        setOpenTabs([hydrated[0].id]);
+        setActiveFileId(hydrated[0].id);
       }
     };
     loadFiles();
-  }, []);
+  }, [ws.ready]);
 
   useEffect(() => {
     // Debounced save to local storage so we don't serialize the whole
@@ -321,7 +409,9 @@ export default function CloudOS() {
     return () => clearTimeout(timeoutId);
   }, [files]);
 
-    const handleEditorChange = (value: string | undefined, isSecondary: boolean = false) => {
+    const contentSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const handleEditorChange = (value: string | undefined, isSecondary: boolean = false) => {
     const fileId = isSecondary ? secondaryActiveFileId : activeFileId;
     if (value !== undefined && fileId) {
       setFiles(prev => prev.map(f => f.id === fileId ? { ...f, content: value } : f));
@@ -329,9 +419,12 @@ export default function CloudOS() {
         if (!prev.includes(fileId)) return [...prev, fileId];
         return prev;
       });
-      
-      // Simulate ESLint
-      
+
+      // Debounced persistence through the oplog (800ms after last keystroke)
+      if (contentSaveTimerRef.current) clearTimeout(contentSaveTimerRef.current);
+      contentSaveTimerRef.current = setTimeout(() => {
+        ws.updateContent(fileId, value).catch(console.error);
+      }, 800);
     }
   };
 
@@ -352,16 +445,19 @@ export default function CloudOS() {
     return ids;
   };
 
-  const handleCreateFile = (e: React.FormEvent) => {
+  const handleCreateFile = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newFileName.trim()) return;
     
+    const content = '// Start coding here\n';
+    const node = await ws.createFile(newFileName, newFileName, content, creatingParentId);
+    
     const newFile: FileNode = {
-      id: Date.now().toString(),
+      id: node.id,
       name: newFileName,
-      content: '// Start coding here\n',
-      language: detectLanguage(newFileName),
-      parentId: creatingParentId
+      content,
+      language: node.language || detectLanguage(newFileName),
+      parentId: creatingParentId,
     };
     
     setFiles(prev => [...prev, newFile]);
@@ -372,18 +468,20 @@ export default function CloudOS() {
     setNewFileName('');
   };
 
-  const handleCreateFolder = (e: React.FormEvent) => {
+  const handleCreateFolder = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newFileName.trim()) return;
 
+    const node = await ws.createFolder(newFileName, newFileName, creatingParentId);
+
     const newFolder: FileNode = {
-      id: Date.now().toString(),
+      id: node.id,
       name: newFileName,
       content: '',
       language: 'folder',
       isFolder: true,
       parentId: creatingParentId,
-      isOpen: true
+      isOpen: true,
     };
 
     setFiles(prev => [...prev, newFolder]);
@@ -392,7 +490,7 @@ export default function CloudOS() {
     setNewFileName('');
   };
 
-  const handleDeleteFile = (id: string, e: React.MouseEvent) => {
+  const handleDeleteFile = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     const item = files.find(f => f.id === id);
     if (!item) return;
@@ -404,6 +502,11 @@ export default function CloudOS() {
 
     const remainingFiles = files.filter(f => !idsToDelete.includes(f.id));
     if (remainingFiles.length === 0) return; // Don't delete everything
+
+    // Delete through workspace oplog (deepest first to preserve parent refs)
+    for (const delId of idsToDelete) {
+      await ws.deleteNode(delId);
+    }
 
     setFiles(prev => prev.filter(f => !idsToDelete.includes(f.id)));
     setOpenTabs(prev => {
@@ -425,12 +528,13 @@ export default function CloudOS() {
     }
   };
 
-  const handleRenameSubmit = (id: string, e: React.FormEvent) => {
+  const handleRenameSubmit = async (id: string, e: React.FormEvent) => {
     e.preventDefault();
     if (!renameValue.trim()) {
       setRenamingFileId(null);
       return;
     }
+    await ws.renameNode(id, renameValue);
     setFiles(prev => prev.map(f => f.id === id ? { 
       ...f, 
       name: renameValue, 
@@ -439,21 +543,27 @@ export default function CloudOS() {
     setRenamingFileId(null);
   };
 
-  const handleMoveNode = (nodeId: string, destParentId: string | null) => {
+  const handleMoveNode = async (nodeId: string, destParentId: string | null) => {
+    await ws.moveNode(nodeId, destParentId);
     setFiles(prev => prev.map(f => f.id === nodeId ? { ...f, parentId: destParentId } : f));
     setMovingFileId(null);
   };
 
   
-    const handleFormat = () => {
+    const handleFormat = async () => {
     try {
       const file = files.find(f => f.id === activeFileId);
       if (!file) return;
       let formatted = file.content;
       if (file.language === "json") {
         formatted = JSON.stringify(JSON.parse(file.content), null, 2);
+      } else if (isPrettierFormattable(file.language)) {
+        formatted = await formatWithPrettier(file.content, file.language);
       }
-      setFiles(prev => prev.map(f => f.id === activeFileId ? { ...f, content: formatted } : f));
+      if (formatted !== file.content) {
+        setFiles(prev => prev.map(f => f.id === activeFileId ? { ...f, content: formatted } : f));
+        ws.updateContent(activeFileId, formatted).catch(console.error);
+      }
     } catch (e) {
       console.warn("Format error:", e);
     }
@@ -670,20 +780,28 @@ export default function CloudOS() {
             <Keyboard className="w-4 h-4" />
             <span>Shortcuts</span>
           </button>
-          
-          <button 
+<button 
             onClick={() => setShowGithub(!showGithub)}
             className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border ${showGithub ? 'bg-emerald-600/20 text-emerald-400 border-emerald-500/20' : 'bg-slate-800/50 text-slate-400 border-slate-700/50 hover:bg-slate-800 hover:text-slate-300'}`}
           >
             <Github className="w-4 h-4" />
             GitHub
           </button>
-          
-          
-          
-          
-          
+
           <button 
+            onClick={() => setShowDrive(!showDrive)}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border ${showDrive ? 'bg-indigo-600/20 text-indigo-400 border-indigo-500/20' : 'bg-slate-800/50 text-slate-400 border-slate-700/50 hover:bg-slate-800 hover:text-slate-300'}`}
+          >
+            <HardDrive className="w-4 h-4" />
+            Drive
+          </button>
+          
+          
+          
+          
+          
+          
+          <button
             onClick={handleExportProject}
             disabled={isExporting}
             className="flex whitespace-nowrap items-center gap-2 px-3 py-1.5 bg-indigo-600/20 text-indigo-400 hover:bg-indigo-600/30 hover:text-indigo-300 rounded-lg text-sm font-medium transition-colors border border-indigo-500/20 cursor-pointer"
@@ -1079,12 +1197,14 @@ export default function CloudOS() {
                  <span className="opacity-60">Theme:</span>
                  <select 
                     value={editorTheme}
-                    onChange={(e) => setEditorTheme(e.target.value)}
+                    onChange={(e) => setEditorTheme(e.target.value as EditorTheme)}
                     className="bg-transparent border-none outline-none text-indigo-400 font-bold cursor-pointer"
                  >
-                    <option value="vs-dark">Dark</option>
-                    <option value="light">Light</option>
-                    <option value="hc-black">High Contrast</option>
+                    {EDITOR_THEMES.map((theme) => (
+                      <option key={theme} value={theme}>
+                        {theme === 'vs-dark' ? 'Dark' : theme === 'vs' ? 'Light' : 'High Contrast'}
+                      </option>
+                    ))}
                  </select>
               </div>
 
@@ -1173,52 +1293,18 @@ export default function CloudOS() {
                   >
                     <div className="flex-1 relative min-h-0 min-w-0">
                       {showDiff ? (
-                        <DiffEditor height="100%"
+                        <CloudDiffEditor
                           original={originalFiles[activeFile.id] || ''}
                           modified={activeFile.content}
                           language={activeFile.language}
                           theme={editorTheme}
-                          options={{
-                            renderSideBySide: true,
-                            minimap: { enabled: false },
-                            fontSize: 14,
-                            fontFamily: '"JetBrains Mono", monospace'
-                          }}
                         />
                       ) : (
-                      <Editor height="100%" className="cloudos-scroll smooth-typing"
+                      <CloudCodeEditor className="cloudos-scroll smooth-typing"
+                        value={activeFile.content}
                         language={activeFile.language}
                         theme={editorTheme}
-                        value={activeFile.content}
                         onChange={(val) => handleEditorChange(val, false)}
-                        onMount={handleEditorDidMount}
-                        options={{
-                          minimap: { enabled: true, renderCharacters: false },
-                          fontSize: 14,
-                          fontFamily: '"JetBrains Mono", monospace',
-                          padding: { top: 16, bottom: 100 },
-                          scrollBeyondLastLine: true,
-                          smoothScrolling: true,
-                          cursorBlinking: "smooth",
-                          cursorSmoothCaretAnimation: "on",
-                          formatOnPaste: true,
-                          automaticLayout: true,
-                          wordWrap: 'off',
-                          scrollbar: {
-                            useShadows: false,
-                            verticalScrollbarSize: 12,
-                            horizontalScrollbarSize: 12,
-                            vertical: 'visible',
-                            horizontal: 'visible',
-                            verticalSliderSize: 10,
-                            horizontalSliderSize: 10,
-                          }
-                        }}
-                        loading={
-                          <div className="flex items-center justify-center h-full text-slate-500 font-mono text-sm">
-                            Loading IDE...
-                          </div>
-                        }
                       />
                       )}
                     </div>
@@ -1230,38 +1316,11 @@ export default function CloudOS() {
                             const secFile = files.find(f => f.id === secondaryActiveFileId);
                             if (!secFile) return null;
                             return (
-                              <Editor height="100%" className="cloudos-scroll smooth-typing"
+                              <CloudCodeEditor className="cloudos-scroll smooth-typing"
+                                value={secFile.content}
                                 language={secFile.language}
                                 theme={editorTheme}
-                                value={secFile.content}
                                 onChange={(val) => handleEditorChange(val, true)}
-                                options={{
-                                  minimap: { enabled: true, renderCharacters: false },
-                                  fontSize: 14,
-                                  fontFamily: '"JetBrains Mono", monospace',
-                                  padding: { top: 16, bottom: 100 },
-                                  scrollBeyondLastLine: true,
-                                  smoothScrolling: true,
-                                  cursorBlinking: "smooth",
-                                  cursorSmoothCaretAnimation: "on",
-                                  formatOnPaste: true,
-                                  automaticLayout: true,
-                                  wordWrap: 'off',
-                                  scrollbar: {
-                                    useShadows: false,
-                                    verticalScrollbarSize: 12,
-                                    horizontalScrollbarSize: 12,
-                                    vertical: 'visible',
-                                    horizontal: 'visible',
-                                    verticalSliderSize: 10,
-                                    horizontalSliderSize: 10,
-                                  }
-                                }}
-                                loading={
-                                  <div className="flex items-center justify-center h-full text-slate-500 font-mono text-sm">
-                                    Loading Secondary IDE...
-                                  </div>
-                                }
                               />
                             );
                           })()}
@@ -1357,6 +1416,19 @@ export default function CloudOS() {
             originalFiles={originalFiles} 
             setOriginalFiles={setOriginalFiles} 
             onClose={() => setShowGithub(false)} 
+          />
+        )}
+        {showDrive && (
+          <DriveManager 
+            files={files}
+            setFiles={setFiles}
+            activeFileId={activeFileId}
+            setActiveFileId={(id) => {
+              setOpenTabs(prev => (prev.includes(id) ? prev : [...prev, id]));
+              setActiveFileId(id);
+              (window as any).vantaosIDE?.setActiveFileId?.(id);
+            }}
+            onClose={() => setShowDrive(false)} 
           />
         )}
         

@@ -5,204 +5,34 @@ import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
 
-export type TerminalTheme = 'dark' | 'light' | 'dracula' | 'monokai' | 'ubuntu';
+import { ShellSession } from '../lib/terminal/commands';
+import {
+  WorkspaceTerminalFs,
+  type TerminalFs,
+} from '../lib/terminal/sandbox';
+import { ExecutionQuota } from '../lib/terminal/quota';
+import {
+  TERMINAL_THEMES,
+  type TerminalTheme,
+  type TerminalPalette,
+} from '../lib/terminal/types';
+import { useWorkspace } from '../lib/workspace/workspace';
 
 interface TerminalPanelProps {
   fontSize?: number;
   theme?: TerminalTheme;
 }
 
-const THEMES: Record<string, any> = {
-  dark: { background: '#1e1e1e', foreground: '#cccccc', cursor: '#ffffff', black: '#000000', red: '#cd3131', green: '#0dbc79', yellow: '#e5e510', blue: '#2472c8', magenta: '#bc3fbc', cyan: '#11a8cd', white: '#e5e5e5' },
-  light: { background: '#f5f5f5', foreground: '#333333', cursor: '#555555', black: '#000000', red: '#cd3131', green: '#0dbc79', yellow: '#949800', blue: '#0451a5', magenta: '#bc05bc', cyan: '#0598bc', white: '#555555' },
-  dracula: { background: '#282a36', foreground: '#f8f8f2', cursor: '#f8f8f0', black: '#21222c', red: '#ff5555', green: '#50fa7b', yellow: '#f1fa8c', blue: '#bd93f9', magenta: '#ff79c6', cyan: '#8be9fd', white: '#f8f8f2' },
-  monokai: { background: '#272822', foreground: '#f8f8f2', cursor: '#f8f8f0', black: '#272822', red: '#f92672', green: '#a6e22e', yellow: '#f4bf75', blue: '#66d9ef', magenta: '#ae81ff', cyan: '#a1efe4', white: '#f9f8f5' },
-  ubuntu: { background: '#300a24', foreground: '#eeeeee', cursor: '#bbbbbb', black: '#2e3436', red: '#cc0000', green: '#4e9a06', yellow: '#c4a000', blue: '#3465a4', magenta: '#75507b', cyan: '#06989a', white: '#d3d7cf' },
-};
+const FONT = '"JetBrains Mono", "Fira Code", monospace';
 
-class LocalShell {
-  private cwd = '/home/user';
-  private fs: Map<string, string> = new Map();
-  private history: string[] = [];
-  private historyIdx = -1;
-
-  constructor() {
-    // Create some initial files
-    this.fs.set('/home/user', 'DIR');
-    this.fs.set('/home/user/hello.js', 'console.log("Hello from VantaOS!");\n');
-    this.fs.set('/home/user/README.md', '# VantaOS Workspace\n\nWelcome to your cloud IDE.\n');
-    this.fs.set('/home', 'DIR');
-  }
-
-  getPrompt(): string {
-    return `\r\n[32mvantaos[0m:[34m${this.cwd}[0m$ `;
-  }
-
-  historyPrev(): string | null {
-    if (this.history.length === 0) return null;
-    if (this.historyIdx > 0) this.historyIdx--;
-    return this.history[this.historyIdx] ?? null;
-  }
-
-  historyNext(): string | null {
-    if (this.historyIdx < this.history.length - 1) {
-      this.historyIdx++;
-      return this.history[this.historyIdx] ?? null;
-    }
-    this.historyIdx = this.history.length;
-    return null;
-  }
-
-  execute(cmd: string): string[] {
-    const lines: string[] = [];
-    const trimmed = cmd.trim();
-    if (!trimmed) return lines;
-
-    const parts = trimmed.match(/(?:[^\s"]+|"[^"]*")+/g) || [];
-    const command = parts[0].toLowerCase();
-    const args = parts.slice(1).map(a => a.replace(/^"/, '').replace(/"$/, ''));
-
-    // Add to history
-    this.history.push(trimmed);
-    this.historyIdx = this.history.length;
-
-    switch (command) {
-      case 'clear': {
-        lines.push('__CLEAR__');
-        break;
-      }
-      case 'help': {
-        lines.push('[36mVantaOS Terminal — Available commands:[0m');
-        lines.push('  [33mls[0m [path]        List files');
-        lines.push('  [33mcd[0m <path>        Change directory');
-        lines.push('  [33mpwd[0m              Print working directory');
-        lines.push('  [33mcat[0m <file>        View file contents');
-        lines.push('  [33mecho[0m <text>       Print text');
-        lines.push('  [33mdate[0m             Show current date/time');
-        lines.push('  [33mwhoami[0m           Show current user');
-        lines.push('  [33mclear[0m            Clear terminal');
-        lines.push('  [33mhelp[0m             Show this help');
-        lines.push('  [33mnode[0m <file.js>    Execute JavaScript file');
-        lines.push('  [33mjs[0m <code>         Run JavaScript code inline');
-        lines.push('  [33mmkdir[0m <dir>       Create directory');
-        lines.push('  [33mtouch[0m <file>      Create empty file');
-        lines.push('  [33mrm[0m <path>         Remove file/directory');
-        break;
-      }
-      case 'pwd': {
-        lines.push(this.cwd);
-        break;
-      }
-      case 'ls': {
-        const target = args[0] || this.cwd;
-        const targetPath = target.startsWith('/') ? target : `${this.cwd}/${target}`.replace(/\/+/g, '/');
-        const dirs = new Set<string>();
-        const files: string[] = [];
-        for (const key of this.fs.keys()) {
-          if (key.startsWith(targetPath + '/') || key === targetPath) {
-            const rest = key.slice(targetPath.length).replace(/^\//, '');
-            if (rest && !rest.includes('/')) {
-              if (this.fs.get(key) === 'DIR') dirs.add(rest);
-              else files.push(rest);
-            }
-          }
-        }
-        if (dirs.size === 0 && files.length === 0) {
-          lines.push('(empty)');
-        } else {
-          for (const d of dirs) lines.push(`[34m${d}/[0m`);
-          for (const f of files) lines.push(f);
-        }
-        break;
-      }
-      case 'cd': {
-        if (!args[0]) {
-          this.cwd = '/home/user';
-        } else {
-          const newPath = args[0].startsWith('/') ? args[0] : `${this.cwd}/${args[0]}`.replace(/\/+/g, '/').replace(/\/$/, '');
-          const normalized = newPath === '' ? '/' : newPath;
-          if (this.fs.has(normalized) && this.fs.get(normalized) === 'DIR') {
-            this.cwd = normalized;
-          } else {
-            lines.push(`[31mcd: ${args[0]}: No such directory[0m`);
-          }
-        }
-        break;
-      }
-      case 'cat': {
-        if (!args[0]) { lines.push('[31mcat: missing operand[0m'); break; }
-        const filePath = args[0].startsWith('/') ? args[0] : `${this.cwd}/${args[0]}`.replace(/\/+/g, '/');
-        const content = this.fs.get(filePath);
-        if (content === undefined) {
-          lines.push(`[31mcat: ${args[0]}: No such file[0m`);
-        } else if (content === 'DIR') {
-          lines.push(`[31mcat: ${args[0]}: Is a directory[0m`);
-        } else {
-          lines.push(content);
-        }
-        break;
-      }
-      case 'echo': {
-        lines.push(args.join(' '));
-        break;
-      }
-      case 'date': {
-        lines.push(new Date().toString());
-        break;
-      }
-      case 'whoami': {
-        lines.push('vantaos-user');
-        break;
-      }
-      case 'node':
-      case 'js': {
-        // Take everything after the command verbatim so quoted strings,
-        // operators, and newlines survive — splitting on args would mangle them.
-        const code = trimmed.replace(/^(node|js)\s+/, '');
-        try {
-          const fn = new Function(code);
-          const result = fn();
-          lines.push(String(result ?? 'undefined'));
-        } catch (e: any) {
-          lines.push(`[31m${e.message}[0m`);
-        }
-        break;
-      }
-      case 'mkdir': {
-        if (!args[0]) { lines.push('[31mmkdir: missing operand[0m'); break; }
-        const dirPath = args[0].startsWith('/') ? args[0] : `${this.cwd}/${args[0]}`.replace(/\/+/g, '/');
-        this.fs.set(dirPath, 'DIR');
-        break;
-      }
-      case 'touch': {
-        if (!args[0]) { lines.push('[31mtouch: missing operand[0m'); break; }
-        const filePath = args[0].startsWith('/') ? args[0] : `${this.cwd}/${args[0]}`.replace(/\/+/g, '/');
-        if (!this.fs.has(filePath)) this.fs.set(filePath, '');
-        break;
-      }
-      case 'rm': {
-        if (!args[0]) { lines.push('[31mrm: missing operand[0m'); break; }
-        const rmPath = args[0].startsWith('/') ? args[0] : `${this.cwd}/${args[0]}`.replace(/\/+/g, '/');
-        this.fs.delete(rmPath);
-        // Also delete children if directory
-        for (const key of this.fs.keys()) {
-          if (key.startsWith(rmPath + '/')) this.fs.delete(key);
-        }
-        break;
-      }
-      default: {
-        lines.push(`[31mCommand not found: ${command}. Type 'help' for available commands.[0m`);
-      }
-    }
-    return lines;
-  }
-}
-
-export default function TerminalPanel({ fontSize = 13, theme = 'dark' }: TerminalPanelProps) {
+export default function TerminalPanel({
+  fontSize = 13,
+  theme = 'dark',
+}: TerminalPanelProps) {
   const terminalRef = useRef<HTMLDivElement>(null);
   const xtermRef = useRef<Terminal | null>(null);
-  const shellRef = useRef<LocalShell | null>(null);
   const [mounted, setMounted] = useState(false);
+  const ws = useWorkspace();
 
   useEffect(() => {
     setMounted(true);
@@ -210,12 +40,25 @@ export default function TerminalPanel({ fontSize = 13, theme = 'dark' }: Termina
 
   useEffect(() => {
     if (!mounted || !terminalRef.current) return;
-    // Focus terminal on mount
-    setTimeout(() => { try { (terminalRef.current as any)?.querySelector(".xterm-helper-textarea")?.focus(); } catch(e) {} }, 500);
+
+    // Focus the terminal once it has rendered.
+    setTimeout(() => {
+      try {
+        const textarea = terminalRef.current?.querySelector(
+          '.xterm-helper-textarea'
+        );
+        (textarea as HTMLElement | null)?.focus();
+      } catch {
+        /* ignore focus failures */
+      }
+    }, 500);
+
+    const fs: TerminalFs = new WorkspaceTerminalFs(ws);
+    const shell = new ShellSession(fs, new ExecutionQuota());
 
     const term = new Terminal({
-      theme: THEMES[theme] || THEMES.dark,
-      fontFamily: '"JetBrains Mono", "Fira Code", monospace',
+      theme: { ...TERMINAL_THEMES[theme] || TERMINAL_THEMES.dark },
+      fontFamily: FONT,
       fontSize,
       cursorBlink: true,
       cursorStyle: 'bar',
@@ -226,26 +69,24 @@ export default function TerminalPanel({ fontSize = 13, theme = 'dark' }: Termina
     term.loadAddon(fitAddon);
     term.open(terminalRef.current);
 
-    const shell = new LocalShell();
-    shellRef.current = shell;
-
-    // Fit terminal to container
     const doFit = () => {
       try {
         if (terminalRef.current && terminalRef.current.clientWidth > 0) {
           fitAddon.fit();
         }
-      } catch {}
+      } catch {
+        /* ignore fit failures */
+      }
     };
     doFit();
     const resizeTimer = setTimeout(doFit, 100);
     window.addEventListener('resize', doFit);
 
-    // Write initial banner
-    term.writeln('[36m╔══════════════════════════════════════╗[0m');
-    term.writeln('[36m║   VantaOS Local Terminal v2          ║[0m');
-    term.writeln('[36m║   Type [33mhelp[36m for available commands     ║[0m');
-    term.writeln('[36m╚══════════════════════════════════════╝[0m');
+    // Initial banner + prompt
+    term.writeln('\u001b[36m╔══════════════════════════════════════╗\u001b[0m');
+    term.writeln('\u001b[36m║   VantaOS Local Terminal v2          ║\u001b[0m');
+    term.writeln('\u001b[36m║   Type \u001b[33mhelp\u001b[36m for available commands     ║\u001b[0m');
+    term.writeln('\u001b[36m╚══════════════════════════════════════╝\u001b[0m');
     term.write(shell.getPrompt());
 
     let currentLine = '';
@@ -255,45 +96,54 @@ export default function TerminalPanel({ fontSize = 13, theme = 'dark' }: Termina
         term.write('\b \b');
       }
     };
+
+    const writeLines = (lines: readonly string[]) => {
+      for (const line of lines) {
+        if (line === '__CLEAR__') term.clear();
+        else term.writeln(line);
+      }
+    };
+
     term.onData((data: string) => {
       const code = data.charCodeAt(0);
 
-      // Handle arrow-key escape sequences (Up / Down navigate command history)
-      if (data === '[A') { // Up arrow
+      if (data === '\u001b[A') {
+        // Up arrow — history back
         const prev = shell.historyPrev();
         if (prev !== null) {
           clearCurrentLine();
           currentLine = prev;
           term.write(currentLine);
         }
-      } else if (data === '[B') { // Down arrow
+      } else if (data === '\u001b[B') {
+        // Down arrow — history forward
         const next = shell.historyNext();
         clearCurrentLine();
         if (next !== null) {
           currentLine = next;
           term.write(currentLine);
         }
-      } else if (code === 13) { // Enter
+      } else if (code === 13) {
+        // Enter
         term.writeln('');
-        if (currentLine.trim()) {
-          const output = shell.execute(currentLine.trim());
-          for (const line of output) {
-            if (line === '__CLEAR__') {
-              term.clear();
-            } else {
-              term.writeln(line);
-            }
-          }
-        }
+        const line = currentLine.trim();
         currentLine = '';
-        term.write(shell.getPrompt());
-      } else if (code === 127) { // Backspace
+        if (line) {
+          void shell.execute(line).then((output) => {
+            writeLines(output);
+            term.write(shell.getPrompt());
+          });
+        } else {
+          term.write(shell.getPrompt());
+        }
+      } else if (code === 127) {
+        // Backspace
         if (currentLine.length > 0) {
           currentLine = currentLine.slice(0, -1);
           term.write('\b \b');
         }
-      } else if (code === 9) { // Tab
-        // Simple tab complete
+      } else if (code === 9) {
+        // Tab — simple completion
         if (currentLine.trim().toLowerCase() === 'cd ') {
           term.write(' ');
           currentLine += ' ';
@@ -307,15 +157,13 @@ export default function TerminalPanel({ fontSize = 13, theme = 'dark' }: Termina
     });
 
     // Handle terminal-send custom events from CloudOS
-    const handleTerminalSend = (e: any) => {
-      const cmd = e.detail || '';
-      if (typeof cmd === 'string') {
-        const output = shell.execute(cmd.trim());
-        for (const line of output) {
-          if (line === '__CLEAR__') term.clear();
-          else term.writeln(line);
-        }
-        term.write(shell.getPrompt());
+    const handleTerminalSend = (e: Event) => {
+      const cmd = (e as CustomEvent).detail ?? '';
+      if (typeof cmd === 'string' && cmd.trim()) {
+        void shell.execute(cmd.trim()).then((output) => {
+          writeLines(output);
+          term.write(shell.getPrompt());
+        });
       }
     };
     window.addEventListener('terminal-send', handleTerminalSend);
@@ -328,7 +176,10 @@ export default function TerminalPanel({ fontSize = 13, theme = 'dark' }: Termina
       window.removeEventListener('resize', doFit);
       window.removeEventListener('terminal-send', handleTerminalSend);
       term.dispose();
+      xtermRef.current = null;
     };
+    // Re-create the session only when the panel first mounts.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mounted]);
 
   useEffect(() => {
@@ -336,17 +187,25 @@ export default function TerminalPanel({ fontSize = 13, theme = 'dark' }: Termina
   }, [fontSize]);
 
   useEffect(() => {
+    const palette: TerminalPalette =
+      TERMINAL_THEMES[theme] || TERMINAL_THEMES.dark;
     if (xtermRef.current) {
-      xtermRef.current.options.theme = THEMES[theme] || THEMES.dark;
+      xtermRef.current.options.theme = { ...palette };
     }
   }, [theme]);
+
+  const background =
+    TERMINAL_THEMES[theme]?.background || TERMINAL_THEMES.dark.background;
 
   if (!mounted) {
     return <div className="w-full h-full bg-[#1e1e1e]" />;
   }
 
   return (
-    <div className="w-full h-full overflow-hidden rounded-lg" style={{ backgroundColor: THEMES[theme]?.background || '#1e1e1e' }}>
+    <div
+      className="w-full h-full overflow-hidden rounded-lg"
+      style={{ backgroundColor: background }}
+    >
       <div ref={terminalRef} className="w-full h-full" />
     </div>
   );

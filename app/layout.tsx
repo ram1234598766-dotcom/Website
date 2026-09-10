@@ -15,7 +15,7 @@ export const metadata: Metadata = {
     template: '%s · VantaOS',
   },
   description:
-    'Write, build, and deploy full-stack applications entirely in the browser. A cloud IDE with Monaco editor, a built-in terminal, Omni-AI assistant, local model hub, and GitHub sync.',
+    'Write, build, and deploy full-stack applications entirely in the browser. A cloud IDE with a CodeMirror-based editor, a built-in terminal, Omni-AI assistant, local model hub, and GitHub sync.',
   keywords: [
     'cloud IDE',
     'browser IDE',
@@ -23,7 +23,7 @@ export const metadata: Metadata = {
     'VantaOS',
     'online code editor',
     'AI coding assistant',
-    'Monaco editor',
+    'CodeMirror',
     'GitHub sync',
     'Ollama',
   ],
