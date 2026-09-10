@@ -31,4 +31,22 @@ export function getAppUrl(): string {
 
 export type ServiceStatus = 'available' | 'unavailable' | 'checking';
 
-export const DEMO_MODE = !isSupabaseConfigured();
+// Exact-form process.env reads (without the "(process as any).env?" indirection)
+// so Next.js inlines NEXT_PUBLIC_* values at build time in the static export.
+const fbApiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY || '';
+const fbAuthDomain = process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || '';
+const fbProjectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || '';
+const fbAppId = process.env.NEXT_PUBLIC_FIREBASE_APP_ID || '';
+
+export function isFirebaseConfigured(): boolean {
+  return !!(
+    fbApiKey &&
+    fbAuthDomain &&
+    fbProjectId &&
+    fbAppId &&
+    !fbAuthDomain.includes('placeholder') &&
+    !fbApiKey.includes('YOUR_')
+  );
+}
+
+export const DEMO_MODE = !isSupabaseConfigured() && !isFirebaseConfigured();

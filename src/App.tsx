@@ -15,6 +15,7 @@ import AdminPanel from './components/AdminPanel';
 import OllamaLocal from './components/OllamaLocal';
 import AuthModal from './components/AuthModal';
 import { supabase } from './lib/supabase';
+import { WorkspaceProvider } from './lib/workspace/workspace';
 
 export default function App() {
   const [currentView, setCurrentView] = useState<ViewState>('home');
@@ -85,6 +86,7 @@ export default function App() {
   }
 
   return (
+    <WorkspaceProvider>
     <AnimatePresence mode="wait">
       <motion.div
         key="app"
@@ -144,5 +146,6 @@ export default function App() {
         <AuthModal isOpen={showAuthModal} onClose={() => setShowAuthModal(false)} initialMode={authMode} />
       </motion.div>
     </AnimatePresence>
+    </WorkspaceProvider>
   );
 }
