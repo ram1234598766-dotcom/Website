@@ -8,9 +8,10 @@ dependency: correctness and security first, then the IDE foundation, then AI and
 WebModel delivery, then collaboration and production operations.
 
 This document is a plan, not a claim that the target capabilities already work.
-The current repository is a static Next.js/React application with Monaco,
-xterm, Ollama/Omni-AI, GitHub synchronization, optional Supabase, and a
-Cloudflare Worker (`README.md:5-8`, `package.json:14-43`, `workers/worker.ts:31-56`).
+The current repository is a static Next.js/React application with a
+CodeMirror 6 editor, xterm, Ollama/Omni-AI, GitHub synchronization, a Google
+Drive integration, optional Firebase auth, optional Supabase, and a Cloudflare
+Worker (`README.md:5-8`, `package.json:14-43`, `workers/worker.ts:31-56`).
 
 ## 1. North-star outcomes
 
@@ -36,7 +37,7 @@ A user should be able to:
 | 2 | IDE reliability | Real editor services, sandboxed execution, resilient terminal | IDE E2E and sandbox quota tests pass |
 | 3 | AI orchestration | Stable provider/tool contracts and safe cloud/local routing | Streaming/cancellation/redaction tests pass |
 | 4 | WebModel delivery | Signed, resumable, device-aware browser model downloads | Tamper/interruption/device matrix tests pass |
-| 5 | Identity and GitHub security | Server-side OAuth, scoped grants, safe token handling | Token-boundary and push safety tests pass |
+| 5 | Identity and GitHub security | Firebase OAuth (in place) + server-side GitHub OAuth, scoped grants, safe token handling | Token-boundary and push safety tests pass |
 | 6 | Sync and collaboration | Offline-first multi-device sync and conflict resolution | Convergence and recovery tests pass |
 | 7 | Mobile/PWA experience | Installable, responsive, low-power mobile workflow | Mobile browser/device tests pass |
 | 8 | Production operations | CI, telemetry, SLOs, incident runbooks, release gates | Production readiness review passes |
@@ -83,7 +84,8 @@ A user should be able to:
    `vantaos_cloudos_files_v2` snapshot (`src/components/CloudOS.tsx:290-322`).
 5. Add deterministic path, rename, move, and delete rules.
 6. Add workspace manifests for export/import and integrity checks.
-7. Keep the existing Monaco UI as an adapter during migration.
+7. Keep the existing CodeMirror editor adapting through the same editor
+   port during migration.
 
 ### Tests
 
@@ -117,7 +119,7 @@ A user should be able to:
 
 ### Tests
 
-- Monaco mount/unmount does not leak workers or listeners.
+- Editor mount/unmount does not leak views or listeners.
 - Large files do not block the main thread beyond the defined budget.
 - Terminal output is bounded and truncation is explicit.
 - Sandbox code cannot access GitHub, AI, or origin credentials.
@@ -208,11 +210,30 @@ Ollama is available on every phone.
 
 ## 8. Phase 5 — Identity and GitHub security
 
+### Already in place
+
+- Firebase Auth as the production identity provider for Google/GitHub OAuth,
+  surfaced through the unified `supabase.auth` adapter
+  (`src/lib/firebase.ts:37-73`, `src/lib/supabase.ts:34-190`).
+- Google Drive integration (browse/open read-only + save to an app-owned
+  VantaOS folder) using the OAuth token captured during Firebase Google
+  sign-in (`src/lib/drive.ts:4-279`, `src/components/DriveManager.tsx`).
+- Demo mode is visibly local-only and non-production (`src/lib/demoAuth.ts`).
+
+**Verification status (2026-09):** Firebase Google sign-in was smoke-verified on
+the live project `website-6e8b1` from `http://localhost:3000` — the popup opens
+to the project's `__/auth/handler` with `providerId=google.com`, Drive scopes
+requested, zero console errors; `npx tsc --noEmit` and `npm run build` pass with
+the real `NEXT_PUBLIC_FIREBASE_*` env. The final Google consent click requires a
+human browser session and is the last manual step to complete the round trip.
+See `docs/ARCHITECTURE.md` §13.0 for the fact table.
+
 ### Work
 
-- Make demo auth visibly local-only and non-production.
 - Add server-side GitHub OAuth and short-lived scoped grants.
 - Remove long-lived GitHub tokens from browser storage.
+- Move Drive/GitHub token refresh out of the browser (currently a 45-minute
+  `sessionStorage` TTL for Drive, `localStorage` for GitHub).
 - Add server-side role and repository-scope checks.
 - Add fresh-parent checks and non-fast-forward protection for pushes.
 - Add pagination and large-repository handling instead of silent truncation.
@@ -224,7 +245,9 @@ Ollama is available on every phone.
 - expired/revoked grants fail closed;
 - push based on a stale parent is rejected with recovery guidance;
 - large repositories are paginated or explicitly rejected before partial clone;
-- tokens are absent from localStorage, logs, analytics, and client bundles.
+- tokens are absent from localStorage, logs, analytics, and client bundles;
+- Firebase sign-in/out and Drive connect save/open round trips work end to end
+  on the deployed origin (execute once Firebase env is set in the deploy env).
 
 ### Exit criteria
 

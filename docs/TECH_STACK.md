@@ -6,8 +6,9 @@ This document separates the **current stack** from the **target stack**. Current
 statements are grounded in repository files; target choices are architectural
 recommendations and are not represented as implemented.
 
-The current product is a browser-based IDE with Monaco, xterm, a local model
-hub, Omni-AI, GitHub synchronization, optional Supabase, and a Cloudflare
+The current product is a browser-based IDE with a CodeMirror 6 editor, xterm, a local
+model hub, Omni-AI, GitHub synchronization, a Google Drive integration, optional
+Firebase auth, optional Supabase, and a Cloudflare
 Worker (`README.md:3-8`, `package.json:14-43`, `workers/worker.ts:31-56`).
 
 ## 1. Stack decision summary
@@ -16,12 +17,13 @@ Worker (`README.md:3-8`, `package.json:14-43`, `workers/worker.ts:31-56`).
 |---|---|---|---|
 | Application | Next.js 15 static export, React 19, TypeScript (`next.config.mjs:2-10`, `package.json:28-34`) | Keep Next.js/React/TypeScript for the web shell; introduce service boundaries and route-level loading | Preserves the existing product while making state and integrations testable |
 | UI | Tailwind CSS v4, Motion, Lucide (`package.json:17-27`) | Keep the design system; add semantic component primitives and responsive/mobile contracts | Improves consistency without replacing the visual language |
-| Editor | Monaco through `@monaco-editor/react` (`package.json:15`, `src/components/CloudOS.tsx:4`) | Keep Monaco; run language services in Web Workers | Retains the familiar editor and removes main-thread blocking |
+| Editor | CodeMirror 6 through `@codemirror/*` with custom React wrappers (`package.json:15-29`, `src/components/CloudCodeEditor.tsx`, `src/components/CloudDiffEditor.tsx`) | Keep CodeMirror as the editor core; add language-service-style workers for diagnostics and completions | Ships in the bundle (no CDN, no ~3MB runtime) while retaining 35+ language modes, diffing, and search |
 | Terminal | xterm.js plus in-page shell (`package.json:18-19`, `src/components/TerminalPanel.tsx:23-35`) | Keep xterm as the terminal surface; add a sandboxed command/execution broker | Separates terminal UI from unsafe execution |
 | Local data | IndexedDB helper exists (`src/lib/storage.ts:1-10`); CloudOS currently uses localStorage JSON (`src/components/CloudOS.tsx:290-322`) | IndexedDB/OPFS operation log and outbox | Provides durable, bounded, migratable offline storage |
 | AI | Ollama plus OpenRouter/Gemini/OpenAI through browser/Worker calls (`src/components/OmniAI.tsx:6-25`, `workers/worker.ts:77-155`) | Provider registry, streaming protocol, server-mediated cloud path, WebModel runtime adapter | Makes providers interchangeable and mobile-capable |
 | Models | Ollama model cards and localhost pull (`src/components/Showcase.tsx:14-105`, `src/components/Showcase.tsx:122-169`) | Signed WebModel catalog, resumable downloads, device profiles, Ollama adapter | Adds a real browser/mobile path without misrepresenting Ollama support |
-| Auth | Optional Supabase client and localStorage demo auth (`src/lib/supabase.ts:9-23`, `src/lib/demoAuth.ts:29-30`) | Supabase production identity, explicit demo mode, short-lived grants | Makes security boundaries explicit |
+| Auth | Optional Firebase client (Google/GitHub OAuth) with a localStorage demo fallback, exposed through the unified `supabase` adapter (`src/lib/firebase.ts:37-73`, `src/lib/supabase.ts:34-190`, `src/lib/demoAuth.ts:29-30`) | Keep Firebase as the production identity provider; add server-side OAuth and short-lived grants | Provides real Google/GitHub sign-in with a single adapter surface |
+| Drive | Google Drive REST v3 (readonly + app-owned files) using the OAuth access token captured during Firebase Google sign-in (`src/lib/drive.ts:4-279`, `src/components/DriveManager.tsx`) | Move long-lived tokens out of the browser; server-side token refresh | Browser-only token expiry/refresh is the current limit |
 | GitHub | Direct REST calls with a browser-stored token (`src/lib/github.ts:8-40`, `src/components/GitHubManager.tsx:15-44`) | Server-side OAuth, scoped grants, fresh-parent push protection | Removes long-lived credentials from the browser |
 | Edge | Cloudflare Worker API proxy (`wrangler.toml:1-11`, `workers/worker.ts:13-75`) | Versioned API gateway, model proxy, OAuth exchange, rate limits, health | Provides a stable trust boundary and operational surface |
 | Tests | No test script is present in `package.json:6-13` | Vitest/Playwright plus contract, worker, security, and mobile E2E suites | Makes reliability claims testable |
@@ -58,8 +60,9 @@ needs a formal small-screen interaction contract.
 
 ### 2.3 Editor and terminal
 
-- **Monaco Editor** is loaded through `@monaco-editor/react`
-  (`package.json:15`, `src/components/CloudOS.tsx:4`).
+- **CodeMirror 6** is the editor core, wired through first-party React wrappers
+  (`package.json:15-29`, `src/components/CloudCodeEditor.tsx:1-16`,
+  `src/components/CloudDiffEditor.tsx:1-18`, `src/lib/editor/setup.ts:1-22`).
 - The IDE supports tabs, split views, diffing, search, formatting, file
   operations, and ZIP export (`src/components/CloudOS.tsx:143-187`,
   `src/components/CloudOS.tsx:208-262`, `src/components/CloudOS.tsx:355-498`).
@@ -75,8 +78,17 @@ needs a formal small-screen interaction contract.
   `metadata` stores (`src/lib/storage.ts:6-10`, `src/lib/storage.ts:23-49`).
 - CloudOS currently loads and saves a whole workspace snapshot in
   `localStorage` (`src/components/CloudOS.tsx:290-322`).
-- Supabase is optional; the client creates a placeholder client in demo mode
-  (`src/lib/supabase.ts:12-23`).
+- Supabase remains optional; the client creates a placeholder client in demo mode
+  (`src/lib/supabase.ts:12-23`), and the Forum/Admin data tier keeps using it when
+  configured.
+- Firebase is the optional production identity layer (Google/GitHub OAuth) surfaced
+  through the unified `supabase.auth` adapter; when the `NEXT_PUBLIC_FIREBASE_*`
+  variables are unset it falls back to real Supabase auth and then to local demo
+  auth (`src/lib/firebase.ts:37-73`, `src/lib/supabase.ts:34-190`).
+- A Google Drive access token (Drive scopes) is captured at Google sign-in
+  (`drive.readonly` browse/open + `drive.file` for the app-owned VantaOS folder) and
+  cached in `sessionStorage` with a 45-minute TTL (`src/lib/drive.ts:42-96`). On
+  sign-out, the Drive token is cleared.
 - Demo users and sessions are stored in localStorage (`src/lib/demoAuth.ts:29-30`,
   `src/lib/demoAuth.ts:66-81`).
 
@@ -120,7 +132,7 @@ needs a formal small-screen interaction contract.
 - React 19 and TypeScript.
 - Tailwind CSS as the styling layer.
 - Motion only for stateful transitions, with reduced-motion support.
-- Monaco as the editor surface.
+- CodeMirror 6 as the editor surface.
 - xterm.js as the terminal surface.
 
 **Add:**
@@ -152,7 +164,8 @@ The target makes the existing storage direction consistent and testable.
 
 ### 3.3 Editor and language tooling
 
-- Monaco stays the user-facing editor.
+- CodeMirror 6 stays the user-facing editor; language modes are lazy per mode
+  where practical.
 - Prettier remains a lazy-loaded formatter for supported languages
   (`src/components/CloudOS.tsx:219-243`).
 - Add language-server-like workers for diagnostics, completions, symbols, and
@@ -220,8 +233,10 @@ See `docs/WEB_MODEL_SPEC.md` for the detailed contract.
 
 ### 3.7 Identity and integration stack
 
-- Supabase Auth for production identity when configured.
-- Explicit demo mode for local-only use.
+- Firebase Auth for production identity when configured (Google/GitHub OAuth).
+- Google Drive via the Firebase-captured token: `drive.readonly` browse/open plus
+  `drive.file` for the app-owned VantaOS folder.
+- Explicit demo mode for local-only use when neither Firebase nor Supabase is set.
 - Server-side GitHub OAuth.
 - Short-lived, scoped GitHub grants.
 - Server-side role and repository authorization.
@@ -276,6 +291,7 @@ See `docs/WEB_MODEL_SPEC.md` for the detailed contract.
 | Sandboxed JS | Required | Required | Required | Required |
 | Native language runners | Remote/absent | Remote/absent | Optional | Optional |
 | GitHub OAuth | Supported | Supported | Supported | Supported |
+| Google Drive (read + app-owned write) | Supported | Supported | Supported | Supported |
 | PWA install | Target | Target | Optional | Optional |
 
 A feature is shown as available only after capability detection. A missing
@@ -285,9 +301,10 @@ runtime produces a clear alternative, never a dead control.
 
 ### Keep and justify
 
-- `@monaco-editor/react` for Monaco integration.
+- The `@codemirror/*` editor packages for the in-bundle editor core.
 - `@xterm/xterm` and `@xterm/addon-fit` for terminal rendering.
-- `@supabase/supabase-js` for the optional Supabase adapter.
+- `@supabase/supabase-js` for the optional Supabase data-tier adapter.
+- `firebase` (auth, app) for the optional Firebase sign-in/provider layer.
 - `jszip` and `file-saver` for explicit user-initiated workspace export.
 - `prettier` for lazy formatting.
 - `motion`, Tailwind, Lucide, and Virtuoso for the current interface.
@@ -391,7 +408,9 @@ Before implementation, create short ADRs for:
 4. Remote runner versus desktop companion for native execution.
 5. SSE versus WebSocket for sync and real-time events.
 6. Supabase versus another backend for workspace sync.
-7. Plugin signature and permission model.
+7. Firebase vs a custom OAuth backend for production identity (and where Drive
+   token refresh lives).
+8. Plugin signature and permission model.
 
 Each ADR should include context, decision, consequences, alternatives, and a
 verification plan.

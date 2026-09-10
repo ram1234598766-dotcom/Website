@@ -2,23 +2,30 @@
 
 ## Document status
 
-This is a documentation-only target architecture for the repository at
-`https://github.com/ram1234598766-dotcom/Website`. It does not claim that the
-target state is implemented or tested. The current implementation evidence is
-called out separately from the proposed architecture.
+This document separates **verified current facts** from **target architecture**,
+for the repository at `https://github.com/ram1234598766-dotcom/Website`.
+
+- **Verified now:** Firebase Google/GitHub sign-in is wired to the live project
+  `website-6e8b1` and smoke-verified end to end up to the Google consent screen;
+  Google Drive scopes are requested correctly (Section 13.0).
+- **Target:** Sections 4–12 describe the target architecture and are not claimed
+  as implemented. Section 13 marks every ROADMAP phase and major component with a
+  status of implemented-and-tested, implemented-untested, or not-yet-implemented,
+  with evidence.
 
 ## 1. Product boundary
 
 VantaOS is a browser-first development environment composed of four user-facing
 products:
 
-1. **CloudOS IDE** — files, Monaco editing, tabs, split views, diffing, search,
+1. **CloudOS IDE** — files, CodeMirror editing, tabs, split views, diffing, search,
    formatting, export, and a terminal surface.
 2. **Omni-AI** — one assistant surface over local Ollama and cloud model
    providers.
 3. **Model Hub** — model discovery, Ollama pull, and model launch.
-4. **Developer integrations** — GitHub synchronization, optional Supabase
-   identity, and future workspace sync/collaboration.
+4. **Developer integrations** — GitHub synchronization, Google Drive, optional
+   Firebase identity, optional Supabase data tier, and future workspace
+   sync/collaboration.
 
 The current application is a static Next.js export served by Cloudflare assets,
 with a Worker handling API paths (`next.config.mjs:2-10`, `wrangler.toml:1-11`,
@@ -50,10 +57,11 @@ with a Worker handling API paths (`next.config.mjs:2-10`, `wrangler.toml:1-11`,
 | Area | Current implementation | Architectural implication |
 |---|---|---|
 | Application shell | `App.tsx` owns the active view, auth state, command palette, and modal state (`src/App.tsx:19-27`, `src/App.tsx:103-145`). | Extract route/state boundaries before adding collaborative or background workflows. |
-| IDE | Monaco, file nodes, tabs, split views, diff, search, Prettier, ZIP export (`src/components/CloudOS.tsx:11-68`, `src/components/CloudOS.tsx:143-187`, `src/components/CloudOS.tsx:208-262`, `src/components/CloudOS.tsx:463-498`). | Introduce a workspace core and editor adapters; keep UI components thin. |
+| IDE | CodeMirror 6 through first-party wrappers (`CloudCodeEditor`, `CloudDiffEditor`), file nodes, tabs, split views, diff, search, Prettier, ZIP export (`src/components/CloudOS.tsx:11-68`, `src/components/CloudOS.tsx:143-187`, `src/components/CloudOS.tsx:208-262`, `src/components/CloudOS.tsx:463-498`). | Introduce a workspace core and editor adapters; keep UI components thin. |
 | Terminal | xterm.js plus an in-page `LocalShell` with an in-memory map and `new Function` execution (`src/components/TerminalPanel.tsx:23-35`, `src/components/TerminalPanel.tsx:56-198`, `src/components/TerminalPanel.tsx:216-231`). | Replace unrestricted evaluation with an isolated execution service and typed command protocol. |
 | Persistence | `storage.ts` defines IndexedDB stores (`src/lib/storage.ts:1-10`, `src/lib/storage.ts:23-49`), while CloudOS currently restores and saves a JSON snapshot in `localStorage` (`src/components/CloudOS.tsx:290-322`). | Make IndexedDB/OPFS the canonical local store and treat snapshots as migration/import data. |
-| Identity | Optional Supabase client with a localStorage demo-auth proxy (`src/lib/supabase.ts:9-23`, `src/lib/supabase.ts:34-190`, `src/lib/demoAuth.ts:1-10`). | Define one identity port, explicit demo/production modes, and a secure token boundary. |
+| Identity | Optional Firebase client (Google/GitHub OAuth) proxied through the unified `supabase` auth adapter, with real Supabase auth and a localStorage demo-auth as fallbacks (`src/lib/firebase.ts:37-73`, `src/lib/supabase.ts:34-190`, `src/lib/demoAuth.ts:1-10`). | Define one identity port, explicit demo/production modes, and a secure token boundary. |
+| Drive | Google Drive REST v3 using the OAuth access token captured during Firebase Google sign-in; browser/sessionStorage token with a 45-minute TTL, Drive scopes `drive.readonly` + `drive.file` (`src/lib/drive.ts:4-279`, `src/components/DriveManager.tsx`). | Move token refresh out of the browser; keep one identity port for Drive + GitHub. |
 | GitHub | Browser code stores a GitHub token in `localStorage` and calls the GitHub REST API directly (`src/components/GitHubManager.tsx:15-44`, `src/lib/github.ts:8-40`). | Move privileged token handling to an OAuth/server boundary and use short-lived workspace grants. |
 | AI | Omni-AI supports Ollama, OpenRouter, Gemini, and OpenAI; settings/history are browser-local (`src/components/OmniAI.tsx:6-25`, `src/components/OmniAI.tsx:130-146`, `src/components/OmniAI.tsx:196-220`). | Add a provider registry, request policy, streaming protocol, and audit-safe telemetry. |
 | Ollama/model hub | The model hub calls `localhost:11434` directly for tags, pull, and generation (`src/components/Showcase.tsx:116-169`, `src/components/OllamaLocal.tsx:17-83`). | Keep Ollama as a desktop adapter; add a separate browser-runtime model path for mobile. |
@@ -84,7 +92,8 @@ with a Worker handling API paths (`next.config.mjs:2-10`, `wrangler.toml:1-11`,
         |                                           |
 +-------v--------+                         +--------v-------+
 | Local storage  |                         | Backend/remote |
-| IndexedDB/OPFS |                         | Supabase/API   |
+| IndexedDB/OPFS |                         | Firebase +     |
+|                |                         | Supabase/API   |
 +----------------+                         +----------------+
 
 Desktop-only adapter: Ollama daemon <-localhost/CORS-> browser
@@ -140,7 +149,7 @@ multi-device sync.
 
 ### 4.3 Editor and language services
 
-- Monaco remains the editor surface.
+- CodeMirror 6 remains the editor surface, bundled in the client.
 - Language workers run in Web Workers and expose diagnostics, formatting,
   completion, and document-symbol contracts.
 - Large files use bounded parsing and virtualized previews.
@@ -326,15 +335,21 @@ mobile-ready.
 
 - Demo mode is explicitly labeled local-only and is never presented as
   production authentication.
-- Supabase OAuth is the production identity adapter.
+- Firebase Auth is the production identity adapter (Google/GitHub OAuth),
+  surfaced through the unified `supabase.auth` adapter.
+- Google Drive uses the OAuth access token captured during Firebase Google
+  sign-in (`drive.readonly` browse/open + `drive.file` for the app-owned
+  VantaOS folder; `src/lib/drive.ts:4-279`).
 - GitHub OAuth exchanges a code server-side; the browser receives a short-lived,
   scoped workspace grant.
 - Refresh tokens and provider secrets never enter `localStorage`.
 - Role checks occur on the server for privileged operations.
 
-The current demo implementation uses localStorage-backed users and sessions
-(`src/lib/demoAuth.ts:29-30`, `src/lib/demoAuth.ts:66-81`) and the GitHub manager
-persists a provider token in `localStorage` (`src/components/GitHubManager.tsx:15-44`,
+The current implementation uses Firebase in the browser with a localStorage
+demo-auth fallback (`src/lib/demoAuth.ts:29-30`, `src/lib/demoAuth.ts:66-81`,
+`src/lib/firebase.ts:37-73`), a Drive token cached in `sessionStorage`
+(`src/lib/drive.ts:42-96`), and the GitHub manager persists a provider token in
+`localStorage` (`src/components/GitHubManager.tsx:15-44`,
 `src/lib/github.ts:8-20`). These are current implementation facts, not target
 security guarantees.
 
@@ -407,11 +422,12 @@ idempotency keys where writes are possible, and contract tests.
    security headers, service worker for shell caching where safe.
 2. **Cloudflare Worker:** API gateway, provider proxy, model proxy, OAuth
    exchange, rate limiting, and edge health.
-3. **Supabase:** identity, workspace metadata, sync operations, and optional
-   forum data with RLS.
-4. **Object storage/CDN:** signed model shards and immutable manifests.
-5. **Optional desktop companion:** Ollama bridge and native execution runner.
-6. **Optional remote runners:** isolated containers/VMs for non-browser
+3. **Firebase:** identity (Google/GitHub OAuth), Google Drive OAuth token capture.
+4. **Supabase:** optional forum data, workspace metadata, and sync operations
+   with RLS.
+5. **Object storage/CDN:** signed model shards and immutable manifests.
+6. **Optional desktop companion:** Ollama bridge and native execution runner.
+7. **Optional remote runners:** isolated containers/VMs for non-browser
    languages and heavy builds.
 
 The current deployment is the first two pieces only: static export plus Worker
@@ -448,4 +464,158 @@ Before implementation is called complete:
   motion, and small screens;
 - production build, typecheck, lint, dependency audit, and browser E2E tests.
 
-No runtime code was changed to produce this document.
+## 13. Phase plan and implementation status
+
+This section is the authoritative implemented/untested/planned status list. Every
+phase maps to the phase of the same name in `docs/ROADMAP.md`. Status values:
+
+- ✅ **Implemented-and-tested** — behavior proven by an executed check; the check
+  and its actual outcome are named.
+- ⚠️ **Implemented-untested** — code exists, but no automated test or end-to-end
+  result is recorded in this repository.
+- 🔲 **Not-yet-implemented** — documented target only.
+
+### 13.0 Verified live state
+
+The production identity path was wired during the most recent work and verified
+as follows (executed commands and their outcomes):
+
+| Fact | Verification | Result |
+|---|---|---|
+| Firebase project `website-6e8b1` exists and holds web app "VantaOS Website" (App ID `1:545509873123:web:e100fdee71cdc833e4bcd6`) | `firebase projects:list` | ✅ Project + App ID confirmed |
+| Identity Platform provisioned; `google.com` IdP `enabled=true` with auto-created OAuth client `545509873123-6g180oc512l81nes733v7kbk1knd3f24.apps.googleusercontent.com`; `github.com` `enabled=true` | Identity Platform Admin API `config` (Bearer token) | ✅ HTTP 200 |
+| Google Drive API enabled on the linked Cloud project | Service Usage API | ✅ `state=ENABLED` |
+| Production origin `website.vasudevaya.workers.dev` is an authorized domain | Identity Platform `authorizedDomains` | ✅ Present |
+| Client compiles and builds with the real Firebase environment | `npx tsc --noEmit`; `npm run build` | ✅ Both pass |
+| Sign-in UI wiring | Playwright smoke: boot → "Sign In" → "Continue with Google" popup to `website-6e8b1.firebaseapp.com/__/auth/handler` with the correct apiKey, `providerId=google.com`, `redirectUrl=http://localhost:3000/`, and Drive scopes | ✅ Zero console errors; the final Google consent click requires a human browser session |
+
+Notes:
+
+- Local development uses `NEXT_PUBLIC_APP_URL=http://localhost:3000`
+  (`.env.local`). A production build must set
+  `NEXT_PUBLIC_APP_URL=https://website.vasudevaya.workers.dev` before running
+  `npm run build`, and then deploy with `npx wrangler deploy`.
+- The final Google account selection and consent step cannot be automated from
+  this environment; it must be completed once by a person in the browser to
+  close the sign-in happy path end to end.
+
+### 13.1 Phase status matrix
+
+| Phase | Name | Status | One-line evidence / gap |
+|---|---|---|---|
+| 0 | Baseline and risk closure | ⚠️ | Inventory exists as docs (`TECH_STACK.md`, this file §3) but no executed baseline suite or risk-register artifact |
+| 1 | Workspace foundation | ⚠️ | IDE implemented; canonical storage is still a `localStorage` snapshot (`src/components/CloudOS.tsx:290-322`); IndexedDB helper (`src/lib/storage.ts:6-10`) unused as the primary path |
+| 2 | IDE reliability | ⚠️ | Editor/terminal/diff/search implemented; terminal executes via `new Function` (`src/components/TerminalPanel.tsx:157-169`); no tests |
+| 3 | Omni-AI orchestration | ⚠️ | Provider union + Worker proxy (`src/components/OmniAI.tsx:6-25`, `workers/worker.ts:77-155`) implemented; no streaming/cancellation/redaction tests |
+| 4 | WebModel delivery | 🔲 | Ollama pull only (`src/components/Showcase.tsx:122-169`); no manifest/shard/signature path |
+| 5 | Identity and GitHub security | ⚠️ | Firebase sign-in live and smoke-verified (§13.0); Drive and GitHub flows implemented-untested; browser-stored GitHub token remains (`src/lib/github.ts:8-40`) |
+| 6 | Sync and collaboration | 🔲 | No sync API, operation log, or conflict model |
+| 7 | Mobile/PWA experience | ⚠️ | Responsive drawer (`src/components/Navigation.tsx:102-159`); no PWA shell or device E2E |
+| 8 | Production operations | ⚠️ | Static export + Worker deployed; no CI, no test script (`package.json:6-13`), no LICENSE file despite the `README.md:138-140` claim |
+| 9 | Plugin ecosystem | 🔲 | Not started |
+
+### 13.2 Per-phase detail and exit gates
+
+**Phase 0 — Baseline and risk closure**
+
+- ✅ Docs inventory with current-vs-target separation (`TECH_STACK.md`, this file §3).
+- 🔲 Executed baseline: no test/lint/E2E script or CI run exists.
+- Exit gate (`ROADMAP.md:69-73`): not met — "no critical risk is hidden behind a
+  marketing claim" is argued in docs but not proven by executed checks.
+
+**Phase 1 — Workspace foundation**
+
+- ✅ Editor surface and file-tree operations implemented in `CloudOS`.
+- ⚠️ Persistence: whole-workspace snapshot in `localStorage`
+  (`CloudOS.tsx:290-322`); IndexedDB `files`/`metadata` stores defined but not the
+  primary write path.
+- 🔲 Operation log, outbox, schema migrations, content hashes, export manifests.
+- Exit gate: refresh/multi-tab and migration tests — unmet.
+
+**Phase 2 — IDE reliability**
+
+- ✅ Editor, tabs, split, diff, search, Prettier, ZIP export (Sections 3, 4.3).
+- ✅ Terminal surface (xterm) with an in-page shell.
+- ⚠️ Execution sandbox: `new Function` remains (`TerminalPanel.tsx:157-169`) —
+  the single highest-risk current gap.
+- 🔲 Language-service workers, run IDs/quotas/cancellation, keyboard and
+  screen-reader contracts.
+- Exit gate: IDE E2E and sandbox quota tests — unmet.
+
+**Phase 3 — Omni-AI orchestration**
+
+- ✅ Provider union (Ollama, OpenRouter, Gemini, OpenAI) and Worker proxy
+  `/api/ai/generate`.
+- ⚠️ Streaming/cancellation/retry/redaction behavior is client-side and untested.
+- 🔲 Provider registry extraction, rate limits, tool permission prompts, model
+  selection policy.
+- Exit gate: streaming/cancellation/redaction tests — unmet.
+
+**Phase 4 — WebModel delivery**
+
+- 🔲 Signed manifests, sharded resumable downloads, digest verification, device
+  profiles, runtime adapter, model-manager UI (contract in §6 and
+  `docs/WEB_MODEL_SPEC.md`).
+- Exit gate: tamper/interruption/device-matrix tests — unmet.
+
+**Phase 5 — Identity and GitHub security**
+
+- ✅ Firebase Google OAuth sign-in: live project `website-6e8b1`, provider
+  enabled, popup flow smoke-verified (§13.0); `npx tsc --noEmit` and
+  `npm run build` green with the real env.
+- ⚠️ Firebase GitHub OAuth: provider enabled; no automated flow test.
+- ⚠️ Google Drive: browse/open (readonly) + VantaOS-folder save implemented
+  (`src/lib/drive.ts:4-279`, `DriveManager`); live round trip pending the human
+  consent step.
+- ⚠️ Demo mode: explicitly labeled local-only (`src/lib/demoAuth.ts`); no test.
+- 🔲 Server-side GitHub OAuth with short-lived scoped grants; remove GitHub token
+  from browser storage; server-side role/repository checks; fresh-parent push
+  protection.
+- Exit gate: token-boundary and push-safety tests — partially met (Firebase path
+  verified; GitHub token boundary still open).
+
+**Phase 6 — Sync and collaboration**
+
+- 🔲 Not started. Operation batches, causality metadata, tombstones, conflict UX,
+  presence/cursors, SSE/WebSocket with a polling fallback.
+- Exit gate: convergence and recovery tests — unmet.
+
+**Phase 7 — Mobile/PWA experience**
+
+- ⚠️ Responsive navigation drawer (`Navigation.tsx:102-159`); IDE small-screen
+  contract is informal.
+- 🔲 PWA manifest/service worker, storage and battery awareness, device E2E.
+- Exit gate: mobile device tests — unmet.
+
+**Phase 8 — Production operations**
+
+- ✅ Static export served by Cloudflare Worker; `/api/health`, `/api/ai/generate`,
+  `/api/security/*` routes exist.
+- 🔲 CI (build, typecheck, lint, browser E2E, dependency audit); no test script in
+  `package.json:6-13`; no LICENSE file (README claims Apache-2.0 at
+  `README.md:138-140`); no `SECURITY.md` or `CONTRIBUTING.md`; no SLOs, runbooks,
+  structured logs, or health/status endpoints.
+- Exit gate: production readiness review — unmet.
+
+**Phase 9 — Plugin ecosystem**
+
+- 🔲 Not started. Signed manifests, capability scopes, sandbox lifecycle,
+  marketplace contract.
+- Exit gate: plugin permission/isolation tests — unmet.
+
+### 13.3 Priority order for the next implementation work
+
+Driven by the charter (correctness/security first, then beginner experience,
+then advanced power):
+
+1. Close Phase 5's security gaps: server-side GitHub OAuth with short-lived
+   grants, remove the browser-stored token, server-side role checks.
+2. Phase 2 sandbox: replace `new Function` execution with an isolated runner and
+   explicit quotas.
+3. Add the Phase 0/8 baseline surface: test runner, CI workflow, `LICENSE`,
+   `SECURITY.md`, `CONTRIBUTING.md`.
+4. Then execute the remaining phases in ROADMAP order (1, 3, 4, 6, 7, 9), each
+   gated on its named tests.
+
+The original target architecture was produced without runtime changes; the
+§13.0 verified states document subsequent live wiring.
