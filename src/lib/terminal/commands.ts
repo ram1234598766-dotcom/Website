@@ -9,6 +9,8 @@
 import type { TerminalFs } from './sandbox';
 import { dirName, joinPath } from './sandbox';
 import { ExecutionQuota } from './quota';
+import type { JsRunner, SandboxRunResult } from './runner';
+import { SandboxRunner } from './runner';
 
 // ─── ANSI helpers ────────────────────────────────────────────────────────────
 
@@ -55,8 +57,23 @@ export class ShellSession {
 
   constructor(
     private readonly fs: TerminalFs,
-    private readonly quota: ExecutionQuota = new ExecutionQuota()
+    private readonly quota: ExecutionQuota = new ExecutionQuota(),
+    private readonly runner: JsRunner = new SandboxRunner()
   ) {}
+
+  /** Formats a sandbox result into terminal lines (mirrors `js`/`node`). */
+  private sandboxLines(res: SandboxRunResult): string[] {
+    const lines: string[] = [];
+    if (res.terminated) {
+      lines.push(`${YELLOW}[run stopped — ${res.terminated}]${RESET}`);
+    } else if (!res.ok) {
+      lines.push(`${RED}${res.error ?? 'Execution failed.'}${RESET}`);
+    } else {
+      lines.push(...res.output);
+      lines.push(res.value);
+    }
+    return lines;
+  }
 
   getPrompt(): string {
     return `\r\n${GREEN}vantaos${RESET}:${BLUE}${this.cwd}${RESET}$ `;
@@ -129,7 +146,8 @@ export class ShellSession {
         lines.push(`  ${YELLOW}rm${RESET} <path>         Remove file/directory`);
         lines.push(
           `${YELLOW}Note:${RESET} '${YELLOW}node${RESET}/${YELLOW}js${RESET}' run ` +
-            `synchronously — an infinite loop will freeze the tab.`
+            `in an isolated sandbox with a time limit and output cap — a runaway ` +
+            `script is stopped, never freezes the tab.`
         );
         break;
       }
@@ -209,14 +227,7 @@ export class ShellSession {
           fileContent !== undefined && rest.trim() === fileTok
             ? fileContent
             : rest;
-        try {
-          // eslint-disable-next-line no-new-func
-          const fn = new Function(code);
-          const result = fn();
-          lines.push(String(result ?? 'undefined'));
-        } catch (e) {
-          lines.push(`${RED}${(e as Error).message}${RESET}`);
-        }
+        lines.push(...this.sandboxLines(await this.runner.run(code).result));
         break;
       }
       case 'mkdir': {

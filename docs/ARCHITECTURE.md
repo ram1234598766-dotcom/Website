@@ -57,12 +57,12 @@ with a Worker handling API paths (`next.config.mjs:2-10`, `wrangler.toml:1-11`,
 |---|---|---|
 | Application shell | `App.tsx` owns the active view, auth state, command palette, and modal state (`src/App.tsx:20-27`, `src/App.tsx:88-146`). | Extract route/state boundaries before adding collaborative or background workflows. |
 | IDE | CodeMirror 6 through first-party wrappers (`CloudCodeEditor`, `CloudDiffEditor`), file nodes, tabs, split views, diff, search, Prettier, ZIP export (`src/components/CloudCodeEditor.tsx:16-116`, `src/components/CloudDiffEditor.tsx:15-115`, `src/components/CloudOS.tsx:151-187`, `src/components/CloudOS.tsx:269-293`, `src/components/CloudOS.tsx:573-607`). | Keep the editor adapters thin while moving workspace mutation and persistence into the oplog core. |
-| Terminal | xterm.js renders a browser terminal backed by `ShellSession`; `WorkspaceTerminalFs` maps commands to the workspace and `ExecutionQuota` rate-limits commands and caps output (`src/components/TerminalPanel.tsx:41-83`, `src/lib/terminal/commands.ts:51-100`, `src/lib/terminal/sandbox.ts:75-165`, `src/lib/terminal/quota.ts:20-65`). JavaScript `js`/`node` and Omni-AI `js`/`calc` still use unrestricted `Function`/`new Function` execution (`src/lib/terminal/commands.ts:202-220`, `src/components/OmniAI.tsx:84-90`). | Replace unrestricted evaluation with an isolated runner while retaining the workspace-backed filesystem and quota boundary. |
+| Terminal | xterm.js renders a browser terminal backed by `ShellSession`; `WorkspaceTerminalFs` maps commands to the workspace and `ExecutionQuota` rate-limits commands and caps output (`src/components/TerminalPanel.tsx:41-83`, `src/lib/terminal/commands.ts:51-100`, `src/lib/terminal/sandbox.ts:75-165`, `src/lib/terminal/quota.ts:20-65`). `js`/`node` execution uses `SandboxRunner` (`src/lib/terminal/commands.ts:230`, `src/lib/terminal/runner.ts:159`), running each snippet in an isolated worker thread with wall-clock, output-cap, and code-size guards. | Add language-service workers, keyboard and screen-reader contracts, and live browser E2E tests. |
 | Persistence | CloudOS hydrates from the IndexedDB workspace oplog, migrates the legacy `localStorage` snapshot, and still writes a secondary snapshot every 300 ms (`src/components/CloudOS.tsx:295-410`). The append-only operation log and sequence metadata are in IndexedDB (`src/lib/workspace/operations.ts:20-169`); the older `storage.ts` helper remains for legacy file storage and migration (`src/lib/storage.ts:10-24`, `src/lib/storage.ts:60-134`). | Finish the migration so the oplog/outbox is the sole canonical write path, then remove the secondary snapshot and add recovery tests. |
 | Identity | Firebase Auth is the preferred Google/GitHub OAuth adapter, exposed through the unified `client.auth` facade; local demo auth is the fallback when Firebase is unconfigured (`src/lib/client.ts`, `src/lib/firebase.ts`, `src/lib/demoAuth.ts`). | Define one identity port, explicit demo/production modes, and a secure token boundary. |
 | Drive | Google Drive REST v3 uses the OAuth access token captured during Firebase Google sign-in; the token is held in memory/sessionStorage with a 45-minute TTL and scopes `drive.readonly` + `drive.file` (`src/lib/drive.ts:30-100`, `src/lib/drive.ts:138-277`, `src/components/DriveManager.tsx:69-205`). | Move token refresh and privileged API calls out of the browser; keep one identity port for Drive and GitHub. |
 | GitHub | Browser code stores a GitHub token and active repository in `localStorage` and calls GitHub REST directly (`src/components/GitHubManager.tsx:15-44`, `src/components/GitHubManager.tsx:68-171`, `src/lib/github.ts:8-116`). | Move privileged token handling to an OAuth/server boundary and use short-lived workspace grants. |
-| AI | Omni-AI supports Ollama, OpenRouter, Gemini, and OpenAI; settings/history are browser-local (`src/components/OmniAI.tsx:6-25`, `src/components/OmniAI.tsx:130-146`, `src/components/OmniAI.tsx:148-235`). Local tool commands also use unrestricted `Function`/`new Function` for `calc`/`js` and fetch arbitrary HTTP URLs (`src/components/OmniAI.tsx:58-100`). | Add a provider registry, request policy, streaming protocol, sandboxed tools, and audit-safe telemetry. |
+| AI | Omni-AI supports Ollama, OpenRouter, Gemini, and OpenAI; settings/history are browser-local (`src/components/OmniAI.tsx:6-25`, `src/components/OmniAI.tsx:130-146`, `src/components/OmniAI.tsx:148-235`). Local tool commands `calc`/`js` now run in the worker-thread `SandboxRunner` (`src/components/OmniAI.tsx:13-106`), not the main thread. | Add a provider registry, request policy, streaming protocol, and audit-safe telemetry. |
 | Ollama/model hub | The model hub calls `localhost:11434` directly for tags, pull, and generation (`src/components/Showcase.tsx:116-169`, `src/components/OllamaLocal.tsx:17-83`). | Keep Ollama as a desktop adapter; add a separate browser-runtime model path for mobile. |
 | Edge API | Worker exposes health, AI generation, security scan, and auth-sync routes; the auth-sync path is `/api/edge-functions/auth-sync` (`workers/worker.ts:31-56`, `workers/worker.ts:77-195`). | Version and contract-test the edge API; separate public read APIs from privileged operations. |
 
@@ -169,9 +169,10 @@ The target terminal is a terminal emulator plus a command broker:
 - native languages are delegated to a remote or desktop runner, not emulated
   incorrectly in the browser.
 
-This replaces the current unrestricted `new Function` path
-(`src/components/TerminalPanel.tsx:157-169`) and the disconnected in-memory
-terminal filesystem (`src/components/TerminalPanel.tsx:23-35`).
+This replaces the previous unrestricted `new Function` path
+(`src/lib/terminal/commands.ts:202-220`, since moved to `SandboxRunner` in
+§13.2) and the disconnected in-memory terminal filesystem
+(`src/components/TerminalPanel.tsx:23-35`).
 
 ## 5. Omni-AI orchestration
 
@@ -503,7 +504,7 @@ Notes:
 |---|---|---|---|
 | 0 | Baseline and risk closure | ⚠️ | Inventory exists as docs (`TECH_STACK.md`, this file §3) but no executed baseline suite or risk-register artifact |
 | 1 | Workspace foundation | ⚠️ | IDE implemented; canonical storage is still a `localStorage` snapshot (`src/components/CloudOS.tsx:290-322`); IndexedDB helper (`src/lib/storage.ts:6-10`) unused as the primary path |
-| 2 | IDE reliability | ⚠️ | Editor/terminal/diff/search implemented; terminal executes via `new Function` (`src/components/TerminalPanel.tsx:157-169`); no tests |
+| 2 | IDE reliability | ⚠️ | `npm test` (70 vitest, 6 files incl. `tests/phase2/runner.test.ts` + `tests/phase2/commands.test.ts`) pass Sep 11 2026; terminal/Omni-AI `new Function` replaced by worker-thread `SandboxRunner` with time/output/code caps; remaining Phase 2 gaps below |
 | 3 | Omni-AI orchestration | ⚠️ | Provider union + Worker proxy (`src/components/OmniAI.tsx:6-25`, `workers/worker.ts:77-155`) implemented; no streaming/cancellation/redaction tests |
 | 4 | WebModel delivery | 🔲 | Ollama pull only (`src/components/Showcase.tsx:122-169`); no manifest/shard/signature path |
 | 5 | Identity and GitHub security | ✅ | `npm test` (53 vitest, 4 files `tests/phase5/*.test.ts`) pass Sep 11 2026; Firebase ID-token RS256 verification + HMAC grant lifecycle + GH OAuth token-boundary proxy + push-safety all test-proven; browser token replaced by memory-only grant |
@@ -534,11 +535,19 @@ Notes:
 
 - ✅ Editor, tabs, split, diff, search, Prettier, ZIP export (Sections 3, 4.3).
 - ✅ Terminal surface (xterm) with an in-page shell.
-- ⚠️ Execution sandbox: `new Function` remains (`TerminalPanel.tsx:157-169`) —
-  the single highest-risk current gap.
-- 🔲 Language-service workers, run IDs/quotas/cancellation, keyboard and
-  screen-reader contracts.
-- Exit gate: IDE E2E and sandbox quota tests — unmet.
+- ✅ Sandboxed execution: `new Function` removed from the shell and Omni-AI;
+  `SandboxRunner` (`src/lib/terminal/runner.ts:159`) runs each snippet in an
+  isolated worker (Web Worker in the browser, `worker_threads` under tests)
+  with a wall-clock `maxRunMs` watchdog, `maxOutputChars` output cap, and
+  `maxCodeChars` size guard; shell (`src/lib/terminal/commands.ts:230`) and
+  Omni-AI (`src/components/OmniAI.tsx:13-106`) are wired to it. Worker source
+  and the Node bridge are exported so tests execute the exact production body
+  (`runner.ts:98`, `tests/phase2/node-worker.ts`). Proven by
+  `tests/phase2/runner.test.ts` (10) and `tests/phase2/commands.test.ts` (7).
+- ⚠️ Remaining: language-service workers, keyboard and screen-reader
+  contracts, live browser E2E.
+- Exit gate: sandbox quota + shell-wiring tests pass (`npm test` 70/70 and
+  `tsc --noEmit` clean, Sep 11 2026).
 
 **Phase 3 — Omni-AI orchestration**
 
@@ -622,10 +631,10 @@ Notes:
 Driven by the charter (correctness/security first, then beginner experience,
 then advanced power):
 
-1. **Phase 2 sandbox** — replace `new Function` terminal execution with an
-   isolated runner (`SandboxRunner`), run-ids, host watchdog, output caps, and
-   tests. Single highest-risk current gap; only thing standing between the
-   claimed "production-ready" state and an XSS/RCE surface in the browser.
+1. **Phase 2 sandbox — DONE** — worker-thread `SandboxRunner`
+   (`src/lib/terminal/runner.ts`) replaces `new Function` in the terminal and
+   Omni-AI; time/output/code caps + 17 new tests; `npm test` 70/70,
+   `tsc --noEmit` clean, Sep 11 2026.
 2. **Phase 0/8 baseline** — add `LICENSE` (Apache-2.0), `SECURITY.md`,
    `CONTRIBUTING.md`, `.github/workflows/ci.yml` (lint + test + build on
    push/PR); update §13 matrix with evidence.

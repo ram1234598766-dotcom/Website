@@ -2,11 +2,23 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { BrainCircuit, Send, Settings, Key, Globe, Zap, Bot, Trash2, Server, RefreshCw, Loader2 } from 'lucide-react';
+import { SandboxRunner } from '../lib/terminal/runner';
 
 type AIProvider = 'ollama' | 'openrouter' | 'gemini' | 'openai';
 
 const SETTINGS_KEY = 'vantaos_omni_settings';
 const HISTORY_KEY = 'vantaos_omni_history';
+
+/** Shared sandbox for the inline JS / calculation tools. */
+const omniRunner = new SandboxRunner();
+
+async function runInSandbox(code: string): Promise<string> {
+  const res = await omniRunner.run(code).result;
+  if (res.terminated) return `(stopped — ${res.terminated})`;
+  if (!res.ok) return res.error ?? 'Execution failed.';
+  const consoleLines = res.output.length ? `${res.output.join('\n')}\n` : '';
+  return `${consoleLines}${res.value}`;
+}
 
 interface StoredSettings { provider: AIProvider; model: string; apiKey: string; ollamaUrl: string; }
 
@@ -82,12 +94,18 @@ For AI answers, connect a provider in ⚙️ Settings — local Ollama, or a clo
     return await getWeather(match?.[1]?.trim() || 'your area') || 'Weather not found. Try: weather in London';
   }
   if (ql.startsWith('calc ') || ql.startsWith('math ')) {
-    try { const expr = q.replace(/^(calc|math)\s+/i, ''); return `**${expr}** = \`${Function('"use strict";return (' + expr + ')')()}\``; }
-    catch (e: any) { return `Math error: ${e.message}. Try \`calc 2 * (3 + 5)\``; }
+    const expr = q.replace(/^(calc|math)\s+/i, '');
+    try {
+      const value = await runInSandbox(`return (${expr})`);
+      return `**${expr}** = \`${value}\``;
+    } catch (e: any) { return `Math error: ${e.message}. Try \`calc 2 * (3 + 5)\``; }
   }
   if (ql.startsWith('js ') || ql.startsWith('run ')) {
-    try { const code = q.replace(/^(js|run)\s+/i, ''); return `\`\`\`\n${String(new Function(code)() ?? 'undefined')}\n\`\`\``; }
-    catch (e: any) { return `JS error: ${e.message}`; }
+    const code = q.replace(/^(js|run)\s+/i, '');
+    try {
+      const value = await runInSandbox(code);
+      return `\`\`\`\n${value}\n\`\`\``;
+    } catch (e: any) { return `JS error: ${e.message}`; }
   }
   if (ql.startsWith('fetch ') || ql.startsWith('get ')) {
     try {

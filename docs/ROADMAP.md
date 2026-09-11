@@ -110,9 +110,11 @@ A user should be able to:
 - Run language services in Web Workers with bounded memory and cancellation.
 - Add real file-backed terminal state rather than a disconnected in-memory map.
 - Replace unrestricted `new Function` execution with a sandboxed runner
-  (`src/components/TerminalPanel.tsx:157-169`).
-- Add run IDs, status, logs, output limits, CPU/memory/time quotas, and
-  cancellation.
+  (`src/lib/terminal/runner.ts:159`) — **done Sep 11 2026**; shell
+  (`commands.ts:230`) and Omni-AI (`OmniAI.tsx:13-106`) wired to it.
+- ~~Add run IDs, status, logs, output limits, CPU/memory/time quotas, and
+  cancellation.~~ Wall-clock `maxRunMs`, `maxOutputChars`, and `maxCodeChars`
+  are implemented; run IDs and rich status are future polish.
 - Add keyboard and screen-reader contracts for every action.
 - Make split views, tabs, search, and terminal resizing deterministic on small
   screens.
@@ -121,8 +123,10 @@ A user should be able to:
 
 - Editor mount/unmount does not leak views or listeners.
 - Large files do not block the main thread beyond the defined budget.
-- Terminal output is bounded and truncation is explicit.
-- Sandbox code cannot access GitHub, AI, or origin credentials.
+- Terminal output is bounded and truncation is explicit — **done**
+  (`tests/phase2/runner.test.ts` output-flood test).
+- Sandbox code cannot access GitHub, AI, or origin credentials — **done**
+  (one-shot worker, no cross-run state, no globalThis leak).
 - Keyboard-only users can complete the main IDE workflows.
 
 ### Exit criteria
