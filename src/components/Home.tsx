@@ -221,7 +221,7 @@ export default function Home({ setCurrentView, onSignIn, onSignUp }: HomeProps) 
           <p className="text-slate-400 text-lg max-w-2xl mx-auto">Built on battle-tested open-source technology, engineered to run entirely in your browser.</p>
         </div>
         <div className="flex flex-wrap items-center justify-center gap-3">
-          {['React 19', 'TypeScript', 'Next.js', 'CodeMirror', 'Tailwind CSS', 'Motion', 'Supabase', 'Ollama', 'Cloudflare'].map((tech) => (
+          {['React 19', 'TypeScript', 'Next.js', 'CodeMirror', 'Tailwind CSS', 'Motion', 'Firebase', 'Ollama', 'Cloudflare'].map((tech) => (
             <span
               key={tech}
               className="px-4 py-2 rounded-full bg-white/5 border border-white/10 text-sm font-semibold text-slate-300 hover:border-indigo-500/40 hover:text-white transition-colors"
@@ -266,7 +266,7 @@ export default function Home({ setCurrentView, onSignIn, onSignUp }: HomeProps) 
               <li className="flex gap-2"><span className="text-indigo-400 font-bold">•</span> <span><strong className="text-slate-200">Omni-AI Assistant</strong> — chat with local Ollama models or cloud providers (OpenRouter, Gemini, OpenAI).</span></li>
               <li className="flex gap-2"><span className="text-indigo-400 font-bold">•</span> <span><strong className="text-slate-200">GitHub Sync</strong> — clone a repo, edit, and push commits directly from the IDE using your GitHub token.</span></li>
               <li className="flex gap-2"><span className="text-indigo-400 font-bold">•</span> <span><strong className="text-slate-200">Model Hub</strong> — browse and pull real open-source models (Llama, Phi, Mistral, Gemma…) to your local Ollama.</span></li>
-              <li className="flex gap-2"><span className="text-indigo-400 font-bold">•</span> <span><strong className="text-slate-200">Offline-first data</strong> — your workspace auto-saves to your browser, and demo accounts store locally when Supabase isn't connected.</span></li>
+              <li className="flex gap-2"><span className="text-indigo-400 font-bold">•</span> <span><strong className="text-slate-200">Offline-first data</strong> — your workspace auto-saves to your browser, and demo accounts store locally when Firebase isn't connected.</span></li>
             </ul>
           </div>
 
@@ -280,7 +280,7 @@ export default function Home({ setCurrentView, onSignIn, onSignUp }: HomeProps) 
               <li className="flex gap-2"><span className="text-emerald-400 font-bold">•</span> <span><strong className="text-slate-200">TypeScript</strong> across the whole codebase.</span></li>
               <li className="flex gap-2"><span className="text-emerald-400 font-bold">•</span> <span><strong className="text-slate-200">CodeMirror 6</strong> — a fast, dependency-light editor core that ships in the bundle (no CDN, no ~3MB runtime).</span></li>
               <li className="flex gap-2"><span className="text-emerald-400 font-bold">•</span> <span><strong className="text-slate-200">xterm.js</strong> for the terminal with a virtual file system.</span></li>
-              <li className="flex gap-2"><span className="text-emerald-400 font-bold">•</span> <span><strong className="text-slate-200">Supabase</strong> (optional) for real auth and forum when configured.</span></li>
+              <li className="flex gap-2"><span className="text-emerald-400 font-bold">•</span> <span><strong className="text-slate-200">Firebase</strong> (optional) for real auth, forum, and admin data when configured.</span></li>
               <li className="flex gap-2"><span className="text-emerald-400 font-bold">•</span> <span><strong className="text-slate-200">Deployed on Cloudflare</strong> as a static export with a Workers proxy for AI calls.</span></li>
             </ul>
           </div>
@@ -401,7 +401,7 @@ export default function Home({ setCurrentView, onSignIn, onSignUp }: HomeProps) 
               <h3 className="text-lg font-bold text-white">GitHub sync</h3>
             </div>
             <div className="p-8 space-y-4 text-sm text-slate-400 leading-relaxed">
-              <p><strong className="text-slate-200">Connect</strong> — open the IDE, click <strong className="text-slate-200">GitHub</strong>, then <strong className="text-slate-200">Connect GitHub</strong>. Use a fine-grained personal access token with repo access (or Supabase OAuth if configured).</p>
+              <p><strong className="text-slate-200">Connect</strong> — open the IDE, click <strong className="text-slate-200">GitHub</strong>, then <strong className="text-slate-200">Connect GitHub</strong>. Use a fine-grained personal access token with repo access (or Firebase OAuth if configured).</p>
               <p><strong className="text-slate-200">Clone a repo</strong> — pick any repository from the list. Its files load into your workspace (up to 200 files).</p>
               <p><strong className="text-slate-200">Commit &amp; push</strong> — edit files, write a commit message, and click <strong className="text-slate-200">Commit &amp; Push</strong> to push your changes to the branch.</p>
             </div>

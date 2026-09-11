@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
-import { supabase, hasSupabase, hasFirebase } from '../lib/supabase';
+import { client, hasFirebase } from '../lib/client';
 import Logo from './Logo';
 
 interface AuthFormProps {
@@ -38,16 +38,16 @@ export default function AuthForm({ initialMode = 'signin' }: AuthFormProps) {
 
       {!isForgotPassword ? (
         <>
-          {!hasFirebase && !hasSupabase ? (
+          {!hasFirebase ? (
             <div className="mb-6 text-xs text-center text-amber-400/80 bg-amber-500/10 border border-amber-500/20 rounded-xl p-3">
-              OAuth sign-in (Google / GitHub) requires Firebase or Supabase. Use email sign-up below in offline mode, or connect Firebase in your environment.
+              OAuth sign-in (Google / GitHub) requires Firebase. Use email sign-up below in offline mode, or connect Firebase in your environment.
             </div>
           ) : (
             <div className="space-y-3 mb-6">
               <button
                 onClick={async () => {
                   setLoading(true);
-                  const { error } = await supabase.auth.signInWithOAuth({ provider: 'google' });
+                  const { error } = await client.auth.signInWithOAuth({ provider: 'google' });
                   if (error) setAuthError(error.message);
                   setLoading(false);
                 }}
@@ -60,7 +60,7 @@ export default function AuthForm({ initialMode = 'signin' }: AuthFormProps) {
               <button
                 onClick={async () => {
                   setLoading(true);
-                  const { error } = await supabase.auth.signInWithOAuth({
+                  const { error } = await client.auth.signInWithOAuth({
                     provider: 'github',
                     options: { scopes: 'user:email repo' }
                   });
@@ -92,12 +92,12 @@ export default function AuthForm({ initialMode = 'signin' }: AuthFormProps) {
 
             try {
               if (isSignUp) {
-                const { error, data } = await supabase.auth.signUp({ email, password, options: { data: { username } } });
+                const { error, data } = await client.auth.signUp({ email, password, options: { data: { username } } });
                 if (error) setAuthError(error.message);
-                else if (data?.session || !hasSupabase) setAuthSuccess('Account created! You are now signed in.');
+                else if (data?.session || !hasFirebase) setAuthSuccess('Account created! You are now signed in.');
                 else setAuthSuccess('Account created! Check your email to confirm your account.');
               } else {
-                const { error } = await supabase.auth.signInWithPassword({ email, password });
+                const { error } = await client.auth.signInWithPassword({ email, password });
                 if (error) setAuthError(error.message);
               }
             } catch (err) {
@@ -134,7 +134,7 @@ export default function AuthForm({ initialMode = 'signin' }: AuthFormProps) {
           setLoading(true);
           const form = e.target as HTMLFormElement;
           const email = (form.elements.namedItem('email') as HTMLInputElement).value;
-          const { error } = await supabase.auth.resetPasswordForEmail(email);
+          const { error } = await client.auth.resetPasswordForEmail(email);
           if (error) setAuthError(error.message);
           else setResetSent(true);
           setLoading(false);
@@ -163,10 +163,10 @@ export default function AuthForm({ initialMode = 'signin' }: AuthFormProps) {
         </form>
       )}
 
-      {!hasFirebase && !hasSupabase && (
+      {!hasFirebase && (
         <p className="mt-6 text-xs text-center text-slate-500">
           Running in offline mode — accounts are stored locally in this browser.
-          Connect Firebase (or Supabase) for Google/GitHub sign-in and cloud accounts.
+          Connect Firebase for Google/GitHub sign-in and cloud accounts.
         </p>
       )}
     </div>

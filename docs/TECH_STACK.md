@@ -8,7 +8,7 @@ recommendations and are not represented as implemented.
 
 The current product is a browser-based IDE with a CodeMirror 6 editor, xterm, a local
 model hub, Omni-AI, GitHub synchronization, a Google Drive integration, optional
-Firebase auth, optional Supabase, and a Cloudflare
+Firebase auth, optional Cloud Firestore, and a Cloudflare
 Worker (`README.md:3-8`, `package.json:14-43`, `workers/worker.ts:31-56`).
 
 ## 1. Stack decision summary
@@ -22,7 +22,7 @@ Worker (`README.md:3-8`, `package.json:14-43`, `workers/worker.ts:31-56`).
 | Local data | IndexedDB helper exists (`src/lib/storage.ts:1-10`); CloudOS currently uses localStorage JSON (`src/components/CloudOS.tsx:290-322`) | IndexedDB/OPFS operation log and outbox | Provides durable, bounded, migratable offline storage |
 | AI | Ollama plus OpenRouter/Gemini/OpenAI through browser/Worker calls (`src/components/OmniAI.tsx:6-25`, `workers/worker.ts:77-155`) | Provider registry, streaming protocol, server-mediated cloud path, WebModel runtime adapter | Makes providers interchangeable and mobile-capable |
 | Models | Ollama model cards and localhost pull (`src/components/Showcase.tsx:14-105`, `src/components/Showcase.tsx:122-169`) | Signed WebModel catalog, resumable downloads, device profiles, Ollama adapter | Adds a real browser/mobile path without misrepresenting Ollama support |
-| Auth | Optional Firebase client (Google/GitHub OAuth) with a localStorage demo fallback, exposed through the unified `supabase` adapter (`src/lib/firebase.ts:37-73`, `src/lib/supabase.ts:34-190`, `src/lib/demoAuth.ts:29-30`) | Keep Firebase as the production identity provider; add server-side OAuth and short-lived grants | Provides real Google/GitHub sign-in with a single adapter surface |
+| Auth | Optional Firebase client (Google/GitHub OAuth) with a localStorage demo fallback, exposed through the unified `client` facade (`src/lib/client.ts`, `src/lib/firebase.ts`, `src/lib/demoAuth.ts`) | Keep Firebase as the production identity provider; add server-side OAuth and short-lived grants | Provides real Google/GitHub sign-in with a single adapter surface |
 | Drive | Google Drive REST v3 (readonly + app-owned files) using the OAuth access token captured during Firebase Google sign-in (`src/lib/drive.ts:4-279`, `src/components/DriveManager.tsx`) | Move long-lived tokens out of the browser; server-side token refresh | Browser-only token expiry/refresh is the current limit |
 | GitHub | Direct REST calls with a browser-stored token (`src/lib/github.ts:8-40`, `src/components/GitHubManager.tsx:15-44`) | Server-side OAuth, scoped grants, fresh-parent push protection | Removes long-lived credentials from the browser |
 | Edge | Cloudflare Worker API proxy (`wrangler.toml:1-11`, `workers/worker.ts:13-75`) | Versioned API gateway, model proxy, OAuth exchange, rate limits, health | Provides a stable trust boundary and operational surface |
@@ -78,13 +78,12 @@ needs a formal small-screen interaction contract.
   `metadata` stores (`src/lib/storage.ts:6-10`, `src/lib/storage.ts:23-49`).
 - CloudOS currently loads and saves a whole workspace snapshot in
   `localStorage` (`src/components/CloudOS.tsx:290-322`).
-- Supabase remains optional; the client creates a placeholder client in demo mode
-  (`src/lib/supabase.ts:12-23`), and the Forum/Admin data tier keeps using it when
-  configured.
+- Cloud Firestore is the Forum/Admin data tier and shares the Firebase project
+  config — no extra environment variables (`src/lib/firestore.ts`).
 - Firebase is the optional production identity layer (Google/GitHub OAuth) surfaced
-  through the unified `supabase.auth` adapter; when the `NEXT_PUBLIC_FIREBASE_*`
-  variables are unset it falls back to real Supabase auth and then to local demo
-  auth (`src/lib/firebase.ts:37-73`, `src/lib/supabase.ts:34-190`).
+  through the unified `client.auth` facade; when the `NEXT_PUBLIC_FIREBASE_*`
+  variables are unset it falls back to local demo auth
+  (`src/lib/client.ts`, `src/lib/firebase.ts:37-73`).
 - A Google Drive access token (Drive scopes) is captured at Google sign-in
   (`drive.readonly` browse/open + `drive.file` for the app-owned VantaOS folder) and
   cached in `sessionStorage` with a 45-minute TTL (`src/lib/drive.ts:42-96`). On
@@ -236,7 +235,7 @@ See `docs/WEB_MODEL_SPEC.md` for the detailed contract.
 - Firebase Auth for production identity when configured (Google/GitHub OAuth).
 - Google Drive via the Firebase-captured token: `drive.readonly` browse/open plus
   `drive.file` for the app-owned VantaOS folder.
-- Explicit demo mode for local-only use when neither Firebase nor Supabase is set.
+- Explicit demo mode for local-only use when Firebase is not set.
 - Server-side GitHub OAuth.
 - Short-lived, scoped GitHub grants.
 - Server-side role and repository authorization.
@@ -256,13 +255,13 @@ See `docs/WEB_MODEL_SPEC.md` for the detailed contract.
 - health and readiness endpoints;
 - structured redacted logs.
 
-**Supabase:**
+**Firebase Cloud Firestore:**
 
-- identity and session metadata;
-- workspace metadata;
-- operation sync;
-- optional forum/community data;
-- row-level security policies.
+- Forum threads and replies;
+- upvotes (deterministic doc IDs for dedupe);
+- user profiles;
+- Admin metrics via realtime queries;
+- security rules mirroring the auth model.
 
 **Object storage/CDN:**
 
@@ -303,8 +302,8 @@ runtime produces a clear alternative, never a dead control.
 
 - The `@codemirror/*` editor packages for the in-bundle editor core.
 - `@xterm/xterm` and `@xterm/addon-fit` for terminal rendering.
-- `@supabase/supabase-js` for the optional Supabase data-tier adapter.
-- `firebase` (auth, app) for the optional Firebase sign-in/provider layer.
+- `firebase` (auth, app, firestore) for the optional Firebase sign-in/provider
+  layer and the Cloud Firestore data tier.
 - `jszip` and `file-saver` for explicit user-initiated workspace export.
 - `prettier` for lazy formatting.
 - `motion`, Tailwind, Lucide, and Virtuoso for the current interface.
@@ -407,7 +406,7 @@ Before implementation, create short ADRs for:
 3. Server-side versus browser-mediated GitHub OAuth.
 4. Remote runner versus desktop companion for native execution.
 5. SSE versus WebSocket for sync and real-time events.
-6. Supabase versus another backend for workspace sync.
+6. Firestore security rules versus other access-control approaches for sync.
 7. Firebase vs a custom OAuth backend for production identity (and where Drive
    token refresh lives).
 8. Plugin signature and permission model.

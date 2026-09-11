@@ -1,0 +1,80 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+    function isOwner(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+    function validBody() {
+      return request.resource.data is map
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['content']);
+    }
+    function counterIncrement(field) {
+      return signedIn()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([field])
+        && (
+          request.resource.data[field] == resource.data[field] + 1
+          || request.resource.data[field] == resource.data[field] - 1
+        );
+    }
+
+    // Profiles: anyone may read names/avatars; only the owner writes.
+    match /profiles/{uid} {
+      allow read: if true;
+      allow create, update, delete: if isOwner(uid);
+    }
+
+    // Threads: public read; signed-in create binds author_id; only the author
+    // may delete; counter increments (replies, upvotes) open to signed-in users.
+    match /threads/{id} {
+      allow read: if true;
+      allow create: if isOwner(request.resource.data.author_id)
+        && request.resource.data.title is string
+        && request.resource.data.title.size() >= 1
+        && request.resource.data.title.size() <= 200
+        && request.resource.data.content is string
+        && request.resource.data.content.size() <= 50000
+        && request.resource.data.category is string
+        && request.resource.data.category.size() <= 40
+        && request.resource.data.created_at != null;
+      allow update: if counterIncrement('replies_count')
+        || counterIncrement('upvotes_count')
+        || (isOwner(resource.data.author_id)
+            && request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly(['title', 'content', 'category', 'replies_count', 'upvotes_count']));
+      allow delete: if isOwner(resource.data.author_id);
+    }
+
+    // Replies: public read; signed-in create binds author_id + thread_id;
+    // content edits and deletes by the author; upvote counter by anyone.
+    match /replies/{id} {
+      allow read: if true;
+      allow create: if isOwner(request.resource.data.author_id)
+        && request.resource.data.thread_id is string
+        && request.resource.data.content is string
+        && request.resource.data.content.size() >= 1
+        && request.resource.data.content.size() <= 20000
+        && request.resource.data.created_at != null;
+      allow update: if counterIncrement('upvotes_count')
+        || (isOwner(resource.data.author_id) && validBody());
+      allow delete: if isOwner(resource.data.author_id);
+    }
+
+    // Upvotes: deterministic doc id <uid>_<target>. Only the owning user may
+    // create or delete their own vote; votes are never partially updated.
+    match /upvotes/{id} {
+      allow read: if signedIn();
+      allow create: if isOwner(request.resource.data.user_id)
+        && id.split('_')[0] == request.auth.uid
+        && (request.resource.data.thread_id is string
+            || request.resource.data.reply_id is string)
+        && request.resource.data.created_at != null;
+      allow delete: if isOwner(resource.data.user_id)
+        && id.split('_')[0] == request.auth.uid;
+      allow update: if false;
+    }
+  }
+}

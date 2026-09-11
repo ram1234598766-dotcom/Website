@@ -10,7 +10,7 @@ WebModel delivery, then collaboration and production operations.
 This document is a plan, not a claim that the target capabilities already work.
 The current repository is a static Next.js/React application with a
 CodeMirror 6 editor, xterm, Ollama/Omni-AI, GitHub synchronization, a Google
-Drive integration, optional Firebase auth, optional Supabase, and a Cloudflare
+Drive integration, optional Firebase auth, optional Cloud Firestore, and a Cloudflare
 Worker (`README.md:5-8`, `package.json:14-43`, `workers/worker.ts:31-56`).
 
 ## 1. North-star outcomes
@@ -213,8 +213,8 @@ Ollama is available on every phone.
 ### Already in place
 
 - Firebase Auth as the production identity provider for Google/GitHub OAuth,
-  surfaced through the unified `supabase.auth` adapter
-  (`src/lib/firebase.ts:37-73`, `src/lib/supabase.ts:34-190`).
+  surfaced through the unified `client.auth` facade
+  (`src/lib/client.ts`, `src/lib/firebase.ts`, `src/lib/demoAuth.ts`).
 - Google Drive integration (browse/open read-only + save to an app-owned
   VantaOS folder) using the OAuth token captured during Firebase Google
   sign-in (`src/lib/drive.ts:4-279`, `src/components/DriveManager.tsx`).

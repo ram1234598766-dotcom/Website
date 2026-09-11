@@ -6,8 +6,48 @@
  * only intercepts requests to /api/* paths and handles SPA fallback.
  */
 
+import { GitHubOAuthService, OAuthCallbackError, type KvLike } from './github-proxy';
+import { verifyFirebaseIdToken } from './firebase-verify';
+import { verifyGrant, type GrantClaims } from './grants';
+
 export interface Env {
   GEMINI_API_KEY?: string;
+  GITHUB_CLIENT_ID?: string;
+  GITHUB_CLIENT_SECRET?: string;
+  GH_GRANT_SECRET?: string;
+  GH_TOKENS?: KvLike;
+  APP_ORIGIN?: string;
+  NEXT_PUBLIC_FIREBASE_PROJECT_ID?: string;
+}
+
+const FALLBACK_PROJECT_ID = 'website-6e8b1';
+
+function corsHeaders(): Record<string, string> {
+  return {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Access-Control-Max-Age': '86400',
+  };
+}
+
+function json(data: unknown, status = 200, extra: Record<string, string> = {}): Response {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { ...corsHeaders(), 'Content-Type': 'application/json', ...extra },
+  });
+}
+
+async function readJson(request: Request): Promise<any> {
+  try {
+    return await request.json();
+  } catch {
+    return null;
+  }
+}
+
+function projectId(env: Env): string {
+  return env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || FALLBACK_PROJECT_ID;
 }
 
 export default {
@@ -15,29 +55,23 @@ export default {
     const url = new URL(request.url);
     const path = url.pathname;
 
-    // CORS headers for all API responses
-    const corsHeaders = {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-      'Access-Control-Max-Age': '86400',
-    };
-
-    // Handle CORS preflight
     if (request.method === 'OPTIONS') {
-      return new Response(null, { headers: corsHeaders });
+      return new Response(null, { headers: corsHeaders() });
     }
 
     try {
       // GET /api/health
       if (request.method === 'GET' && path === '/api/health') {
-        return Response.json({
-          ok: true,
-          uptimeSeconds: 0,
-          environment: 'cloudflare-worker',
-          version: '2.0.0',
-          timestamp: new Date().toISOString(),
-        }, { headers: corsHeaders });
+        return json(
+          {
+            ok: true,
+            uptimeSeconds: 0,
+            environment: 'cloudflare-worker',
+            version: '2.0.0',
+            timestamp: new Date().toISOString(),
+          },
+          200
+        );
       }
 
       // POST /api/ai/generate
@@ -50,29 +84,174 @@ export default {
         return handleSecurityScan(env);
       }
 
-      // POST /api/edge-functions/auth-sync
+      // POST /api/edge-functions/auth-sync — real server-side token verification
       if (request.method === 'POST' && path === '/api/edge-functions/auth-sync') {
-        return handleAuthSync(request);
+        const auth = request.headers.get('authorization');
+        const token = auth?.startsWith('Bearer ') ? auth.slice(7) : auth;
+        const claims = await verifyFirebaseIdToken(token ?? '', {
+          projectId: projectId(env),
+          nowMs: Date.now(),
+        });
+        if (!claims) {
+          return json(
+            { success: false, error: 'Invalid or expired token.' },
+            401
+          );
+        }
+        return json({
+          success: true,
+          uid: claims.uid,
+          email: claims.email ?? null,
+          validated: true,
+          serverTime: new Date().toISOString(),
+        });
       }
 
-      // If no API route matches, return 404
-      return new Response(JSON.stringify({ 
-        error: 'Not found',
-        path: path,
-        message: 'The requested API endpoint does not exist.'
-      }), { 
-        status: 404,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
+      // ─── GitHub OAuth + proxy (Phase 5 token boundary) ───
+      if (path.startsWith('/api/gh')) {
+        return handleGitHubRoutes(request, env, path, url);
+      }
+
+      return json(
+        { error: 'Not found', path, message: 'The requested API endpoint does not exist.' },
+        404
+      );
     } catch (err: any) {
       console.error('Worker error:', err);
-      return Response.json(
-        { error: err.message || 'Internal error' },
-        { status: 500, headers: corsHeaders }
-      );
+      return json({ error: err.message || 'Internal error' }, 500);
     }
   },
 };
+
+async function handleGitHubRoutes(
+  request: Request,
+  env: Env,
+  path: string,
+  url: URL
+): Promise<Response> {
+  const service = new GitHubOAuthService(env);
+
+  // POST /api/gh/authorize — start a server-driven OAuth dance
+  if (request.method === 'POST' && path === '/api/gh/authorize') {
+    const body = await readJson(request);
+    if (!body?.firebaseToken) {
+      return json({ error: 'Missing firebaseToken.' }, 401);
+    }
+    const claims = await verifyFirebaseIdToken(body.firebaseToken, {
+      projectId: projectId(env),
+      nowMs: Date.now(),
+    });
+    if (!claims) {
+      return json({ error: 'Unauthorized', message: 'Expired Firebase session.' }, 401);
+    }
+    const { url: authorizeUrl } = await service.startAuthorize(claims.uid);
+    return json({ url: authorizeUrl });
+  }
+
+  // GET /api/gh/callback — OAuth redirect landing; exchanges code, stores token, redirects
+  if (request.method === 'GET' && path === '/api/gh/callback') {
+    const code = url.searchParams.get('code') ?? '';
+    const state = url.searchParams.get('state') ?? '';
+    try {
+      const { location } = await service.processCallback({ code, state });
+      const res = new Response(null, {
+        status: 302,
+        headers: { Location: location },
+      });
+      res.headers.set('Access-Control-Allow-Origin', env.APP_ORIGIN || '*');
+      return res;
+    } catch (err) {
+      if (err instanceof OAuthCallbackError) {
+        const res = new Response(
+          JSON.stringify({ error: err.message }),
+          { status: 400, headers: { 'Content-Type': 'application/json' } }
+        );
+        res.headers.set('Access-Control-Allow-Origin', env.APP_ORIGIN || '*');
+        return res;
+      }
+      throw err;
+    }
+  }
+
+  // POST /api/gh/import — store an access token captured from the Firebase popup flow
+  if (request.method === 'POST' && path === '/api/gh/import') {
+    const body = await readJson(request);
+    if (!body?.firebaseToken || !body?.accessToken) {
+      return json({ error: 'Missing firebaseToken or accessToken.' }, 400);
+    }
+    const claims = await verifyFirebaseIdToken(body.firebaseToken, {
+      projectId: projectId(env),
+      nowMs: Date.now(),
+    });
+    if (!claims) {
+      return json({ error: 'Unauthorized', message: 'Expired Firebase session.' }, 401);
+    }
+    try {
+      const grant = await service.importToken(claims.uid, body.accessToken);
+      return json({ ok: true, gh_grant: grant, expiresIn: 15 * 60 });
+    } catch (err: any) {
+      return json({ error: err.message || 'Import failed.' }, 400);
+    }
+  }
+
+  // POST /api/gh/session — mint a fresh grant if we already hold a token for this uid
+  if (request.method === 'POST' && path === '/api/gh/session') {
+    const auth = request.headers.get('authorization');
+    const token = auth?.startsWith('Bearer ') ? auth.slice(7) : auth;
+    const claims = await verifyFirebaseIdToken(token ?? '', {
+      projectId: projectId(env),
+      nowMs: Date.now(),
+    });
+    if (!claims) {
+      return json({ error: 'Unauthorized', message: 'Expired Firebase session.' }, 401);
+    }
+    const grant = await service.createGrant(claims.uid);
+    if (!grant) {
+      return json(
+        { error: 'GitHub is not connected.', needsConnect: true },
+        404
+      );
+    }
+    return json({ ok: true, gh_grant: grant, expiresIn: 15 * 60 });
+  }
+
+  // POST /api/gh/revoke — delete the KV token so all grants fail closed
+  if (request.method === 'POST' && path === '/api/gh/revoke') {
+    const grantRes = await requireGrant(request, env);
+    if (grantRes instanceof Response) return grantRes;
+    await service.revoke(grantRes.claims.uid);
+    return json({ ok: true, revoked: true });
+  }
+
+  // Everything else under /api/gh/* is a proxied GitHub API call
+  const grantRes = await requireGrant(request, env);
+  if (grantRes instanceof Response) return grantRes;
+
+  const pathAfterPrefix = path.replace(/^\/api\/gh/, '') || '/';
+  const upstream = await service.proxy(pathAfterPrefix, request, grantRes.claims);
+  const out = new Response(upstream.body, upstream);
+  out.headers.set('Access-Control-Allow-Origin', '*');
+  return out;
+}
+
+/** Extracts and verifies the grant bound to the request; fails closed. */
+async function requireGrant(
+  request: Request,
+  env: Env
+): Promise<{ claims: GrantClaims } | Response> {
+  const auth = request.headers.get('authorization');
+  const grant = auth?.startsWith('Bearer ') ? auth.slice(7) : auth;
+  const claims = await verifyGrant(env.GH_GRANT_SECRET ?? '', grant ?? '', {
+    nowSec: Math.floor(Date.now() / 1000),
+  });
+  if (!claims) {
+    return json(
+      { error: 'Unauthorized', message: 'GitHub session expired. Re-connect.' },
+      401
+    );
+  }
+  return { claims };
+}
 
 async function handleAiGenerate(request: Request, env: Env): Promise<Response> {
   try {
@@ -80,9 +259,9 @@ async function handleAiGenerate(request: Request, env: Env): Promise<Response> {
     const { provider, model, apiKey, messages } = body;
 
     if (!provider || !apiKey) {
-      return Response.json(
+      return json(
         { error: 'Missing required fields: provider, apiKey, and messages or prompt' },
-        { status: 400 }
+        400
       );
     }
 
@@ -103,7 +282,7 @@ async function handleAiGenerate(request: Request, env: Env): Promise<Response> {
         });
         const data = await res.json() as any;
         if (!res.ok) throw new Error(data.error?.message || `OpenRouter error (${res.status})`);
-        return Response.json({ text: data.choices?.[0]?.message?.content || '', model });
+        return json({ text: data.choices?.[0]?.message?.content || '', model });
       }
 
       case 'gemini': {
@@ -123,7 +302,7 @@ async function handleAiGenerate(request: Request, env: Env): Promise<Response> {
         const data = await res.json() as any;
         if (!res.ok) throw new Error(data.error?.message || `Gemini error (${res.status})`);
         const text = data?.candidates?.[0]?.content?.parts?.map((p: any) => p.text).join('') || '';
-        return Response.json({ text, model: geminiModel });
+        return json({ text, model: geminiModel });
       }
 
       case 'openai': {
@@ -140,16 +319,16 @@ async function handleAiGenerate(request: Request, env: Env): Promise<Response> {
         });
         const data = await res.json() as any;
         if (!res.ok) throw new Error(data.error?.message || `OpenAI error (${res.status})`);
-        return Response.json({ text: data.choices?.[0]?.message?.content || '', model });
+        return json({ text: data.choices?.[0]?.message?.content || '', model });
       }
 
       default:
-        return Response.json({ error: `Unsupported provider: ${provider}` }, { status: 400 });
+        return json({ error: `Unsupported provider: ${provider}` }, 400);
     }
   } catch (err: any) {
-    return Response.json(
+    return json(
       { error: err.message || 'AI request failed' },
-      { status: 500 }
+      500
     );
   }
 }
@@ -169,27 +348,11 @@ async function handleSecurityScan(env: Env): Promise<Response> {
     (f) => f.severity === 'high' || f.severity === 'medium'
   );
 
-  return Response.json({
+  return json({
     status: threatsFound ? 'threat' : 'secure',
     threatsFound,
     scannedAt: new Date().toISOString(),
     environment: 'cloudflare-worker',
     findings,
-  });
-}
-
-async function handleAuthSync(request: Request): Promise<Response> {
-  const auth = request.headers.get('authorization');
-
-  if (!auth || !auth.startsWith('Bearer ')) {
-    return Response.json(
-      { error: 'Unauthorized', message: 'Missing or invalid authentication token' },
-      { status: 401 }
-    );
-  }
-
-  return Response.json({
-    success: true,
-    message: 'Server-side validation passed',
   });
 }

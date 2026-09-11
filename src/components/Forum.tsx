@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabaseClient';
+import { client } from '../lib/client';
+import * as forum from '../lib/firestore';
 import { sanitizeInput, detectSqlInjection } from '../lib/sanitize';
-import { Thread, Profile, Reply } from '../types';
+import { Thread, Reply } from '../types';
 import { MessageSquare, ArrowUp, Plus, LogOut, Loader2, ArrowLeft } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 
@@ -32,100 +33,41 @@ const categories = ["All Topics", "General", "AI Research", "Announcements", "He
 
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    client.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setLoading(false);
     });
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = client.auth.onAuthStateChange((_event, session) => {
       setSession(session);
     });
 
     return () => subscription.unsubscribe();
   }, []);
 
+  // Realtime data: Firestore onSnapshot replaces the old postgres_changes
+  // channels. Listening to the threads collection (or the replies collection
+  // while a thread is open) also picks up upvote/reply-count changes.
   useEffect(() => {
     if (activeThread) {
-      loadReplies(activeThread.id);
-    } else {
-      loadThreads();
+      return forum.subscribeReplies(activeThread.id, setReplies);
     }
+    return forum.subscribeThreads(setThreads);
   }, [activeThread]);
-
-  useEffect(() => {
-    // Realtime subscriptions
-    const threadsSubscription = supabase
-      .channel('public:threads')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'threads' }, () => {
-        if (!activeThread) loadThreads();
-      })
-      .subscribe();
-
-    const repliesSubscription = supabase
-      .channel('public:replies')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'replies' }, payload => {
-        if (activeThread && (payload.new as any).thread_id === activeThread.id) {
-          loadReplies(activeThread.id);
-        }
-      })
-      .subscribe();
-
-    const upvotesSubscription = supabase
-      .channel('public:upvotes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'upvotes' }, payload => {
-        if (activeThread) {
-          loadReplies(activeThread.id);
-        } else {
-          loadThreads();
-        }
-      })
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(threadsSubscription);
-      supabase.removeChannel(repliesSubscription);
-      supabase.removeChannel(upvotesSubscription);
-    };
-  }, [activeThread]);
-
-  async function loadThreads() {
-    const { data, error } = await (supabase
-      .from('threads') as any)
-      .select('*, author:profiles(*)') as any;
-
-    if (data) {
-      setThreads((data as any[]).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));
-    }
-  }
-
-  async function loadReplies(threadId: string) {
-    const { data, error } = await (supabase
-      .from('replies') as any)
-      .select('*, author:profiles(*)')
-      .eq('thread_id', threadId)
-      .order('created_at', { ascending: true }) as any;
-
-    if (data) setReplies(data as any[]);
-  }
 
   async function handleAuth(e: React.FormEvent) {
     e.preventDefault();
     setAuthError('');
     
-    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL.includes('placeholder')) {
-      setAuthError('Supabase is not configured. Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your AI Studio secrets.');
-      return;
-    }
-
     try {
       if (isSignUp) {
         if (!username) {
           setAuthError('Username is required');
           return;
         }
-        const { error } = await supabase.auth.signUp({
+        const { error } = await client.auth.signUp({
           email,
           password,
           options: {
@@ -135,7 +77,7 @@ const categories = ["All Topics", "General", "AI Research", "Announcements", "He
         if (error) throw error;
         alert('Check your email for the login link or log in if auto-confirmed!');
       } else {
-        const { error } = await supabase.auth.signInWithPassword({
+        const { error } = await client.auth.signInWithPassword({
           email,
           password
         });
@@ -155,25 +97,19 @@ const categories = ["All Topics", "General", "AI Research", "Announcements", "He
       return;
     }
 
-    const { data, error } = await (supabase
-      .from('threads') as any)
-      .insert([
-        {
-          title: sanitizeInput(newThreadTitle),
-          content: sanitizeInput(newThreadContent),
-          category: newThreadCategory,
-          author_id: session.user.id
-        }
-      ])
-      .select() as any;
+    const result = await forum.createThread({
+      title: sanitizeInput(newThreadTitle),
+      content: sanitizeInput(newThreadContent),
+      category: newThreadCategory,
+    });
 
-    if (error) {
-      alert(error.message);
+    if (result.error) {
+      alert(result.error);
     } else {
       setIsComposing(false);
       setNewThreadTitle('');
       setNewThreadContent('');
-      loadThreads();
+      forum.syncProfileForCurrentUser();
     }
   }
 
@@ -186,22 +122,12 @@ const categories = ["All Topics", "General", "AI Research", "Announcements", "He
       return;
     }
 
-    const { error } = await (supabase
-      .from('replies') as any)
-      .insert([
-        {
-          thread_id: activeThread.id,
-          content: sanitizeInput(replyContent),
-          author_id: session.user.id
-        }
-      ]) as any;
+    const result = await forum.createReply(activeThread.id, sanitizeInput(replyContent));
 
-    if (error) {
-      alert(error.message);
+    if (result.error) {
+      alert(result.error);
     } else {
       setReplyContent('');
-      // increment reply count on thread via rpc or trigger in real app
-      // for now, subscription handles reload
     }
   }
 
@@ -210,17 +136,9 @@ const categories = ["All Topics", "General", "AI Research", "Announcements", "He
       alert('Please log in to upvote');
       return;
     }
-    const { error } = await (supabase
-      .from('upvotes') as any)
-      .insert([
-        {
-          user_id: session.user.id,
-          thread_id: threadId,
-          reply_id: replyId
-        }
-      ]);
-    if (error && error.code !== '23505') { // Ignore unique constraint violations (already upvoted)
-      alert(error.message);
+    const result = await forum.setUpvote({ threadId, replyId });
+    if (result.error) {
+      alert(result.error);
     }
   }
 
@@ -260,7 +178,7 @@ const categories = ["All Topics", "General", "AI Research", "Announcements", "He
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-3xl font-extrabold tracking-tight text-white">Community Forum</h2>
-          <p className="text-slate-300 mt-1">Live, real-time discussions powered by Supabase.</p>
+          <p className="text-slate-300 mt-1">Live, real-time discussions powered by Firebase Firestore.</p>
         </div>
         
         {session ? (
@@ -269,7 +187,7 @@ const categories = ["All Topics", "General", "AI Research", "Announcements", "He
               Welcome, {session.user.user_metadata?.username || session.user.email}
             </span>
             <button 
-              onClick={() => supabase.auth.signOut()}
+              onClick={() => client.auth.signOut()}
               className="inline-flex items-center gap-2 px-3 py-1.5 bg-white/10 text-slate-300 text-sm font-semibold rounded-lg hover:bg-white/5 transition-colors"
             >
               <LogOut className="w-4 h-4" />

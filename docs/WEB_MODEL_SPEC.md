@@ -341,8 +341,8 @@ a substitute for package integrity.
 6. Prompts and outputs are excluded from analytics.
 7. Installed models can be deleted and re-verified by the user.
 8. A failed verification never changes the `ready` state.
-9. A model cannot access GitHub, Supabase, AI provider keys, or arbitrary
-   network endpoints through the runtime adapter.
+9. A model cannot access GitHub, Firebase credential stores, AI provider keys, or
+   arbitrary network endpoints through the runtime adapter.
 10. License and acceptable-use metadata are visible before download.
 
 ## 13. Accessibility and mobile requirements

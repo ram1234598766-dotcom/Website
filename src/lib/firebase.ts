@@ -1,13 +1,14 @@
 /**
  * Firebase client initialization for VantaOS.
  *
- * Firebase is used for account sign-in / sign-out (replacing the Supabase
- * auth layer), and to mint a Google OAuth access token that the Google Drive
- * REST API can consume (drive.readonly + drive.file).
+ * Firebase handles account sign-in / sign-out and mints a Google OAuth
+ * access token that the Google Drive REST API can consume
+ * (drive.readonly + drive.file). Its Cloud Firestore instance backs the
+ * Forum and Admin data tier (src/lib/firestore.ts).
  *
  * All NEXT_PUBLIC_FIREBASE_* values are inlined at build time (static export).
  * If no Firebase project is configured, isFirebaseConfigured() returns false
- * and the app falls back to the legacy Supabase auth or the local demo auth.
+ * and the app falls back to the local demo auth (src/lib/demoAuth.ts).
  */
 
 import { initializeApp, getApps, type FirebaseApp } from 'firebase/app';

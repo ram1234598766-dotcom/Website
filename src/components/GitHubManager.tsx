@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Github, Loader2, RefreshCw, Download, Upload, AlertCircle, X, ChevronRight, GitCommit } from 'lucide-react';
+import { Github, Loader2, RefreshCw, Download, Upload, AlertCircle, X, ChevronRight, GitCommit, Unplug } from 'lucide-react';
 import * as github from '../lib/github';
-import { supabase } from '../lib/supabaseClient';
+import { client } from '../lib/client';
 
 interface Props {
   files: any[];
@@ -13,34 +13,28 @@ interface Props {
 }
 
 export default function GitHubManager({ files, setFiles, originalFiles, setOriginalFiles, onClose }: Props) {
-  const [token, setToken] = useState<string | null>(localStorage.getItem('github_token'));
+  const [connected, setConnected] = useState(() => github.hasGitHubGrant());
   const [repos, setRepos] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  
+
   const [activeRepo, setActiveRepo] = useState<any>(null);
   const [commitMessage, setCommitMessage] = useState('');
   const [pushing, setPushing] = useState(false);
 
+  // Reflect the memory-only grant state (connect/revoke/expiry) reactively.
   useEffect(() => {
-    if (token) {
+    return github.onGitHubGrantChange((g) => {
+      const now = !!g;
+      setConnected(now);
+      if (now) loadRepos();
+    });
+  }, []);
+
+  useEffect(() => {
+    if (github.hasGitHubGrant()) {
       loadRepos();
     }
-  }, [token]);
-
-  // Capture the GitHub provider token from the Supabase session after OAuth
-  // completes, and persist it so the sync flow is reachable.
-  useEffect(() => {
-    const persistToken = (session: any) => {
-      const tok = session?.provider_token;
-      if (tok) {
-        localStorage.setItem('github_token', tok);
-        setToken(tok);
-      }
-    };
-    supabase.auth.getSession().then(({ data }) => persistToken((data as any)?.session));
-    const sub = supabase.auth.onAuthStateChange((_event, session) => persistToken(session));
-    return () => sub.data.subscription.unsubscribe();
   }, []);
 
   const loadRepos = async () => {
@@ -51,18 +45,37 @@ export default function GitHubManager({ files, setFiles, originalFiles, setOrigi
       setRepos(data);
     } catch (err: any) {
       setError(err.message);
-      if (err.status === 401) setToken(null);
     } finally {
       setLoading(false);
     }
   };
 
+  // Server-driven OAuth: the Worker stores the access token in KV and hands
+  // the browser a short-lived grant via the redirect hash. No token ever
+  // touches this page's storage.
   const handleLogin = async () => {
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'github',
-      options: { scopes: 'user:email repo' }
-    });
-    if (error) setError(error.message);
+    try {
+      setError('');
+      const { data, error: sessionError } = await client.auth.getSession();
+      if (sessionError || !data?.session?.access_token) {
+        setError('Sign in to VantaOS first, then connect GitHub.');
+        return;
+      }
+      await github.connectGitHubWithFirebase(data.session.access_token);
+    } catch (err: any) {
+      setError(err.message);
+    }
+  };
+
+  const handleDisconnect = async () => {
+    try {
+      setError('');
+      await github.revokeGitHub();
+      setActiveRepo(null);
+      localStorage.removeItem('active_github_repo');
+    } catch (err: any) {
+      setError(err.message);
+    }
   };
 
   const handleClone = async (repo: any) => {
@@ -71,12 +84,12 @@ export default function GitHubManager({ files, setFiles, originalFiles, setOrigi
       setError('');
       const branch = await github.getDefaultBranch(repo.owner.login, repo.name);
       const treeData = await github.getRepoTree(repo.owner.login, repo.name, branch);
-      
+
       const newFiles: any[] = [];
       const newOriginals: Record<string, string> = {};
-      
+
       let idCounter = Date.now();
-      
+
       // Load all files from the tree so nothing is silently dropped. GitHub's
       // tree API is paginated; if a repo is huge, we surface a note rather
       // than truncating without the user's knowledge.
@@ -89,7 +102,7 @@ export default function GitHubManager({ files, setFiles, originalFiles, setOrigi
       for (const item of limitedBlobs) {
         const content = await github.getFileContent(repo.owner.login, repo.name, item.path);
         const id = `${idCounter++}`;
-        
+
         let language = 'plaintext';
         if (item.path.endsWith('.ts') || item.path.endsWith('.tsx')) language = 'typescript';
         else if (item.path.endsWith('.js') || item.path.endsWith('.jsx')) language = 'javascript';
@@ -97,25 +110,24 @@ export default function GitHubManager({ files, setFiles, originalFiles, setOrigi
         else if (item.path.endsWith('.css')) language = 'css';
         else if (item.path.endsWith('.html')) language = 'html';
         else if (item.path.endsWith('.md')) language = 'markdown';
-        
+
         newFiles.push({
           id,
           name: item.path.split('/').pop() || item.path,
           path: item.path,
           content,
-          language
+          language,
         });
         newOriginals[id] = content;
       }
-      
+
       setFiles(newFiles);
       setOriginalFiles(newOriginals);
       setActiveRepo({ ...repo, branch });
       localStorage.setItem('active_github_repo', JSON.stringify({ owner: repo.owner.login, name: repo.name, branch }));
-      
+
     } catch (err: any) {
       setError(err.message);
-      if (err.status === 401) setToken(null);
     } finally {
       setLoading(false);
     }
@@ -126,46 +138,48 @@ export default function GitHubManager({ files, setFiles, originalFiles, setOrigi
     try {
       setPushing(true);
       setError('');
-      
+
       const owner = activeRepo.owner.login || activeRepo.owner;
       const name = activeRepo.name;
       const branch = activeRepo.branch;
-      
+
       const latestCommitSha = await github.getLatestCommit(owner, name, branch);
       const baseTreeSha = await github.getCommitTree(owner, name, latestCommitSha);
-      
+
       const tree = [];
       const changedFiles = files.filter(f => f.content !== originalFiles[f.id]);
-      
+
       if (changedFiles.length === 0) {
         throw new Error('No changes to commit.');
       }
-      
+
       for (const file of changedFiles) {
-         const blobSha = await github.createBlob(owner, name, file.content);
-         tree.push({
-           path: file.path || file.name,
-           mode: '100644',
-           type: 'blob',
-           sha: blobSha
-         });
+        const blobSha = await github.createBlob(owner, name, file.content);
+        tree.push({
+          path: file.path || file.name,
+          mode: '100644',
+          type: 'blob',
+          sha: blobSha,
+        });
       }
-      
+
       const newTreeSha = await github.createTree(owner, name, baseTreeSha, tree);
       const newCommitSha = await github.createCommit(owner, name, commitMessage || 'Update from VantaOS', newTreeSha, latestCommitSha);
-      await github.updateRef(owner, name, branch, newCommitSha);
-      
+      // expectedParent gives the Worker a server-side fresh-parent check on top
+      // of GitHub's own fast-forward rule (both map to a 409 with pull-first
+      // guidance if the branch moved).
+      await github.updateRef(owner, name, branch, newCommitSha, latestCommitSha);
+
       // Update original files
       const newOriginals = { ...originalFiles };
       for (const file of changedFiles) {
-         newOriginals[file.id] = file.content;
+        newOriginals[file.id] = file.content;
       }
       setOriginalFiles(newOriginals);
       setCommitMessage('');
-      
+
     } catch (err: any) {
       setError(err.message);
-      if (err.status === 401) setToken(null);
     } finally {
       setPushing(false);
     }
@@ -184,7 +198,7 @@ export default function GitHubManager({ files, setFiles, originalFiles, setOrigi
   const changedFilesCount = files.filter(f => f.content !== originalFiles[f.id]).length;
 
   return (
-    <motion.div 
+    <motion.div
       initial={{ opacity: 0, x: 20 }}
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: 20 }}
@@ -198,7 +212,7 @@ export default function GitHubManager({ files, setFiles, originalFiles, setOrigi
           <X className="w-4 h-4" />
         </button>
       </div>
-      
+
       <div className="p-4 overflow-y-auto flex-1">
         {error && (
           <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg flex items-start gap-2 text-red-400 text-sm">
@@ -207,11 +221,11 @@ export default function GitHubManager({ files, setFiles, originalFiles, setOrigi
           </div>
         )}
 
-        {!token ? (
+        {!connected ? (
           <div className="text-center py-8">
             <Github className="w-12 h-12 text-slate-500 mx-auto mb-4" />
             <p className="text-slate-400 text-sm mb-6">Sign in to sync your repositories, clone code, and commit directly from VantaOS.</p>
-            <button 
+            <button
               onClick={handleLogin}
               className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-lg transition-colors w-full"
             >
@@ -220,83 +234,96 @@ export default function GitHubManager({ files, setFiles, originalFiles, setOrigi
           </div>
         ) : (
           <div className="flex flex-col gap-6">
+            <div className="flex items-center justify-between bg-slate-800/30 border border-slate-700/30 rounded-lg px-3 py-2">
+              <span className="text-sm text-slate-300 flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                Connected to GitHub
+              </span>
+              <button
+                onClick={handleDisconnect}
+                className="text-xs px-2 py-1 bg-slate-700 hover:bg-slate-600 rounded text-slate-300 transition-colors flex items-center gap-1"
+              >
+                <Unplug className="w-3 h-3" /> Disconnect
+              </button>
+            </div>
+
             {activeRepo && (
-               <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-4">
-                 <div className="flex items-center justify-between mb-4">
-                    <div>
-                      <div className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-1">Active Repository</div>
-                      <div className="font-medium text-white">{activeRepo.owner?.login || activeRepo.owner}/{activeRepo.name}</div>
-                      <div className="text-xs text-slate-500 flex items-center gap-1 mt-1">
-                        <GitCommit className="w-3 h-3" /> Branch: {activeRepo.branch}
-                      </div>
+              <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-4">
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <div className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-1">Active Repository</div>
+                    <div className="font-medium text-white">{activeRepo.owner?.login || activeRepo.owner}/{activeRepo.name}</div>
+                    <div className="text-xs text-slate-500 flex items-center gap-1 mt-1">
+                      <GitCommit className="w-3 h-3" /> Branch: {activeRepo.branch}
                     </div>
-                    <button 
-                      onClick={() => { setActiveRepo(null); localStorage.removeItem('active_github_repo'); }} 
-                      className="text-xs px-2 py-1 bg-slate-700 hover:bg-slate-600 rounded text-slate-300 transition-colors"
-                    >
-                      Disconnect
-                    </button>
-                 </div>
-                 
-                 <div className="pt-4 border-t border-slate-700/50">
-                    <div className="flex items-center justify-between text-sm mb-3">
-                       <span className="text-slate-300">Uncommitted Changes</span>
-                       <span className={`font-mono font-bold ${changedFilesCount > 0 ? 'text-amber-400' : 'text-emerald-400'}`}>
-                         {changedFilesCount} files
-                       </span>
+                  </div>
+                  <button
+                    onClick={() => { setActiveRepo(null); localStorage.removeItem('active_github_repo'); }}
+                    className="text-xs px-2 py-1 bg-slate-700 hover:bg-slate-600 rounded text-slate-300 transition-colors"
+                  >
+                    Clear
+                  </button>
+                </div>
+
+                <div className="pt-4 border-t border-slate-700/50">
+                  <div className="flex items-center justify-between text-sm mb-3">
+                    <span className="text-slate-300">Uncommitted Changes</span>
+                    <span className={`font-mono font-bold ${changedFilesCount > 0 ? 'text-amber-400' : 'text-emerald-400'}`}>
+                      {changedFilesCount} files
+                    </span>
+                  </div>
+                  {changedFilesCount > 0 ? (
+                    <div className="space-y-3">
+                      <input
+                        type="text"
+                        placeholder="Commit message..."
+                        value={commitMessage}
+                        onChange={(e) => setCommitMessage(e.target.value)}
+                        className="w-full bg-black/40 border border-slate-600 rounded p-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                      />
+                      <button
+                        onClick={handlePush}
+                        disabled={pushing}
+                        className="w-full py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold rounded-lg flex items-center justify-center gap-2 transition-colors disabled:opacity-50"
+                      >
+                        {pushing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                        {pushing ? 'Committing...' : 'Commit & Push'}
+                      </button>
                     </div>
-                    {changedFilesCount > 0 ? (
-                       <div className="space-y-3">
-                          <input 
-                            type="text" 
-                            placeholder="Commit message..." 
-                            value={commitMessage}
-                            onChange={(e) => setCommitMessage(e.target.value)}
-                            className="w-full bg-black/40 border border-slate-600 rounded p-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
-                          />
-                          <button 
-                            onClick={handlePush}
-                            disabled={pushing}
-                            className="w-full py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold rounded-lg flex items-center justify-center gap-2 transition-colors disabled:opacity-50"
-                          >
-                            {pushing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-                            {pushing ? 'Committing...' : 'Commit & Push'}
-                          </button>
-                       </div>
-                    ) : (
-                       <div className="text-center py-2 text-slate-500 text-sm">
-                         Working tree clean.
-                       </div>
-                    )}
-                 </div>
-               </div>
+                  ) : (
+                    <div className="text-center py-2 text-slate-500 text-sm">
+                      Working tree clean.
+                    </div>
+                  )}
+                </div>
+              </div>
             )}
-            
+
             {!activeRepo && (
-               <div>
-                 <div className="flex items-center justify-between mb-3">
-                   <h4 className="text-sm font-bold text-slate-300">Your Repositories</h4>
-                   <button onClick={loadRepos} aria-label="Refresh repositories" className="text-slate-500 hover:text-slate-300" disabled={loading}>
-                     <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-                   </button>
-                 </div>
-                 
-                 <div className="space-y-2 max-h-64 overflow-y-auto pr-1 custom-scrollbar">
-                   {repos.map(repo => (
-                     <button key={repo.id} onClick={() => handleClone(repo)} aria-label={`Clone ${repo.name}`}
-                       className="w-full flex items-center justify-between p-3 bg-slate-800/30 hover:bg-slate-800/80 border border-slate-700/30 rounded-lg transition-colors group cursor-pointer text-left">
-                       <div className="overflow-hidden">
-                         <div className="text-sm font-medium text-slate-200 truncate">{repo.name}</div>
-                         <div className="text-xs text-slate-500 truncate">{repo.full_name}</div>
-                       </div>
-                       <Download className="w-4 h-4 opacity-50 group-hover:opacity-100 text-indigo-400 shrink-0 ml-2" />
-                     </button>
-                   ))}
-                   {!loading && repos.length === 0 && (
-                     <div className="text-center py-4 text-sm text-slate-500">No repositories found.</div>
-                   )}
-                 </div>
-               </div>
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="text-sm font-bold text-slate-300">Your Repositories</h4>
+                  <button onClick={loadRepos} aria-label="Refresh repositories" className="text-slate-500 hover:text-slate-300" disabled={loading}>
+                    <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                  </button>
+                </div>
+
+                <div className="space-y-2 max-h-64 overflow-y-auto pr-1 custom-scrollbar">
+                  {repos.map(repo => (
+                    <button key={repo.id} onClick={() => handleClone(repo)} aria-label={`Clone ${repo.name}`}
+                      className="w-full flex items-center justify-between p-3 bg-slate-800/30 hover:bg-slate-800/80 border border-slate-700/30 rounded-lg transition-colors group cursor-pointer text-left">
+                      <div className="overflow-hidden">
+                        <div className="text-sm font-medium text-slate-200 truncate">{repo.name}</div>
+                        <div className="text-xs text-slate-500 truncate">{repo.full_name}</div>
+                      </div>
+                      <Download className="w-4 h-4 opacity-50 group-hover:opacity-100 text-indigo-400 shrink-0 ml-2" />
+                    </button>
+                  ))}
+                  {!loading && repos.length === 0 && (
+                    <div className="text-center py-4 text-sm text-slate-500">No repositories found.</div>
+                  )}
+                </div>
+              </div>
             )}
           </div>
         )}

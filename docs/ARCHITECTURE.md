@@ -23,9 +23,8 @@ products:
 2. **Omni-AI** — one assistant surface over local Ollama and cloud model
    providers.
 3. **Model Hub** — model discovery, Ollama pull, and model launch.
-4. **Developer integrations** — GitHub synchronization, Google Drive, optional
-   Firebase identity, optional Supabase data tier, and future workspace
-   sync/collaboration.
+4. **Developer integrations** — GitHub synchronization, Google Drive, Firebase
+   identity + Cloud Firestore data tier, and future workspace sync/collaboration.
 
 The current application is a static Next.js export served by Cloudflare assets,
 with a Worker handling API paths (`next.config.mjs:2-10`, `wrangler.toml:1-11`,
@@ -60,7 +59,7 @@ with a Worker handling API paths (`next.config.mjs:2-10`, `wrangler.toml:1-11`,
 | IDE | CodeMirror 6 through first-party wrappers (`CloudCodeEditor`, `CloudDiffEditor`), file nodes, tabs, split views, diff, search, Prettier, ZIP export (`src/components/CloudCodeEditor.tsx:16-116`, `src/components/CloudDiffEditor.tsx:15-115`, `src/components/CloudOS.tsx:151-187`, `src/components/CloudOS.tsx:269-293`, `src/components/CloudOS.tsx:573-607`). | Keep the editor adapters thin while moving workspace mutation and persistence into the oplog core. |
 | Terminal | xterm.js renders a browser terminal backed by `ShellSession`; `WorkspaceTerminalFs` maps commands to the workspace and `ExecutionQuota` rate-limits commands and caps output (`src/components/TerminalPanel.tsx:41-83`, `src/lib/terminal/commands.ts:51-100`, `src/lib/terminal/sandbox.ts:75-165`, `src/lib/terminal/quota.ts:20-65`). JavaScript `js`/`node` and Omni-AI `js`/`calc` still use unrestricted `Function`/`new Function` execution (`src/lib/terminal/commands.ts:202-220`, `src/components/OmniAI.tsx:84-90`). | Replace unrestricted evaluation with an isolated runner while retaining the workspace-backed filesystem and quota boundary. |
 | Persistence | CloudOS hydrates from the IndexedDB workspace oplog, migrates the legacy `localStorage` snapshot, and still writes a secondary snapshot every 300 ms (`src/components/CloudOS.tsx:295-410`). The append-only operation log and sequence metadata are in IndexedDB (`src/lib/workspace/operations.ts:20-169`); the older `storage.ts` helper remains for legacy file storage and migration (`src/lib/storage.ts:10-24`, `src/lib/storage.ts:60-134`). | Finish the migration so the oplog/outbox is the sole canonical write path, then remove the secondary snapshot and add recovery tests. |
-| Identity | Firebase Auth is the preferred Google/GitHub OAuth adapter, exposed through the unified `supabase.auth` proxy; Supabase and local demo auth are fallbacks (`src/lib/firebase.ts:37-73`, `src/lib/supabase.ts:33-214`, `src/lib/demoAuth.ts:1-10`). | Define one identity port, explicit demo/production modes, and a secure token boundary. |
+| Identity | Firebase Auth is the preferred Google/GitHub OAuth adapter, exposed through the unified `client.auth` facade; local demo auth is the fallback when Firebase is unconfigured (`src/lib/client.ts`, `src/lib/firebase.ts`, `src/lib/demoAuth.ts`). | Define one identity port, explicit demo/production modes, and a secure token boundary. |
 | Drive | Google Drive REST v3 uses the OAuth access token captured during Firebase Google sign-in; the token is held in memory/sessionStorage with a 45-minute TTL and scopes `drive.readonly` + `drive.file` (`src/lib/drive.ts:30-100`, `src/lib/drive.ts:138-277`, `src/components/DriveManager.tsx:69-205`). | Move token refresh and privileged API calls out of the browser; keep one identity port for Drive and GitHub. |
 | GitHub | Browser code stores a GitHub token and active repository in `localStorage` and calls GitHub REST directly (`src/components/GitHubManager.tsx:15-44`, `src/components/GitHubManager.tsx:68-171`, `src/lib/github.ts:8-116`). | Move privileged token handling to an OAuth/server boundary and use short-lived workspace grants. |
 | AI | Omni-AI supports Ollama, OpenRouter, Gemini, and OpenAI; settings/history are browser-local (`src/components/OmniAI.tsx:6-25`, `src/components/OmniAI.tsx:130-146`, `src/components/OmniAI.tsx:148-235`). Local tool commands also use unrestricted `Function`/`new Function` for `calc`/`js` and fetch arbitrary HTTP URLs (`src/components/OmniAI.tsx:58-100`). | Add a provider registry, request policy, streaming protocol, sandboxed tools, and audit-safe telemetry. |
@@ -93,7 +92,7 @@ with a Worker handling API paths (`next.config.mjs:2-10`, `wrangler.toml:1-11`,
 +-------v--------+                         +--------v-------+
 | Local storage  |                         | Backend/remote |
 | IndexedDB/OPFS |                         | Firebase +     |
-|                |                         | Supabase/API   |
+|                |                         | Firestore/API  |
 +----------------+                         +----------------+
 
 Desktop-only adapter: Ollama daemon <-localhost/CORS-> browser
@@ -336,7 +335,7 @@ mobile-ready.
 - Demo mode is explicitly labeled local-only and is never presented as
   production authentication.
 - Firebase Auth is the production identity adapter (Google/GitHub OAuth),
-  surfaced through the unified `supabase.auth` adapter.
+  surfaced through the unified `client.auth` facade.
 - Google Drive uses the OAuth access token captured during Firebase Google
   sign-in (`drive.readonly` browse/open + `drive.file` for the app-owned
   VantaOS folder; `src/lib/drive.ts:4-279`).
@@ -422,9 +421,8 @@ idempotency keys where writes are possible, and contract tests.
    security headers, service worker for shell caching where safe.
 2. **Cloudflare Worker:** API gateway, provider proxy, model proxy, OAuth
    exchange, rate limiting, and edge health.
-3. **Firebase:** identity (Google/GitHub OAuth), Google Drive OAuth token capture.
-4. **Supabase:** optional forum data, workspace metadata, and sync operations
-   with RLS.
+3. **Firebase:** identity (Google/GitHub OAuth), Google Drive OAuth token capture,
+   and the Cloud Firestore data tier (forum threads, replies, upvotes, profiles).
 5. **Object storage/CDN:** signed model shards and immutable manifests.
 6. **Optional desktop companion:** Ollama bridge and native execution runner.
 7. **Optional remote runners:** isolated containers/VMs for non-browser
@@ -508,10 +506,10 @@ Notes:
 | 2 | IDE reliability | ⚠️ | Editor/terminal/diff/search implemented; terminal executes via `new Function` (`src/components/TerminalPanel.tsx:157-169`); no tests |
 | 3 | Omni-AI orchestration | ⚠️ | Provider union + Worker proxy (`src/components/OmniAI.tsx:6-25`, `workers/worker.ts:77-155`) implemented; no streaming/cancellation/redaction tests |
 | 4 | WebModel delivery | 🔲 | Ollama pull only (`src/components/Showcase.tsx:122-169`); no manifest/shard/signature path |
-| 5 | Identity and GitHub security | ⚠️ | Firebase sign-in live and smoke-verified (§13.0); Drive and GitHub flows implemented-untested; browser-stored GitHub token remains (`src/lib/github.ts:8-40`) |
+| 5 | Identity and GitHub security | ✅ | `npm test` (53 vitest, 4 files `tests/phase5/*.test.ts`) pass Sep 11 2026; Firebase ID-token RS256 verification + HMAC grant lifecycle + GH OAuth token-boundary proxy + push-safety all test-proven; browser token replaced by memory-only grant |
 | 6 | Sync and collaboration | 🔲 | No sync API, operation log, or conflict model |
 | 7 | Mobile/PWA experience | ⚠️ | Responsive drawer (`src/components/Navigation.tsx:102-159`); no PWA shell or device E2E |
-| 8 | Production operations | ⚠️ | Static export + Worker deployed; no CI, no test script (`package.json:6-13`), no LICENSE file despite the `README.md:138-140` claim |
+| 8 | Production operations | ⚠️ | `npm test` runs vitest (53 Phase 5 tests); CI workflow, LICENSE, SECURITY.md, CONTRIBUTING.md still missing |
 | 9 | Plugin ecosystem | 🔲 | Not started |
 
 ### 13.2 Per-phase detail and exit gates
@@ -560,19 +558,33 @@ Notes:
 
 **Phase 5 — Identity and GitHub security**
 
-- ✅ Firebase Google OAuth sign-in: live project `website-6e8b1`, provider
-  enabled, popup flow smoke-verified (§13.0); `npx tsc --noEmit` and
-  `npm run build` green with the real env.
-- ⚠️ Firebase GitHub OAuth: provider enabled; no automated flow test.
-- ⚠️ Google Drive: browse/open (readonly) + VantaOS-folder save implemented
-  (`src/lib/drive.ts:4-279`, `DriveManager`); live round trip pending the human
-  consent step.
-- ⚠️ Demo mode: explicitly labeled local-only (`src/lib/demoAuth.ts`); no test.
-- 🔲 Server-side GitHub OAuth with short-lived scoped grants; remove GitHub token
-  from browser storage; server-side role/repository checks; fresh-parent push
-  protection.
-- Exit gate: token-boundary and push-safety tests — partially met (Firebase path
-  verified; GitHub token boundary still open).
+- ✅ Server-side GitHub OAuth with short-lived HMAC-signed grants
+  (`workers/grants.ts`; version/1, TTL 900s, skew 15s, HMAC-SHA256 over
+  `version.exp.uid.jti`). Browser holds only the grant in memory
+  (`src/lib/github.ts`); GitHub access token stored server-side in KV
+  `gh:{uid}` with 60-day TTL. Browser-stored token removed.
+- ✅ Firebase ID-token server-side verification (`workers/firebase-verify.ts`):
+  RS256 via Google JWKS with kid/use-sig filtering, `aud`/`iss`/`exp`
+  validation, WebCrypto sig check, JWKS cache keyed by URL.
+- ✅ Push safety: proxy enforces fresh-parent check on PATCH
+  `git/refs/heads/*` (409 `stale_base`), protects protected-branch pushes
+  (409 `protected_branch`), maps GitHub's "not a fast forward" 422 → 409
+  `push_conflict`; 403 rate-limit → 429 `rate_limited`.
+- ✅ All of the above proven by 53 vitest tests (`npm test` Sep 11 2026):
+  grant lifecycle (sign/verify/expiry/replay/nbf/byte-injection),
+  Firebase ID-token verification (tampered/expired/bad-key/cache/clockSkew),
+  proxy (token extraction, GET/POST/DELETE routing, fake-origin rejection,
+  stashed token forwarding, bad-session → needsConnect, 422/403 mapping,
+  expected_parent, force:false rejection, protected-branch, revocation,
+  hash capture, grant refresh flow).
+- ⚠️ Live end-to-end OAuth round trip requires user-supplied GitHub OAuth
+  App credentials and worker secrets (`GITHUB_CLIENT_ID`,
+  `GITHUB_CLIENT_SECRET`, `GH_GRANT_SECRET`) + `GH_TOKENS` KV binding +
+  `APP_ORIGIN` (cannot automate from this environment).
+- ⚠️ Firebase Drive round-trip implemented (`src/lib/drive.ts`); browser
+  consent for folder creation still pending user's first Google sign-in.
+- Exit gate: token-boundary and push-safety tests — now met via
+  `npm test` (53 vitest tests, `tests/phase5/*.test.ts`).
 
 **Phase 6 — Sync and collaboration**
 
@@ -590,12 +602,14 @@ Notes:
 **Phase 8 — Production operations**
 
 - ✅ Static export served by Cloudflare Worker; `/api/health`, `/api/ai/generate`,
-  `/api/security/*` routes exist.
-- 🔲 CI (build, typecheck, lint, browser E2E, dependency audit); no test script in
-  `package.json:6-13`; no LICENSE file (README claims Apache-2.0 at
-  `README.md:138-140`); no `SECURITY.md` or `CONTRIBUTING.md`; no SLOs, runbooks,
-  structured logs, or health/status endpoints.
-- Exit gate: production readiness review — unmet.
+  `/api/security/*`, `/api/gh/*` routes exist.
+- ✅ `npm test` runs vitest (53 Phase 5 tests, Sep 11 2026); `npm run lint`
+  (`tsc --noEmit`) passes; `npm run build` produces a static export.
+- 🔲 CI workflow (lint + test + build, on push/PR); no LICENSE file (README
+  claims Apache-2.0 at `README.md:138-140`); no `SECURITY.md` or
+  `CONTRIBUTING.md`; no structured logs or SLO runbooks.
+- Exit gate: production readiness review — partially met (test runner in place;
+  CI and docs hygiene still open).
 
 **Phase 9 — Plugin ecosystem**
 
@@ -608,14 +622,19 @@ Notes:
 Driven by the charter (correctness/security first, then beginner experience,
 then advanced power):
 
-1. Close Phase 5's security gaps: server-side GitHub OAuth with short-lived
-   grants, remove the browser-stored token, server-side role checks.
-2. Phase 2 sandbox: replace `new Function` execution with an isolated runner and
-   explicit quotas.
-3. Add the Phase 0/8 baseline surface: test runner, CI workflow, `LICENSE`,
-   `SECURITY.md`, `CONTRIBUTING.md`.
-4. Then execute the remaining phases in ROADMAP order (1, 3, 4, 6, 7, 9), each
-   gated on its named tests.
+1. **Phase 2 sandbox** — replace `new Function` terminal execution with an
+   isolated runner (`SandboxRunner`), run-ids, host watchdog, output caps, and
+   tests. Single highest-risk current gap; only thing standing between the
+   claimed "production-ready" state and an XSS/RCE surface in the browser.
+2. **Phase 0/8 baseline** — add `LICENSE` (Apache-2.0), `SECURITY.md`,
+   `CONTRIBUTING.md`, `.github/workflows/ci.yml` (lint + test + build on
+   push/PR); update §13 matrix with evidence.
+3. **Phase 5 live end-to-end** — remaining UI work (Firebase Account Link
+   wizard `src/components/Auth.tsx`, Drive consent flow) + live round-trip
+   with user-supplied credentials. Blocked on: GitHub OAuth App, worker
+   secrets, KV binding, `APP_ORIGIN`.
+4. Remaining phases in ROADMAP order (1, 3, 4, 6, 7, 9), each gated on its
+   named tests.
 
 The original target architecture was produced without runtime changes; the
 §13.0 verified states document subsequent live wiring.

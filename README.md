@@ -29,7 +29,7 @@ Sign in with Google, GitHub (or Firebase OAuth — the default), clone any of yo
 Sign in with your Google account (Firebase) and connect Google Drive. Browse every file in your Drive read-only, open any text document straight into the editor, and save work into a dedicated **VantaOS** folder the app owns — your own files are never overwritten.
 
 ### 🔐 Privacy
-Your workspace data stays in your browser by default. Demo auth accounts are stored locally (passwords hashed with SHA-256). When Firebase is configured, sign-in and accounts use your Firebase project; the optional Supabase tier keeps backing the Forum and Admin data layer with row-level security. No tracking scripts, no telemetry resale.
+Your workspace data stays in your browser by default. Demo auth accounts are stored locally (passwords hashed with SHA-256). When Firebase is configured, sign-in and accounts use your Firebase project; the Forum, Admin metrics, and profiles are stored in your own Cloud Firestore database, protected by Firestore security rules. No tracking scripts, no telemetry resale.
 
 ---
 
@@ -44,7 +44,7 @@ Your workspace data stays in your browser by default. Demo auth accounts are sto
 | Terminal | xterm.js |
 | AI | Ollama, OpenRouter, Gemini, OpenAI |
 | Auth | Firebase (optional — Google/GitHub OAuth, Google Drive) |
-| DB | Supabase (optional — Forum, Admin) |
+| DB | Firebase (Cloud Firestore — Forum, Admin) |
 | Deployment | Cloudflare Workers + static assets |
 
 ---
@@ -53,8 +53,7 @@ Your workspace data stays in your browser by default. Demo auth accounts are sto
 
 ### Prerequisites
 - Node.js 20+ and npm
-- (Optional) A Firebase project for Google/GitHub sign-in + Google Drive (`NEXT_PUBLIC_FIREBASE_*` env vars; enable the Google Drive API in the linked Google Cloud project)
-- (Optional) A Supabase project for the Forum/Admin data tier
+- (Optional) A Firebase project for Google/GitHub sign-in + Google Drive + the Forum/Admin data tier (enable Firebase Authentication, Cloud Firestore, and the Google Drive API in the linked Google Cloud project)
 - (Optional) A local [Ollama](https://ollama.com) install for the model hub
 - (Optional) API keys for OpenRouter / Gemini / OpenAI to use cloud AI
 
@@ -94,8 +93,7 @@ npm run build && npx wrangler deploy
 
 Set environment variables / secrets in the Cloudflare dashboard or via `wrangler secret put`:
 - `GEMINI_API_KEY` — for Omni-AI (optional)
-- `NEXT_PUBLIC_FIREBASE_*` — Firebase auth + Drive (optional; build-time)
-- `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` — Forum/Admin data tier (optional; build-time)
+- `NEXT_PUBLIC_FIREBASE_*` — Firebase auth + Drive + Cloud Firestore (optional; build-time)
 
 ---
 
@@ -112,7 +110,7 @@ Set environment variables / secrets in the Cloudflare dashboard or via `wrangler
     ├── components/        # Home, CloudOS (IDE), TerminalPanel, OmniAI,
     │                      # OllamaLocal, Showcase (model hub), GitHubManager, DriveManager,
     │                      # AuthModal, CommandPalette, AdminPanel, ...
-    ├── lib/               # supabase (unified auth/data client), firebase, drive, demoAuth, github, sanitize
+    ├── lib/               # client (unified auth facade), firebase, firestore, drive, demoAuth, github, sanitize
     └── types.ts           # Shared TypeScript types
 ```
 
@@ -128,8 +126,6 @@ Set environment variables / secrets in the Cloudflare dashboard or via `wrangler
 | `NEXT_PUBLIC_FIREBASE_APP_ID` | Firebase Web app ID | No |
 | `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET` | Firebase storage bucket (optional) | No |
 | `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID` | Firebase messaging sender ID (optional) | No |
-| `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL (Forum/Admin data tier) | No |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon key | No |
 | `NEXT_PUBLIC_APP_URL` | Public URL (for OAuth callbacks) | No |
 | `GEMINI_API_KEY` | Worker-side secret for Omni-AI | No |
 

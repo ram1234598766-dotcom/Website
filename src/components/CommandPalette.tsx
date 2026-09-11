@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, Compass, Puzzle, File, Folder, Plus, Save, LogOut, Settings as SettingsIcon, Terminal } from 'lucide-react';
 import { ViewState } from '../types';
-import { supabase } from '../lib/supabase';
+import { client } from '../lib/client';
 
 interface CommandPaletteProps {
   isOpen: boolean;
@@ -81,7 +81,7 @@ export default function CommandPalette({ isOpen, onClose, setCurrentView }: Comm
       description: 'Sign out of VantaOS',
       icon: LogOut,
       onSelect: () => {
-        supabase.auth.signOut();
+        client.auth.signOut();
         onClose();
       }
     }

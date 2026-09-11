@@ -1,6 +1,7 @@
 import { ShieldAlert, Activity, Users, Server, Ban, Lock, Globe2, Loader2, MessageSquare, Reply } from 'lucide-react';
 import { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabaseClient';
+import { client } from '../lib/client';
+import * as forum from '../lib/firestore';
 
 export default function AdminPanel() {
   const [adminEmail, setAdminEmail] = useState('');
@@ -12,50 +13,32 @@ export default function AdminPanel() {
   });
 
   useEffect(() => {
-    async function loadMetrics() {
-      try {
-        const [usersRes, threadsRes, repliesRes] = await Promise.all([
-          supabase.from('profiles').select('*', { count: 'exact', head: true }),
-          supabase.from('threads').select('*', { count: 'exact', head: true }),
-          supabase.from('replies').select('*', { count: 'exact', head: true })
-        ]);
+    let unsub: (() => void) | null = null;
 
-        setMetrics({
-          usersCount: usersRes.count || 0,
-          threadsCount: threadsRes.count || 0,
-          repliesCount: repliesRes.count || 0,
-          loading: false
-        });
-      } catch (err) {
-        console.error('Failed to load metrics:', err);
-        setMetrics(prev => ({ ...prev, loading: false }));
-      }
-    }
+    forum.getMetrics().then((m) => {
+      setMetrics({
+        usersCount: m.users,
+        threadsCount: m.threads,
+        repliesCount: m.replies,
+        loading: false
+      });
+    });
 
-    loadMetrics();
+    // Realtime counts via Firestore onSnapshot (replaces postgres_changes).
+    unsub = forum.subscribeMetrics((m) => {
+      setMetrics({
+        usersCount: m.users,
+        threadsCount: m.threads,
+        repliesCount: m.replies,
+        loading: false
+      });
+    });
 
-    // Subscribe to changes to update metrics in real-time
-    const threadsSub = supabase.channel('metrics_threads')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'threads' }, loadMetrics)
-      .subscribe();
-    
-    const repliesSub = supabase.channel('metrics_replies')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'replies' }, loadMetrics)
-      .subscribe();
-
-    const profilesSub = supabase.channel('metrics_profiles')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, loadMetrics)
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(threadsSub);
-      supabase.removeChannel(repliesSub);
-      supabase.removeChannel(profilesSub);
-    };
+    return () => unsub?.();
   }, []);
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
+    client.auth.getUser().then(({ data }) => {
       setAdminEmail(data.user?.email || '');
     });
   }, []);
@@ -138,8 +121,8 @@ export default function AdminPanel() {
                 <button 
                   onClick={async () => {
                      try {
-                        const { error } = await supabase.auth.signInWithOAuth({ provider: 'github' });
-                        if (error) alert(`Test failed: ${error.message}`);
+const { error } = await client.auth.signInWithOAuth({ provider: 'github' });
+if (error) alert(`Test failed: ${error.message}`);
                      } catch (err: any) {
                         alert(`Test error: ${err.message}`);
                      }
@@ -156,8 +139,8 @@ export default function AdminPanel() {
                 <button 
                   onClick={async () => {
                      try {
-                        const { error } = await supabase.auth.signInWithOAuth({ provider: 'google' });
-                        if (error) alert(`Test failed: ${error.message}`);
+const { error } = await client.auth.signInWithOAuth({ provider: 'google' });
+                         if (error) alert(`Test failed: ${error.message}`);
                      } catch (err: any) {
                         alert(`Test error: ${err.message}`);
                      }

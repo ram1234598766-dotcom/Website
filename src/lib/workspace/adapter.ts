@@ -167,8 +167,7 @@ export class GitHubAdapter implements Adapter {
   }
 
   async health(): Promise<boolean> {
-    const token = localStorage.getItem('github_token');
-    return !!token;
+    return github.hasGitHubGrant();
   }
 }
 

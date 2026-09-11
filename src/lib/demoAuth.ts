@@ -2,11 +2,9 @@
  * DemoAuth — A localStorage-backed authentication system that works
  * entirely in the browser without any external service.
  *
- * When Supabase is configured (NEXT_PUBLIC_SUPABASE_URL is set), this
- * module defers to the real Supabase client automatically.
- *
- * All passwords are hashed with SHA-256 before storage. No plaintext
- * passwords are ever persisted.
+ * Used only when no Firebase project is configured
+ * (NEXT_PUBLIC_FIREBASE_* unset). All passwords are hashed with SHA-256
+ * before storage. No plaintext passwords are ever persisted.
  */
 
 export interface DemoUser {
@@ -81,13 +79,6 @@ function setSession(user: Omit<DemoUser, never> | null) {
   }
 }
 
-export function isSupabaseConfigured(): boolean {
-  const url = 
-    (typeof process !== 'undefined' && (process as any).env?.NEXT_PUBLIC_SUPABASE_URL) ||
-    '';
-  return !!(url && !url.includes('placeholder') && !url.includes('YOUR_'));
-}
-
 function getUsers(): StoredUser[] {
   try {
     const data = localStorage.getItem(USERS_KEY);
@@ -99,7 +90,7 @@ function saveUsers(users: StoredUser[]) {
   localStorage.setItem(USERS_KEY, JSON.stringify(users));
 }
 
-export async function demoSupabase(): Promise<{
+export async function demoAuth(): Promise<{
   auth: {
     signUp: (email: string, password: string, username?: string) => Promise<{ error: string | null }>;
     signInWithPassword: (email: string, password: string) => Promise<{ error: string | null }>;

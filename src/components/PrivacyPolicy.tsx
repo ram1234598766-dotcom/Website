@@ -27,9 +27,9 @@ export default function PrivacyPolicy() {
             <h2 className="text-2xl font-bold text-white mb-3 tracking-tight">1. Your data stays local by default</h2>
             <p className="text-slate-400 leading-relaxed">
               Your code workspace and demo account are stored entirely in your browser (localStorage).
-              When you connect a Supabase project, your data moves to <em>your own</em> Supabase
-              instance, protected by that project's row-level security. No data is ever sent to a
-              VantaOS-operated server.
+              When you connect a Firebase project, your data moves to <em>your own</em> Firebase
+              project, protected by that project's authentication and Firestore security rules. No data
+              is ever sent to a VantaOS-operated server.
             </p>
           </div>
         </div>

@@ -14,7 +14,7 @@ import OmniAI from './components/OmniAI';
 import AdminPanel from './components/AdminPanel';
 import OllamaLocal from './components/OllamaLocal';
 import AuthModal from './components/AuthModal';
-import { supabase } from './lib/supabase';
+import { client } from './lib/client';
 import { WorkspaceProvider } from './lib/workspace/workspace';
 
 export default function App() {
@@ -39,7 +39,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    supabase.auth
+    client.auth
       .getSession()
       .then(({ data: { session } }: any) => {
         setSession(session);
@@ -50,7 +50,7 @@ export default function App() {
         setAppReady(true);
       });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event: string, session: any) => {
+    const { data: { subscription } } = client.auth.onAuthStateChange((_event: string, session: any) => {
       setSession(session);
     });
 
@@ -98,7 +98,7 @@ export default function App() {
         {sessionWarning && (
           <div role="alert" className="bg-amber-500/20 border-b border-amber-500/50 px-4 py-2 text-center text-sm font-medium text-amber-200 z-50 relative">
             Your session is about to expire.{' '}
-            <button onClick={() => supabase.auth.refreshSession?.()} className="underline font-bold hover:text-amber-100">Click here to refresh</button>
+            <button onClick={() => client.auth.refreshSession?.()} className="underline font-bold hover:text-amber-100">Click here to refresh</button>
           </div>
         )}
 
