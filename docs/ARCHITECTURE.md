@@ -507,10 +507,10 @@ Notes:
 | 2 | IDE reliability | ⚠️ | `npm test` (70 vitest, 6 files incl. `tests/phase2/runner.test.ts` + `tests/phase2/commands.test.ts`) pass Sep 11 2026; terminal/Omni-AI `new Function` replaced by worker-thread `SandboxRunner` with time/output/code caps; remaining Phase 2 gaps below |
 | 3 | Omni-AI orchestration | ⚠️ | Provider union + Worker proxy (`src/components/OmniAI.tsx:6-25`, `workers/worker.ts:77-155`) implemented; no streaming/cancellation/redaction tests |
 | 4 | WebModel delivery | 🔲 | Ollama pull only (`src/components/Showcase.tsx:122-169`); no manifest/shard/signature path |
-| 5 | Identity and GitHub security | ✅ | `npm test` (53 vitest, 4 files `tests/phase5/*.test.ts`) pass Sep 11 2026; Firebase ID-token RS256 verification + HMAC grant lifecycle + GH OAuth token-boundary proxy + push-safety all test-proven; browser token replaced by memory-only grant |
+| 5 | Identity and GitHub security | ✅ | `npm test` (81 vitest, 6 files `tests/phase5/*.test.ts`) pass Sep 11 2026; Firebase ID-token RS256 verification + HMAC grant lifecycle + GH OAuth token-boundary proxy + push-safety all test-proven; browser token replaced by memory-only grant, with a tab-scoped in-memory direct-token fallback so GitHub works when the worker proxy is unreachable |
 | 6 | Sync and collaboration | 🔲 | No sync API, operation log, or conflict model |
 | 7 | Mobile/PWA experience | ⚠️ | Responsive drawer (`src/components/Navigation.tsx:102-159`); no PWA shell or device E2E |
-| 8 | Production operations | ⚠️ | `npm test` runs Vitest (70 tests, 6 files); `LICENSE`, `SECURITY.md`, `CONTRIBUTING.md`, `.github/workflows/ci.yml` (lint+test+build) added Sep 11 2026; first GitHub CI run pending |
+| 8 | Production operations | ⚠️ | `npm test` runs Vitest (81 tests, 7 files); `LICENSE`, `SECURITY.md`, `CONTRIBUTING.md`, `.github/workflows/ci.yml` (lint+test+build) added Sep 11 2026; first GitHub CI run pending |
 | 9 | Plugin ecosystem | 🔲 | Not started |
 
 ### 13.2 Per-phase detail and exit gates
@@ -576,6 +576,14 @@ Notes:
   `version.exp.uid.jti`). Browser holds only the grant in memory
   (`src/lib/github.ts`); GitHub access token stored server-side in KV
   `gh:{uid}` with 60-day TTL. Browser-stored token removed.
+- ✅ Direct fallback: when the worker proxy is unreachable or not configured
+  (`next dev`, missing KV/vars), the access token captured from the Firebase
+  GitHub popup is held in memory only, for the lifetime of the tab, and used
+  straight against api.github.com (`connectGitHubWithDirectToken`,
+  `connectionKind()` = `'direct'` in `src/lib/github.ts`; wired in
+  `src/lib/client.ts` and `src/components/GitHubManager.tsx`). Nothing is
+  persisted; an expired grant falls back to a direct token if one exists,
+  and a 401 clears the tab token with a `needs_connect` error.
 - ✅ Firebase ID-token server-side verification (`workers/firebase-verify.ts`):
   RS256 via Google JWKS with kid/use-sig filtering, `aud`/`iss`/`exp`
   validation, WebCrypto sig check, JWKS cache keyed by URL.
@@ -583,21 +591,26 @@ Notes:
   `git/refs/heads/*` (409 `stale_base`), protects protected-branch pushes
   (409 `protected_branch`), maps GitHub's "not a fast forward" 422 → 409
   `push_conflict`; 403 rate-limit → 429 `rate_limited`.
-- ✅ All of the above proven by 53 vitest tests (`npm test` Sep 11 2026):
+- ✅ All of the above proven by 81 vitest tests (`npm test` Sep 11 2026):
   grant lifecycle (sign/verify/expiry/replay/nbf/byte-injection),
   Firebase ID-token verification (tampered/expired/bad-key/cache/clockSkew),
   proxy (token extraction, GET/POST/DELETE routing, fake-origin rejection,
   stashed token forwarding, bad-session → needsConnect, 422/403 mapping,
   expected_parent, force:false rejection, protected-branch, revocation,
-  hash capture, grant refresh flow).
-- ⚠️ Live end-to-end OAuth round trip requires user-supplied GitHub OAuth
-  App credentials and worker secrets (`GITHUB_CLIENT_ID`,
+  hash capture, grant refresh flow), client direct fallback (Bearer direct
+  calls, grant-precedence, expired-grant → direct, 401 clears tab token,
+  403-rate-limit mapping, revoke clears direct without server call,
+  invalid-token rejection, `client` import-failure → direct fallback).
+- ⚠️ Live end-to-end OAuth round trip via the worker requires user-supplied
+  GitHub OAuth App credentials and worker secrets (`GITHUB_CLIENT_ID`,
   `GITHUB_CLIENT_SECRET`, `GH_GRANT_SECRET`) + `GH_TOKENS` KV binding +
-  `APP_ORIGIN` (cannot automate from this environment).
+  `APP_ORIGIN` (cannot automate from this environment). "Continue with
+  GitHub" now works without them via the memory-only direct fallback (tab
+  lifetime; re-connect after reload).
 - ⚠️ Firebase Drive round-trip implemented (`src/lib/drive.ts`); browser
   consent for folder creation still pending user's first Google sign-in.
 - Exit gate: token-boundary and push-safety tests — now met via
-  `npm test` (53 vitest tests, `tests/phase5/*.test.ts`).
+  `npm test` (81 vitest tests, `tests/phase5/*.test.ts`).
 
 **Phase 6 — Sync and collaboration**
 
@@ -616,7 +629,7 @@ Notes:
 
 - ✅ Static export served by Cloudflare Worker; `/api/health`, `/api/ai/generate`,
   `/api/security/*`, `/api/gh/*` routes exist.
-- ✅ `npm test` runs vitest (70 tests, 6 files, Sep 11 2026); `npm run lint`
+- ✅ `npm test` runs vitest (81 tests, 7 files, Sep 11 2026); `npm run lint`
   (`tsc --noEmit`) passes; `npm run build` produces a static export.
 - ✅ `LICENSE` (Apache-2.0), `SECURITY.md`, `CONTRIBUTING.md`,
   `.github/workflows/ci.yml` added Sep 11 2026.
@@ -643,10 +656,14 @@ then advanced power):
    `CONTRIBUTING.md`, `.github/workflows/ci.yml` (lint + test + build on
    push/PR) added; §13 matrix updated with evidence. First CI green run
    pending a push. Next: Phase 5 live end-to-end.
-3. **Phase 5 live end-to-end** — remaining UI work (Firebase Account Link
-   wizard `src/components/Auth.tsx`, Drive consent flow) + live round-trip
-   with user-supplied credentials. Blocked on: GitHub OAuth App, worker
-   secrets, KV binding, `APP_ORIGIN`.
+3. **Phase 5 live end-to-end — PARTIAL** — "Continue with GitHub" now works
+   without the worker: a failed `/api/gh/import` falls back to a memory-only
+   tab-scoped direct token (`src/lib/github.ts`, `src/lib/client.ts`,
+   `GitHubManager`), proven by 11 new vitest tests (81 total). Remaining:
+   live Firebase Account Link wizard (`src/components/Auth.tsx`), Drive
+   consent flow, and the worker-driven durable round trip. Worker OAuth
+   still blocked on user-supplied GitHub OAuth App, worker secrets, KV
+   binding, `APP_ORIGIN`.
 4. Remaining phases in ROADMAP order (1, 3, 4, 6, 7, 9), each gated on its
    named tests.
 

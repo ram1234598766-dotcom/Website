@@ -223,6 +223,16 @@ Ollama is available on every phone.
   VantaOS folder) using the OAuth token captured during Firebase Google
   sign-in (`src/lib/drive.ts:4-279`, `src/components/DriveManager.tsx`).
 - Demo mode is visibly local-only and non-production (`src/lib/demoAuth.ts`).
+- Server-side GitHub OAuth with short-lived HMAC-signed grants
+  (`workers/grants.ts`, `workers/github-proxy.ts`): browser holds only the
+  in-memory grant; the access token lives in KV `gh:{uid}`
+  (`src/lib/github.ts`, pushed from `src/lib/client.ts`).
+- "Continue with GitHub" works even when the worker proxy is unreachable or
+  unconfigured: the popup access token falls back to a **memory-only,
+  tab-scoped** connection used straight against api.github.com
+  (`connectGitHubWithDirectToken`, `connectionKind()`, fallback wired in
+  `src/lib/client.ts` and `src/components/GitHubManager.tsx`). Nothing is
+  persisted — the token dies with the page.
 
 **Verification status (2026-09):** Firebase Google sign-in was smoke-verified on
 the live project `website-6e8b1` from `http://localhost:3000` — the popup opens
@@ -230,18 +240,21 @@ to the project's `__/auth/handler` with `providerId=google.com`, Drive scopes
 requested, zero console errors; `npx tsc --noEmit` and `npm run build` pass with
 the real `NEXT_PUBLIC_FIREBASE_*` env. The final Google consent click requires a
 human browser session and is the last manual step to complete the round trip.
-See `docs/ARCHITECTURE.md` §13.0 for the fact table.
+GitHub direct-token fallback is covered by `tests/phase5/github-client.test.ts`
+and `tests/phase5/client-github-fallback.test.ts` (81 vitest tests total, all
+passing Sep 11 2026). See `docs/ARCHITECTURE.md` §13.0 for the fact table.
 
 ### Work
 
-- Add server-side GitHub OAuth and short-lived scoped grants.
-- Remove long-lived GitHub tokens from browser storage.
+- [x] Add server-side GitHub OAuth and short-lived scoped grants.
+- [x] Remove long-lived GitHub tokens from browser storage (durable grant path;
+  memory-only tab token as the unconfigured-worker fallback).
+- [x] Add fresh-parent checks and non-fast-forward protection for pushes.
+- [x] Add revocation and session expiry behavior.
 - Move Drive/GitHub token refresh out of the browser (currently a 45-minute
   `sessionStorage` TTL for Drive, `localStorage` for GitHub).
 - Add server-side role and repository-scope checks.
-- Add fresh-parent checks and non-fast-forward protection for pushes.
 - Add pagination and large-repository handling instead of silent truncation.
-- Add revocation and session expiry behavior.
 
 ### Tests
 
@@ -255,7 +268,9 @@ See `docs/ARCHITECTURE.md` §13.0 for the fact table.
 
 ### Exit criteria
 
-- The browser never holds a long-lived GitHub credential.
+- The browser never retains a long-lived GitHub credential (durable path:
+  KV-held token, memory-only grant; fallback path: memory-only tab token
+  that never survives a reload).
 - Every write has an auditable actor, repository, branch, and operation ID.
 
 ## 9. Phase 6 — Sync and collaboration
@@ -315,7 +330,7 @@ See `docs/ARCHITECTURE.md` §13.0 for the fact table.
 
 - Add CI for build, typecheck, lint, unit tests, browser E2E, dependency audit,
   and artifact publication.
-  **Done (Sep 11 2026):** lint (`tsc --noEmit`), Vitest suite (70 tests), and
+  **Done (Sep 11 2026):** lint (`tsc --noEmit`), Vitest suite (81 tests), and
   static build run on every push/PR via `.github/workflows/ci.yml`. Still open:
   browser E2E, `npm audit`, artifact publication.
 - Add preview deployments with environment-specific configuration.

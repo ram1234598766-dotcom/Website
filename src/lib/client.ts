@@ -11,9 +11,10 @@
  *   signOut() / resetPasswordForEmail()
  *
  * Engineered cases: when Firebase is unconfigured the existing demo-auth
- * behavior is preserved untouched. GitHub sessions run through the Phase 5
- * token boundary — the browser holds only a short-lived grant issued by the
- * Worker, never a GitHub access token (see github.ts).
+ * behavior is preserved untouched. GitHub sessions prefer the Phase 5 token
+ * boundary — a short-lived grant issued by the Worker — and fall back to a
+ * memory-only, tab-scoped direct token when the Worker proxy is unreachable
+ * so GitHub still works (see github.ts).
  */
 
 import { demoAuth, DemoUser as DemoUserType } from './demoAuth';
@@ -215,8 +216,11 @@ function firebaseAuthValue(authProp: string) {
               }
               try {
                 await githubClient.importGitHubAccessToken(firebaseToken, accessToken);
-              } catch (err: any) {
-                return { data: null, error: { message: err?.message || 'Failed to connect GitHub.' } };
+              } catch {
+                // Worker proxy unreachable or not configured (`next dev`, no
+                // KV/vars): keep the session working with a memory-only,
+                // tab-scoped token instead of failing the whole sign-in.
+                await githubClient.connectGitHubWithDirectToken(accessToken);
               }
             }
             if (scopesNeedGithub && !accessToken) {

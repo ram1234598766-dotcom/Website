@@ -1,11 +1,18 @@
 /**
  * Client-side GitHub integration for VantaOS (Phase 5 token boundary).
  *
- * The browser never holds a GitHub access token. It holds only a short-lived
- * HMAC-signed *grant* issued by the Worker after a real OAuth / Firebase
- * exchange. Every GitHub API call goes through the same-origin Worker proxy
- * (`/api/gh/*`), which derives the actor from the verified Firebase uid and
- * stores/uses the real token server-side.
+ * Two connection modes:
+ *
+ * 1. Worker proxy (preferred, durable): the browser holds only a short-lived
+ *    HMAC-signed *grant* issued by the Worker after a real OAuth / Firebase
+ *    exchange. Every GitHub API call goes through the same-origin Worker
+ *    proxy (`/api/gh/*`), which derives the actor from the verified Firebase
+ *    uid and stores/uses the real token server-side.
+ * 2. Direct fallback (memory-only, tab-scoped): when the Worker proxy is not
+ *    reachable or configured (`next dev`, missing KV bindings/vars), an
+ *    access token captured from the Firebase GitHub popup is held in memory
+ *    for the lifetime of this tab and used straight against api.github.com.
+ *    Nothing is persisted — the token dies with the page.
  *
  * This module is deliberately importable in Node tests: no `firebase` import
  * and no `localStorage` access at module scope. The Firebase token getter is
@@ -27,12 +34,13 @@ export function isGitHubGrantError(err: unknown): err is GitHubError {
   return err instanceof GitHubError;
 }
 
-/* ── Grant holder (memory only — explicit by design) ─────────────────────── */
+/* ── Token holder (memory only — explicit by design) ─────────────────────── */
 
 let grant: string | null = null;
+let directToken: string | null = null;
 let firebaseTokenGetter: (() => Promise<string | null>) | null = null;
 
-type GrantListener = (grant: string | null) => void;
+type GrantListener = (token: string | null) => void;
 const grantListeners = new Set<GrantListener>();
 
 export function setFirebaseTokenGetter(
@@ -44,12 +52,22 @@ export function setFirebaseTokenGetter(
 /** Test seam: clears module-level state. Not part of the public API. */
 export function __resetGitHubStateForTests(): void {
   grant = null;
+  directToken = null;
   firebaseTokenGetter = null;
   grantListeners.clear();
 }
 
+/** Whether GitHub is usable right now (worker grant or tab-scoped token). */
 export function hasGitHubGrant(): boolean {
-  return grant !== null;
+  return grant !== null || directToken !== null;
+}
+
+/**
+ * Which backend currently backs the connection: the worker proxy (`worker`,
+ * durable) or a memory-only token valid only for this tab (`direct`).
+ */
+export function connectionKind(): 'worker' | 'direct' | null {
+  return grant ? 'worker' : directToken ? 'direct' : null;
 }
 
 export function onGitHubGrantChange(listener: GrantListener): () => void {
@@ -57,15 +75,29 @@ export function onGitHubGrantChange(listener: GrantListener): () => void {
   return () => grantListeners.delete(listener);
 }
 
-function setGrant(value: string | null): void {
-  grant = value;
+function effectiveToken(): string | null {
+  return grant ?? directToken;
+}
+
+function notifyListeners(): void {
+  const token = effectiveToken();
   grantListeners.forEach((l) => {
     try {
-      l(value);
+      l(token);
     } catch {
       // listener errors must not break the flow
     }
   });
+}
+
+function setGrant(value: string | null): void {
+  grant = value;
+  notifyListeners();
+}
+
+function setDirectToken(value: string | null): void {
+  directToken = value;
+  notifyListeners();
 }
 
 /**
@@ -175,22 +207,48 @@ export async function refreshGitHubGrant(): Promise<boolean> {
   return false;
 }
 
-/** Revokes server-side: the KV entry is deleted so every grant fails closed. */
+/**
+ * Fallback connect path: holds an access token captured from the Firebase
+ * popup in memory only, for the lifetime of this tab. Used when the Worker
+ * proxy is unreachable or not configured (`next dev`, missing KV/vars) so
+ * GitHub still works. Nothing is persisted — the token dies with the page.
+ * The worker grant path remains the durable, preferred mode.
+ */
+export async function connectGitHubWithDirectToken(accessToken: string): Promise<void> {
+  if (accessToken.length < 16) {
+    throw new GitHubError(
+      'GitHub did not return a usable access token.',
+      400,
+      'invalid_token'
+    );
+  }
+  setDirectToken(accessToken);
+}
+
+/** Revokes: drops the server-side KV entry (grants fail closed) and any
+ *  tab-scoped direct token. */
 export async function revokeGitHub(): Promise<void> {
   try {
     if (grant) await postJson('/api/gh/revoke', {}, grant);
   } finally {
     setGrant(null);
+    setDirectToken(null);
   }
 }
 
-/* ── Proxied GitHub API ───────────────────────────────────────────────────── */
+/* ── Proxied / direct GitHub API ────────────────────────────────────────── */
 
-async function ensureGrant(): Promise<string> {
-  if (grant) return grant;
+async function ensureAuth(): Promise<{ kind: 'grant' | 'direct'; value: string }> {
+  if (grant) return { kind: 'grant', value: grant };
+  if (directToken) return { kind: 'direct', value: directToken };
   if (firebaseTokenGetter) {
-    const ok = await refreshGitHubGrant();
-    if (ok && grant) return grant;
+    try {
+      const ok = await refreshGitHubGrant();
+      if (ok && grant) return { kind: 'grant', value: grant };
+    } catch {
+      // Worker unreachable or not configured — fall through to direct/none.
+    }
+    if (directToken) return { kind: 'direct', value: directToken };
   }
   throw new GitHubError(
     'GitHub is not connected. Connect GitHub to sync your code.',
@@ -199,49 +257,35 @@ async function ensureGrant(): Promise<string> {
   );
 }
 
-export async function fetchGitHub(
-  endpoint: string,
-  options: RequestInit = {}
-): Promise<any> {
-  const token = await ensureGrant();
-  const res = await fetch(`${apiBase()}/api/gh${endpoint}`, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      'Accept': 'application/vnd.github.v3+json',
-      'Authorization': `Bearer ${token}`,
-      ...options.headers,
-    },
-  });
+function needsConnectError(): GitHubError {
+  return new GitHubError('GitHub session expired. Re-connect.', 401, 'needs_connect');
+}
 
-  if (res.status === 401) {
-    setGrant(null);
-    try {
-      const data = await res.json();
-      throw new GitHubError(
-        data?.message || 'GitHub session expired. Re-connect.',
-        401,
-        'needs_connect'
-      );
-    } catch (err) {
-      if (err instanceof GitHubError) throw err;
-      throw new GitHubError('GitHub session expired. Re-connect.', 401);
-    }
-  }
-
+/** Shared response handling for the worker proxy and direct api.github.com. */
+async function parseGitHubResponse(res: Response): Promise<any> {
   if (!res.ok) {
     let data: any = null;
     try {
       data = await res.json();
     } catch {
-      // fall through to generic error
+      // non-JSON response
     }
     const msg = data?.error || data?.message || `GitHub API Error (${res.status})`;
     const code: string | undefined = data?.code;
-    const status = res.status === 429 && !code ? 'rate_limited' : (code ?? undefined);
-    if (status === 'rate_limited' || res.status === 429) {
+    if (res.status === 429) {
       throw new GitHubError(
         data?.error || 'GitHub API rate limit exceeded. Try again later.',
+        429,
+        'rate_limited'
+      );
+    }
+    if (res.status === 403 && res.headers.get('X-RateLimit-Remaining') === '0') {
+      const reset = res.headers.get('X-RateLimit-Reset');
+      const when = reset
+        ? new Date(parseInt(reset, 10) * 1000).toISOString()
+        : 'later';
+      throw new GitHubError(
+        `GitHub API rate limit exceeded — retry after ${when}.`,
         429,
         'rate_limited'
       );
@@ -252,6 +296,63 @@ export async function fetchGitHub(
   if (res.status === 204 || res.status === 202) return null;
   const contentType = res.headers.get('content-type') || '';
   return contentType.includes('json') ? res.json() : res.text();
+}
+
+/**
+ * Direct-to-api.github.com mode (memory-only tab token): no Worker involved.
+ * `/user/...` and `/repos/...` paths map 1:1 onto the GitHub REST API.
+ */
+async function fetchGitHubDirect(
+  endpoint: string,
+  options: RequestInit,
+  token: string
+): Promise<any> {
+  const res = await fetch(`https://api.github.com${endpoint}`, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      'Accept': 'application/vnd.github.v3+json',
+      'X-GitHub-Api-Version': '2022-11-28',
+      'Authorization': `Bearer ${token}`,
+      ...options.headers,
+    },
+  });
+  if (res.status === 401) {
+    setDirectToken(null);
+    throw needsConnectError();
+  }
+  return parseGitHubResponse(res);
+}
+
+export async function fetchGitHub(
+  endpoint: string,
+  options: RequestInit = {}
+): Promise<any> {
+  const auth = await ensureAuth();
+
+  if (auth.kind === 'direct') {
+    return fetchGitHubDirect(endpoint, options, auth.value);
+  }
+
+  const res = await fetch(`${apiBase()}/api/gh${endpoint}`, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      'Accept': 'application/vnd.github.v3+json',
+      'Authorization': `Bearer ${auth.value}`,
+      ...options.headers,
+    },
+  });
+
+  if (res.status === 401) {
+    // Grant expired or revoked by the server — fall back to a tab-scoped
+    // direct token if one exists, otherwise ask the user to re-connect.
+    setGrant(null);
+    if (directToken) return fetchGitHubDirect(endpoint, options, directToken);
+    throw needsConnectError();
+  }
+
+  return parseGitHubResponse(res);
 }
 
 /* ── High-level GitHub operations (unchanged surface) ────────────────────── */

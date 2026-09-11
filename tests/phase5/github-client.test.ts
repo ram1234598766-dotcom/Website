@@ -9,6 +9,8 @@ import {
   revokeGitHub,
   updateRef,
   refreshGitHubGrant,
+  connectGitHubWithDirectToken,
+  connectionKind,
   __resetGitHubStateForTests,
   GitHubError,
 } from '../../src/lib/github';
@@ -207,6 +209,125 @@ describe('updateRef request shape', () => {
     const apiCall = calls.find((c) => c.url.includes('/api/gh/repos/owner/repo/git/refs/heads/main'))!;
     const body = JSON.parse(String((apiCall.init as RequestInit).body));
     expect(body).toEqual({ sha: 'sha1', force: false });
+  });
+});
+
+describe('direct-token fallback mode', () => {
+  it('calls api.github.com directly with the tab token and reports the kind', async () => {
+    setFirebaseTokenGetter(null);
+    await connectGitHubWithDirectToken('ghp_direct_123456');
+    const calls = installFetchQueue([
+      {
+        matcher: (u) => u === 'https://api.github.com/user/repos',
+        handler: async () => json([{ id: 7, name: 'direct-repo' }]),
+      },
+    ]);
+    expect(connectionKind()).toBe('direct');
+    const repos = await fetchGitHub('/user/repos');
+    expect(repos).toEqual([{ id: 7, name: 'direct-repo' }]);
+    const apiCall = calls.find((c) => c.url === 'https://api.github.com/user/repos')!;
+    expect(apiCall.init?.headers).toMatchObject({
+      Authorization: 'Bearer ghp_direct_123456',
+    });
+    expect(hasGitHubGrant()).toBe(true);
+  });
+
+  it('notifies grant listeners when a direct token is set', async () => {
+    setFirebaseTokenGetter(null);
+    const seen: Array<string | null> = [];
+    const unsubscribe = onGitHubGrantChange((g) => seen.push(g));
+    await connectGitHubWithDirectToken('ghp_notify_token_123');
+    expect(seen).toEqual(['ghp_notify_token_123']);
+    unsubscribe();
+  });
+
+  it('prefers the worker grant over a direct token when both are present', async () => {
+    setFirebaseTokenGetter(null);
+    await connectGitHubWithDirectToken('ghp_direct_123456');
+    window.history.replaceState(null, '', '/#gh_grant=grant-1');
+    captureGitHubGrantFromUrl();
+    const calls = installFetchQueue([
+      {
+        matcher: (u) => u === `${ORIGIN}/api/gh/user/repos`,
+        handler: async () => json([{ id: 1 }]),
+      },
+    ]);
+    await fetchGitHub('/user/repos');
+    expect(calls.some((c) => c.url === 'https://api.github.com/user/repos')).toBe(false);
+    const proxyCall = calls.find((c) => c.url === `${ORIGIN}/api/gh/user/repos`)!;
+    expect(proxyCall.init?.headers).toMatchObject({ Authorization: 'Bearer grant-1' });
+    expect(connectionKind()).toBe('worker');
+  });
+
+  it('falls back to the direct token when an expired grant gets a 401', async () => {
+    await connectGitHubWithDirectToken('ghp_direct_123456');
+    window.history.replaceState(null, '', '/#gh_grant=expired');
+    captureGitHubGrantFromUrl();
+    const calls = installFetchQueue([
+      {
+        matcher: (u) => u.includes('/api/gh/user'),
+        handler: async () => json({ message: 'Grant expired' }, 401),
+      },
+      {
+        matcher: (u) => u === 'https://api.github.com/user',
+        handler: async () => json({ login: 'fallback-user' }),
+      },
+    ]);
+    const user = await fetchGitHub('/user');
+    expect(user).toEqual({ login: 'fallback-user' });
+    expect(connectionKind()).toBe('direct');
+    expect(hasGitHubGrant()).toBe(true);
+  });
+
+  it('clears the direct token and surfaces needs_connect on a 401 from api.github.com', async () => {
+    setFirebaseTokenGetter(null);
+    await connectGitHubWithDirectToken('ghp_doomed_token_1234');
+    installFetchQueue([
+      { matcher: () => true, handler: async () => json({ message: 'Bad credentials' }, 401) },
+    ]);
+    await expect(fetchGitHub('/user')).rejects.toMatchObject({
+      code: 'needs_connect',
+      status: 401,
+    });
+    expect(hasGitHubGrant()).toBe(false);
+    expect(connectionKind()).toBe(null);
+  });
+
+  it('maps GitHub rate limits (403, remaining 0) to rate_limited in direct mode', async () => {
+    setFirebaseTokenGetter(null);
+    await connectGitHubWithDirectToken('ghp_limited_token_12');
+    installFetchQueue([
+      {
+        matcher: () => true,
+        handler: async () =>
+          new Response(JSON.stringify({ message: 'API rate limit exceeded' }), {
+            status: 403,
+            headers: { 'content-type': 'application/json', 'X-RateLimit-Remaining': '0' },
+          }),
+      },
+    ]);
+    await expect(fetchGitHub('/user')).rejects.toMatchObject({
+      code: 'rate_limited',
+      status: 429,
+    });
+    expect(hasGitHubGrant()).toBe(true);
+  });
+
+  it('revokeGitHub clears a direct token without touching the server', async () => {
+    setFirebaseTokenGetter(null);
+    await connectGitHubWithDirectToken('ghp_revoke_token_123');
+    const calls = installFetchQueue([]);
+    await revokeGitHub();
+    expect(calls).toHaveLength(0);
+    expect(hasGitHubGrant()).toBe(false);
+    expect(connectionKind()).toBe(null);
+  });
+
+  it('rejects a token that looks invalid', async () => {
+    await expect(connectGitHubWithDirectToken('short')).rejects.toMatchObject({
+      code: 'invalid_token',
+    });
+    expect(hasGitHubGrant()).toBe(false);
   });
 });
 

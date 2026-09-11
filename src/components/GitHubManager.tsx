@@ -14,6 +14,7 @@ interface Props {
 
 export default function GitHubManager({ files, setFiles, originalFiles, setOriginalFiles, onClose }: Props) {
   const [connected, setConnected] = useState(() => github.hasGitHubGrant());
+  const [connectKind, setConnectKind] = useState<'worker' | 'direct' | null>(() => github.connectionKind());
   const [repos, setRepos] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -24,9 +25,10 @@ export default function GitHubManager({ files, setFiles, originalFiles, setOrigi
 
   // Reflect the memory-only grant state (connect/revoke/expiry) reactively.
   useEffect(() => {
-    return github.onGitHubGrantChange((g) => {
-      const now = !!g;
+    return github.onGitHubGrantChange(() => {
+      const now = github.hasGitHubGrant();
       setConnected(now);
+      setConnectKind(github.connectionKind());
       if (now) loadRepos();
     });
   }, []);
@@ -50,9 +52,10 @@ export default function GitHubManager({ files, setFiles, originalFiles, setOrigi
     }
   };
 
-  // Server-driven OAuth: the Worker stores the access token in KV and hands
-  // the browser a short-lived grant via the redirect hash. No token ever
-  // touches this page's storage.
+  // Server-driven OAuth (preferred): the Worker stores the access token in KV
+  // and hands the browser a short-lived grant via the redirect hash. If the
+  // Worker proxy isn't configured/reachable, fall back to the Firebase GitHub
+  // popup, which yields a tab-scoped in-memory token so connecting still works.
   const handleLogin = async () => {
     try {
       setError('');
@@ -61,7 +64,15 @@ export default function GitHubManager({ files, setFiles, originalFiles, setOrigi
         setError('Sign in to VantaOS first, then connect GitHub.');
         return;
       }
-      await github.connectGitHubWithFirebase(data.session.access_token);
+      try {
+        await github.connectGitHubWithFirebase(data.session.access_token);
+      } catch {
+        const { error: oauthError } = await client.auth.signInWithOAuth({
+          provider: 'github',
+          options: { scopes: 'user:email repo' },
+        });
+        if (oauthError) throw new Error(oauthError.message);
+      }
     } catch (err: any) {
       setError(err.message);
     }
@@ -246,6 +257,16 @@ export default function GitHubManager({ files, setFiles, originalFiles, setOrigi
                 <Unplug className="w-3 h-3" /> Disconnect
               </button>
             </div>
+
+            {connectKind === 'direct' && (
+              <div className="flex items-start gap-2 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2 text-amber-400 text-xs">
+                <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                <span>
+                  Connected for this tab only — the token is held in memory and
+                  expires on reload. Re-connect after refreshing to keep syncing.
+                </span>
+              </div>
+            )}
 
             {activeRepo && (
               <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-4">
