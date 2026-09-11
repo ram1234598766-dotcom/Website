@@ -134,3 +134,9 @@ Set environment variables / secrets in the Cloudflare dashboard or via `wrangler
 ## License
 
 Licensed under the Apache License 2.0.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, commands, and review
+checklist. Security issues: report privately via
+[SECURITY.md](SECURITY.md), not a public issue.

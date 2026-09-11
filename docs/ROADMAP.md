@@ -315,6 +315,9 @@ See `docs/ARCHITECTURE.md` §13.0 for the fact table.
 
 - Add CI for build, typecheck, lint, unit tests, browser E2E, dependency audit,
   and artifact publication.
+  **Done (Sep 11 2026):** lint (`tsc --noEmit`), Vitest suite (70 tests), and
+  static build run on every push/PR via `.github/workflows/ci.yml`. Still open:
+  browser E2E, `npm audit`, artifact publication.
 - Add preview deployments with environment-specific configuration.
 - Add structured, redacted logs and correlation IDs.
 - Add service health, sync health, model download health, and AI provider health.
@@ -322,6 +325,8 @@ See `docs/ARCHITECTURE.md` §13.0 for the fact table.
   terminal run startup.
 - Add incident runbooks for credential exposure, model supply-chain failure,
   sync corruption, and edge deployment rollback.
+- Add `LICENSE` (Apache-2.0), `SECURITY.md`, `CONTRIBUTING.md` — **done
+  (Sep 11 2026).**
 
 ### Exit criteria
 

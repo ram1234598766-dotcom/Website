@@ -502,7 +502,7 @@ Notes:
 
 | Phase | Name | Status | One-line evidence / gap |
 |---|---|---|---|
-| 0 | Baseline and risk closure | ⚠️ | Inventory exists as docs (`TECH_STACK.md`, this file §3) but no executed baseline suite or risk-register artifact |
+| 0 | Baseline and risk closure | ⚠️ | Inventory exists as docs (`TECH_STACK.md`, this file §3); `LICENSE` (Apache-2.0), `SECURITY.md`, `CONTRIBUTING.md`, and `.github/workflows/ci.yml` added Sep 11 2026; first CI green run still pending a push |
 | 1 | Workspace foundation | ⚠️ | IDE implemented; canonical storage is still a `localStorage` snapshot (`src/components/CloudOS.tsx:290-322`); IndexedDB helper (`src/lib/storage.ts:6-10`) unused as the primary path |
 | 2 | IDE reliability | ⚠️ | `npm test` (70 vitest, 6 files incl. `tests/phase2/runner.test.ts` + `tests/phase2/commands.test.ts`) pass Sep 11 2026; terminal/Omni-AI `new Function` replaced by worker-thread `SandboxRunner` with time/output/code caps; remaining Phase 2 gaps below |
 | 3 | Omni-AI orchestration | ⚠️ | Provider union + Worker proxy (`src/components/OmniAI.tsx:6-25`, `workers/worker.ts:77-155`) implemented; no streaming/cancellation/redaction tests |
@@ -510,7 +510,7 @@ Notes:
 | 5 | Identity and GitHub security | ✅ | `npm test` (53 vitest, 4 files `tests/phase5/*.test.ts`) pass Sep 11 2026; Firebase ID-token RS256 verification + HMAC grant lifecycle + GH OAuth token-boundary proxy + push-safety all test-proven; browser token replaced by memory-only grant |
 | 6 | Sync and collaboration | 🔲 | No sync API, operation log, or conflict model |
 | 7 | Mobile/PWA experience | ⚠️ | Responsive drawer (`src/components/Navigation.tsx:102-159`); no PWA shell or device E2E |
-| 8 | Production operations | ⚠️ | `npm test` runs vitest (53 Phase 5 tests); CI workflow, LICENSE, SECURITY.md, CONTRIBUTING.md still missing |
+| 8 | Production operations | ⚠️ | `npm test` runs Vitest (70 tests, 6 files); `LICENSE`, `SECURITY.md`, `CONTRIBUTING.md`, `.github/workflows/ci.yml` (lint+test+build) added Sep 11 2026; first GitHub CI run pending |
 | 9 | Plugin ecosystem | 🔲 | Not started |
 
 ### 13.2 Per-phase detail and exit gates
@@ -518,9 +518,13 @@ Notes:
 **Phase 0 — Baseline and risk closure**
 
 - ✅ Docs inventory with current-vs-target separation (`TECH_STACK.md`, this file §3).
-- 🔲 Executed baseline: no test/lint/E2E script or CI run exists.
-- Exit gate (`ROADMAP.md:69-73`): not met — "no critical risk is hidden behind a
-  marketing claim" is argued in docs but not proven by executed checks.
+- ✅ Hygiene baseline added Sep 11 2026: `LICENSE` (Apache-2.0),
+  `SECURITY.md`, `CONTRIBUTING.md`, `.github/workflows/ci.yml` (lint +
+  test + build on push/PR).
+- ⚠️ Executed baseline: `npm test` (70/70) and `npm run lint` pass locally;
+  first GitHub CI run pending.
+- Exit gate (`ROADMAP.md:69-73`): partially met — test/lint evidence exists;
+  CI still needs its first green run.
 
 **Phase 1 — Workspace foundation**
 
@@ -612,13 +616,13 @@ Notes:
 
 - ✅ Static export served by Cloudflare Worker; `/api/health`, `/api/ai/generate`,
   `/api/security/*`, `/api/gh/*` routes exist.
-- ✅ `npm test` runs vitest (53 Phase 5 tests, Sep 11 2026); `npm run lint`
+- ✅ `npm test` runs vitest (70 tests, 6 files, Sep 11 2026); `npm run lint`
   (`tsc --noEmit`) passes; `npm run build` produces a static export.
-- 🔲 CI workflow (lint + test + build, on push/PR); no LICENSE file (README
-  claims Apache-2.0 at `README.md:138-140`); no `SECURITY.md` or
-  `CONTRIBUTING.md`; no structured logs or SLO runbooks.
-- Exit gate: production readiness review — partially met (test runner in place;
-  CI and docs hygiene still open).
+- ✅ `LICENSE` (Apache-2.0), `SECURITY.md`, `CONTRIBUTING.md`,
+  `.github/workflows/ci.yml` added Sep 11 2026.
+- ⚠️ CI added but first GitHub run pending; no structured logs or SLO runbooks.
+- Exit gate: production readiness review — partially met (test runner, CI
+  workflow, and docs hygiene now in place; CI run results + logs/SLOs open).
 
 **Phase 9 — Plugin ecosystem**
 
@@ -635,9 +639,10 @@ then advanced power):
    (`src/lib/terminal/runner.ts`) replaces `new Function` in the terminal and
    Omni-AI; time/output/code caps + 17 new tests; `npm test` 70/70,
    `tsc --noEmit` clean, Sep 11 2026.
-2. **Phase 0/8 baseline** — add `LICENSE` (Apache-2.0), `SECURITY.md`,
+2. **Phase 0/8 baseline — DONE** — `LICENSE` (Apache-2.0), `SECURITY.md`,
    `CONTRIBUTING.md`, `.github/workflows/ci.yml` (lint + test + build on
-   push/PR); update §13 matrix with evidence.
+   push/PR) added; §13 matrix updated with evidence. First CI green run
+   pending a push. Next: Phase 5 live end-to-end.
 3. **Phase 5 live end-to-end** — remaining UI work (Firebase Account Link
    wizard `src/components/Auth.tsx`, Drive consent flow) + live round-trip
    with user-supplied credentials. Blocked on: GitHub OAuth App, worker
