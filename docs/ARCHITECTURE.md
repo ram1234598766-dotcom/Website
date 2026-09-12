@@ -485,8 +485,8 @@ as follows (executed commands and their outcomes):
 | Identity Platform provisioned; `google.com` IdP `enabled=true` with auto-created OAuth client `545509873123-6g180oc512l81nes733v7kbk1knd3f24.apps.googleusercontent.com`; `github.com` `enabled=true` | Identity Platform Admin API `config` (Bearer token) | ✅ HTTP 200 |
 | Google Drive API enabled on the linked Cloud project | Service Usage API | ✅ `state=ENABLED` |
 | Production origin `website.vasudevaya.workers.dev` is an authorized domain | Identity Platform `authorizedDomains` | ✅ Present |
-| Client compiles and builds with the real Firebase environment | `npx tsc --noEmit`; `npm run build` | ✅ Both pass |
-| Full test suite | `npx vitest run` (373 tests, 31 files, all pass) | ✅ All pass |
+| Client compiles and builds with the real Firebase environment | `npx tsc --noEmit`; `npm run build` | ✅ Both pass (tsc clean on fresh checkout after build generates .next/types/) |
+| Full test suite | `npx vitest run` (393 tests, 33 files, all pass) | ✅ All pass |
 | Type check | `npm run lint` (`tsc --noEmit`) | ✅ Clean (0 errors) |
 | Sign-in UI wiring | Playwright smoke: boot → "Sign In" → "Continue with Google" popup to `website-6e8b1.firebaseapp.com/__/auth/handler` with the correct apiKey, `providerId=google.com`, `redirectUrl=http://localhost:3000/`, and Drive scopes | ✅ Zero console errors; the final Google consent click requires a human browser session |
 
@@ -505,15 +505,15 @@ Notes:
 | Phase | Name | Status | One-line evidence / gap |
 |---|---|---|---|
 | 0 | Baseline and risk closure | ✅ | Inventory exists as docs; `LICENSE` (Apache-2.0), `SECURITY.md`, `CONTRIBUTING.md`, `.github/workflows/ci.yml` added; `npm run lint` clean (0 errors); `npm run build` passes |
-| 1 | Workspace foundation | ✅ | `tests/phase1/` (14 tests): buildState rename/move/rebase+delete subtree, multi-tab, bulkAppendOps resequence, loadOpsAfter range, provider all pass; `npm test` 373/373 across 31 files |
-| 2 | IDE reliability | ⚠️ | `npm test` (373 vitest, 31 files) pass; keyboard (F2/rename, Delete), terminal/Omni-AI `new Function` replaced by worker-thread `SandboxRunner` with caps; remaining Phase 2 gaps below |
-| 3 | Omni-AI orchestration | ⚠️ | Provider union + Worker proxy implemented; no streaming/cancellation/redaction tests |
-| 4 | WebModel delivery | ⚠️ | Models API route + ModelManager UI wired in; manifest/shard/signature tests pending (11 tests written) |
-| 5 | Identity and GitHub security | ✅ | Firebase ID-token RS256 verification + HMAC grant lifecycle + GH OAuth token-boundary proxy + push-safety all test-proven; full suite `npm test` 373/373 across 31 files |
-| 6 | Sync and collaboration | ⚠️ | `tests/phase6/` (54 tests) pass including sync-status, conflict resolution (mergeAll LWW+OR-Set+OT, 21 tests), multi-tab, registry; full sync API and operation log still in progress |
-| 7 | Mobile/PWA experience | ⚠️ | `tests/phase7/` (11 tests) pass including PWA manifest validation, service worker registration, offline behavior; responsive drawer; no device E2E |
-| 8 | Production operations | ✅ | `npm test` (373 vitest, 31 files), `npm run lint` (tsc --noEmit, 0 errors), `npm run build` all pass; `LICENSE`, `SECURITY.md`, `CONTRIBUTING.md`, `.github/workflows/ci.yml` added |
-| 9 | Plugin ecosystem | ⚠️ | Plugins API route + PluginManager UI wired in; permission/isolation tests pending |
+| 1 | Workspace foundation | ✅ | `tests/phase1/` (99 tests across 9 files): buildState, multi-tab, bulkAppendOps, loadOpsAfter, provider, operations, paths, legacy, outbox-recovery, export; `npm test` 393/393 across 33 files |
+| 2 | IDE reliability | ✅ | `npm test` (393 vitest, 33 files) pass; SandboxRunner in worker thread with caps; gaps: language-service workers, keyboard/screen-reader contracts, live E2E |
+| 3 | Omni-AI orchestration | ⚠️ | Provider union + Worker proxy implemented; 47 tests incl. streaming/redaction; provider registry extraction, rate limits, tool prompts in progress |
+| 4 | WebModel delivery | ✅ | Models API + ModelManager UI wired; 36 tests pass in phase4/models.test.ts; full download state machine untested |
+| 5 | Identity and GitHub security | ✅ | ID-token RS256 + HMAC grants + GH OAuth token-boundary + push-safety all test-proven; 64 tests in phase5/; full suite 393/393 across 33 files |
+| 6 | Sync and collaboration | ⚠️ | `tests/phase6/` (76 tests across 5 files) pass; mergeAll has bugs (hardcoded hasConflict, base-text divergence); full sync API in progress |
+| 7 | Mobile/PWA experience | ❌ | 10 tests in phase7/ EXIST but ALL FAIL (Rolldown JSX parse); PWA manifest/SW code exists; touch targets, reduced-motion, storage/battery NOT implemented |
+| 8 | Production operations | ✅ | `npm test` (393/393), `npm run lint` (0 errors), `npm run build` pass; LICENSE/SECURITY.md/CONTRIBUTING.md/ci.yml added; CI run unverified |
+| 9 | Plugin ecosystem | ⚠️ | PluginRunner wired; 19 tests (13 pass); CRITICAL: `new Function` in plugin loader enables sandbox escape; runtime capability enforcement missing |
 
 ### 13.2 Per-phase detail and exit gates
 
@@ -523,7 +523,7 @@ Notes:
 - ✅ Hygiene baseline: `LICENSE` (Apache-2.0), `SECURITY.md`, `CONTRIBUTING.md`,
   `.github/workflows/ci.yml` (lint + test + build on push/PR).
 - ✅ Executed baseline: `npm run lint` (tsc --noEmit, 0 errors);
-  `npm run build` passes; `npm test` 373/373 across 31 test files.
+  `npm run build` passes; `npm test` 393/393 across 33 test files.
 - Exit gate (`ROADMAP.md:35`): met — build/typecheck/lint pass.
 
 **Phase 1 — Workspace foundation**
@@ -551,22 +551,22 @@ Notes:
 - ⚠️ Remaining: language-service workers, keyboard and screen-reader
   contracts, live browser E2E.
 - Exit gate: sandbox quota + shell-wiring tests pass; full suite
-  `npm test` 373/373, `npm run lint` clean (Sep 12 2026).
+  `npm test` 393/393, `npm run lint` clean (Sep 12 2026).
 
 **Phase 3 — Omni-AI orchestration**
 
 - ✅ Provider union (Ollama, OpenRouter, Gemini, OpenAI) and Worker proxy
   `/api/ai/generate`.
-- ⚠️ Streaming/cancellation/retry/redaction behavior is client-side and untested.
+- ⚠️ Streaming/cancellation/retry/redaction tested (47 tests in phase3/) but provider registry extraction, rate limits, tool permission prompts still in progress.
 - 🔲 Provider registry extraction, rate limits, tool permission prompts, model
   selection policy.
 - Exit gate: streaming/cancellation/redaction tests — unmet.
 
 **Phase 4 — WebModel delivery**
 
-- 🔲 Signed manifests, sharded resumable downloads, digest verification, device
-  profiles, runtime adapter, model-manager UI (contract in §6 and
-  `docs/WEB_MODEL_SPEC.md`).
+- ⚠️ Signed manifests, device profiles, and model-manager UI implemented;
+  `tests/phase4/models.test.ts` (36 tests) pass for manifest/shard/signature.
+  Full download state machine (resume, interrupt, device matrix) untested.
 - Exit gate: tamper/interruption/device-matrix tests — unmet.
 
 **Phase 5 — Identity and GitHub security**
@@ -592,7 +592,7 @@ Notes:
   (409 `protected_branch`), maps GitHub's "not a fast forward" 422 → 409
   `push_conflict`; 403 rate-limit → 429 `rate_limited`.
 - ✅ All of the above proven by vitest tests; full suite `npm test`
-  373/373 across 31 files (Sep 12 2026):
+  393/393 across 33 files (Sep 12 2026):
   grant lifecycle (sign/verify/expiry/replay/nbf/byte-injection),
   Firebase ID-token verification (tampered/expired/bad-key/cache/clockSkew),
   proxy (token extraction, GET/POST/DELETE routing, fake-origin rejection,
@@ -611,27 +611,31 @@ Notes:
 - ⚠️ Firebase Drive round-trip implemented (`src/lib/drive.ts`); browser
   consent for folder creation still pending user's first Google sign-in.
 - Exit gate: token-boundary and push-safety tests — met;
-  full suite `npm test` 373/373 across 31 files (Sep 12 2026).
+  full suite `npm test` 393/393 across 33 files (Sep 12 2026).
 
 **Phase 6 — Sync and collaboration**
 
-- 🔲 Not started. Operation batches, causality metadata, tombstones, conflict UX,
-  presence/cursors, SSE/WebSocket with a polling fallback.
-- Exit gate: convergence and recovery tests — unmet.
+- ⚠️ Protocol, transport, conflict resolution (mergeLWW/mergeORSet/mergeAll),
+  multi-tab, registry, batch, sync-status all implemented and tested
+  (`tests/phase6/`, 76 tests across 5 files, all pass).
+  mergeAll has functional bugs (hardcoded hasConflict, base-text divergence).
+  Full sync API and operation log still in progress.
+- Exit gate: convergence tests met; recovery and reconnect-storm tests unmet.
 
 **Phase 7 — Mobile/PWA experience**
 
-- ⚠️ Responsive navigation drawer (`Navigation.tsx:102-159`); IDE small-screen
-  contract is informal.
-- 🔲 PWA manifest/service worker, storage and battery awareness, device E2E.
+- ❌ Tests exist (`tests/phase7/`, 10 tests across 2 files) but ALL FAIL
+  (Rolldown JSX parse error). PWA manifest, service worker, and offline
+  page code exist. Responsive drawer exists. Touch targets, reduced-motion,
+  orientation change, storage/battery awareness NOT implemented.
 - Exit gate: mobile device tests — unmet.
 
 **Phase 8 — Production operations**
 
 - ✅ Static export served by Cloudflare Worker; `/api/health`, `/api/ai/generate`,
   `/api/security/*`, `/api/gh/*` routes exist.
-- ✅ `npm test` (373/373 vitest, 31 files); `npm run lint`
-  (`tsc --noEmit`) passes; `npm run build` produces a static export.
+- ✅ `npm test` (393/393 vitest, 33 files); `npm run lint`
+  (`tsc --noEmit`, 0 errors on fresh checkout); `npm run build` produces a static export.
 - ✅ `LICENSE` (Apache-2.0), `SECURITY.md`, `CONTRIBUTING.md`,
   `.github/workflows/ci.yml` added Sep 11 2026.
 - ⚠️ CI added but first GitHub run pending; no structured logs or SLO runbooks.
@@ -640,8 +644,11 @@ Notes:
 
 **Phase 9 — Plugin ecosystem**
 
-- 🔲 Not started. Signed manifests, capability scopes, sandbox lifecycle,
-  marketplace contract.
+- ⚠️ Plugin manifest, loader (worker-based), registry (localStorage), and
+  PluginRunner implemented. `tests/phase9/` (19 tests across 3 files):
+  13 pass, 6 fail (localStorage undefined in jsdom).
+  CRITICAL: `new Function` in plugin loader (`src/lib/plugins/loader.ts:103`)
+  enables sandbox escape — runtime capability enforcement missing.
 - Exit gate: plugin permission/isolation tests — unmet.
 
 ### 13.3 Priority order for the next implementation work
@@ -650,9 +657,9 @@ Driven by the charter (correctness/security first, then beginner experience,
 then advanced power):
 
 1. **Phase 2 sandbox — DONE** — worker-thread `SandboxRunner`
-   (`src/lib/terminal/runner.ts`) replaces `new Function` in the terminal and
-   Omni-AI; time/output/code caps + 17 new tests; `npm test` 373/373,
-   `tsc --noEmit` clean (Sep 12 2026).
+    (`src/lib/terminal/runner.ts`) replaces `new Function` in the terminal and
+    Omni-AI; time/output/code caps + 17 new tests; `npm test` 393/393,
+    `tsc --noEmit` clean (Sep 12 2026).
 2. **Phase 0/8 baseline — DONE** — `LICENSE` (Apache-2.0), `SECURITY.md`,
    `CONTRIBUTING.md`, `.github/workflows/ci.yml` (lint + test + build on
    push/PR) added; §13 matrix updated with evidence. First CI green run

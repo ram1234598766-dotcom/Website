@@ -1,10 +1,11 @@
-fix: build break, CORS wildcard, tsconfig include, doc violations
+docs: fix test counts and phase status contradictions throughout
 
-- tsconfig.json: remove .next/types/**/*.ts from include (caused tsc --noEmit
-  to fail with 6 TS6053 errors on fresh checkout, contradicting §13.0 claim)
-- ModelManager.tsx: fix broken import path ../../lib/models/downloader ->
-  ../lib/models/downloader (was breaking next build)
-- workers/worker.ts: replace CORS wildcard (*) with allow-list origin
-  (http://localhost:3000, https://website.vasudevaya.workers.dev,
-  https://www.vantaos.org); add credentials header
-- npm run lint (tsc --noEmit) now clean (0 errors) on fresh checkout
+- ARCHITECTURE.md §13.0: 373/31 → 393/33 (all occurrences)
+- ARCHITECTURE.md §13.1 matrix: all phase rows updated to actual
+  counts and statuses; Phase 7 → ❌ (all 10 tests fail)
+- ARCHITECTURE.md §13.2: resolve contradictions with §13.1 for
+  phases 3 (tests exist), 4 (36 tests pass), 6 (76 tests, ⚠️ not 🔲),
+  7 (10 tests, ❌ not ⚠️/🔲), 9 (19 tests, ⚠️ not 🔲)
+- ARCHITECTURE.md §13.3: 373/373 → 393/393
+- ROADMAP.md §3: 373/31 → 393/33 with per-phase breakdown
+- ROADMAP.md Phase table: added actual test counts to exit gates

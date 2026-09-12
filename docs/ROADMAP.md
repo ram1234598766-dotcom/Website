@@ -33,15 +33,15 @@ A user should be able to:
 | Phase | Name | Primary outcome | Exit gate |
 |---|---|---|---|
 | 0 | Baseline and risk closure | Understand the current system and stop unsafe assumptions | Build/typecheck/lint pass; risk register reviewed |
-| 1 | Workspace foundation | Canonical local workspace, operation log, migration path | Refresh/crash and multi-tab tests pass |
-| 2 | IDE reliability | Real editor services, sandboxed execution, resilient terminal | IDE E2E and sandbox quota tests pass |
-| 3 | AI orchestration | Stable provider/tool contracts and safe cloud/local routing | Streaming/cancellation/redaction tests pass |
-| 4 | WebModel delivery | Signed, resumable, device-aware browser model downloads | Tamper/interruption/device matrix tests pass |
-| 5 | Identity and GitHub security | Firebase OAuth (in place) + server-side GitHub OAuth, scoped grants, safe token handling | Token-boundary and push safety tests pass |
-| 6 | Sync and collaboration | Offline-first multi-device sync and conflict resolution | Convergence and recovery tests pass |
-| 7 | Mobile/PWA experience | Installable, responsive, low-power mobile workflow | Mobile browser/device tests pass |
+| 1 | Workspace foundation | Canonical local workspace, operation log, migration path | Refresh/crash and multi-tab tests pass (99 tests) |
+| 2 | IDE reliability | Real editor services, sandboxed execution, resilient terminal | IDE E2E and sandbox quota tests pass (25 tests) |
+| 3 | AI orchestration | Stable provider/tool contracts and safe cloud/local routing | Streaming/cancellation/redaction tests pass (47 tests) |
+| 4 | WebModel delivery | Signed, resumable, device-aware browser model downloads | Tamper/interruption/device-matrix tests pass (36 tests) |
+| 5 | Identity and GitHub security | Firebase OAuth (in place) + server-side GitHub OAuth, scoped grants, safe token handling | Token-boundary and push safety tests pass (64 tests) |
+| 6 | Sync and collaboration | Offline-first multi-device sync and conflict resolution | Convergence and recovery tests pass (76 tests; mergeAll bugs open) |
+| 7 | Mobile/PWA experience | Installable, responsive, low-power mobile workflow | Mobile browser/device tests pass — BLOCKED (10 tests fail) |
 | 8 | Production operations | CI, telemetry, SLOs, incident runbooks, release gates | Production readiness review passes |
-| 9 | Plugin ecosystem | Signed extensions with least-privilege capabilities | Plugin permission and isolation tests pass |
+| 9 | Plugin ecosystem | Signed extensions with least-privilege capabilities | Plugin permission/isolation tests pass — BLOCKED (13/19 pass; new Function sandbox escape open) |
 
 ## 3. Phase 0 — Baseline and risk closure
 
@@ -76,11 +76,13 @@ A user should be able to:
 
 - `npm run lint` (`tsc --noEmit`): 0 errors
 - `npm run build`: passes (static export)
-- `npm test` (`vitest run`): 373/373 across 31 test files
-  - Phase 1 (workspace): 14 tests — buildState (rename/move/rebase/delete), multi-tab, bulkAppendOps resequence, loadOpsAfter range, provider
-  - Phase 2 (IDE): 55 tests — keyboard (F2 rename, Delete), terminal, commands, AI streaming, PWA
-  - Phase 6 (sync): 54 tests — sync status, multi-tab, conflict resolution, registry, etc.
-  - Phase 7 (PWA): 11 tests — manifest validation, service worker, offline behavior
+- `npm test` (`vitest run`): 393/393 across 33 test files
+  - Phase 1 (workspace): 99 tests across 9 files — buildState, multi-tab, bulkAppendOps, loadOpsAfter, provider, operations, paths, legacy, outbox-recovery, export
+  - Phase 2 (IDE): 25 tests — keyboard, terminal, commands, runner
+  - Phase 3 (AI): 47 tests — provider, streaming, redaction, cancellation
+  - Phase 5 (auth): 64 tests across 5 files — grant lifecycle, ID-token verification, GitHub proxy, client fallback
+  - Phase 6 (sync): 76 tests across 5 files — sync status, conflict, protocol, batch, convergence-recovery
+  - Phase 7 (PWA): 10 tests across 2 files — PWA manifest, responsive (all fail — Rolldown JSX)
   - Phase 8 (health): 11 tests — per-service health endpoints
 
 ## 4. Phase 1 — Workspace foundation
