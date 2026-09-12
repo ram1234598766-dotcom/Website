@@ -4,17 +4,12 @@ on:
   push:
     branches: [main]
   pull_request:
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
-permissions:
-  contents: read
+    branches: [main]
 
 jobs:
-  checks:
+  lint:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -22,25 +17,40 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22
-          cache: npm
+          node-version: '20'
+          cache: 'npm'
 
-      - name: Install dependencies
-        run: npm ci
+      - name: Type check
+        run: npx tsc --noEmit
 
-      - name: Lint (tsc --noEmit)
-        run: npm run lint
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Test (vitest --run)
-        run: npm test -- --run
-
-      - name: Build (static export)
-        run: npm run build
-
-      - name: Upload coverage report
-        if: always()
-        uses: actions/upload-artifact@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
         with:
-          name: coverage-report
-          path: coverage/
-          retention-days: 14
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Run tests
+        run: npx vitest run
+
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Build
+        run: npm run build

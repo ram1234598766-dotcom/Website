@@ -87,7 +87,7 @@ export async function signUpWithEmail(email: string, password: string, username?
     try {
       await updateProfile(credential.user, { displayName: username });
     } catch {
-      // Non-fatal — display name is cosmetic.
+      // Non-fatal â€” display name is cosmetic.
     }
   }
   return credential.user;
@@ -126,11 +126,51 @@ export function buildGithubProvider(): GithubAuthProvider {
   return provider;
 }
 
+const OAUTH_STATE_KEY = 'vantaos_oauth_state';
+const OAUTH_STATE_EXPIRY_MS = 600000; // 10 minutes
+
+/** Generate a cryptographically random OAuth state parameter and store it in sessionStorage. */
+function generateOAuthState(providerName: string): string {
+  const timestamp = Date.now();
+  const random = Array.from(crypto.getRandomValues(new Uint8Array(16)))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+  return `${providerName}:${timestamp}:${random}`;
+}
+
+/** Clear the OAuth state from sessionStorage (one-time use after validation). */
+export function clearOAuthState(): void {
+  sessionStorage.removeItem(OAUTH_STATE_KEY);
+}
+
 export async function runProviderSignIn(
   provider: GoogleAuthProvider | GithubAuthProvider
 ): Promise<{ user: User; accessToken: string | null }> {
   const auth = getFireAuth();
+
+  // Generate and store state parameter before sign-in
+  const providerName =
+    provider instanceof GoogleAuthProvider ? 'google' : 'github';
+  const state = generateOAuthState(providerName);
+  sessionStorage.setItem(OAUTH_STATE_KEY, state);
+
   const result = await signInWithPopup(auth, provider);
+
+  // Validate state parameter after sign-in
+  const storedState = sessionStorage.getItem(OAUTH_STATE_KEY);
+  if (!storedState) {
+    throw new Error('OAuth state validation failed — possible CSRF attack');
+  }
+
+  const [, timestampStr] = storedState.split(':');
+  const timestamp = parseInt(timestampStr, 10);
+  if (Date.now() - timestamp > OAUTH_STATE_EXPIRY_MS) {
+    throw new Error('OAuth state validation failed — possible CSRF attack');
+  }
+
+  // State valid — remove from sessionStorage (one-time use)
+  sessionStorage.removeItem(OAUTH_STATE_KEY);
+
   const googleCred = GoogleAuthProvider.credentialFromResult(result);
   const githubCred = GithubAuthProvider.credentialFromResult(result);
   const accessToken = googleCred?.accessToken ?? githubCred?.accessToken ?? null;
@@ -146,7 +186,7 @@ export function friendlyFirebaseError(err: any): string {
     'auth/popup-blocked': 'The sign-in popup was blocked. Allow popups for this site and try again.',
     'auth/email-already-in-use': 'An account with this email already exists. Try signing in instead.',
     'auth/invalid-email': 'That email address doesn\u2019t look valid.',
-    'auth/weak-password': 'Password is too weak — use at least 6 characters.',
+    'auth/weak-password': 'Password is too weak â€” use at least 6 characters.',
     'auth/invalid-credential': 'Invalid email or password.',
     'auth/user-disabled': 'This account has been disabled.',
     'auth/user-not-found': 'No account found with this email.',

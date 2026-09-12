@@ -10,7 +10,9 @@
     "test": "vitest run",
     "start": "npx serve out",
     "deploy": "npm run build && npx wrangler deploy",
-    "cf-preview": "npm run build && npx wrangler dev"
+    "cf-preview": "npm run build && npx wrangler dev",
+    "firebase:setup": "bash scripts/firebase-setup.sh",
+    "firebase:deploy": "firebase deploy --only firestore:rules,firestore:indexes"
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.3",

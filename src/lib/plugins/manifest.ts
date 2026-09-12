@@ -1,5 +1,5 @@
 /**
- * VantaOS Plugin — Manifest schema and validation.
+ * VantaOS Plugin - Manifest schema and validation.
  */
 
 export type PluginCapability =
@@ -31,6 +31,7 @@ export interface PluginManifest {
   signature: string;
 }
 
+// URL entry points must use HTTPS (see isValidUrlEntryPoint).
 const ALLOWED_CAPABILITIES: readonly PluginCapability[] = [
   'workspace:read',
   'workspace:write',
@@ -38,6 +39,24 @@ const ALLOWED_CAPABILITIES: readonly PluginCapability[] = [
   'network:request',
   'terminal:execute',
 ];
+
+export function isValidUrlEntryPoint(url: string): { valid: boolean; reason?: string } {
+  // Must use https:// scheme
+  if (!url.startsWith('https://')) {
+    return { valid: false, reason: 'Must use https:// scheme' };
+  }
+  // Must have a valid hostname (not just https:// with nothing after)
+  const rest = url.slice('https://'.length);
+  if (rest.length === 0 || rest.startsWith('/') || rest.startsWith(':') || rest.startsWith('?') || rest.startsWith('#')) {
+    return { valid: false, reason: 'URL must have a valid hostname' };
+  }
+  const hostnamePart = rest.split('/')[0].split(':')[0];
+  if (hostnamePart.length === 0) {
+    return { valid: false, reason: 'URL must have a valid hostname' };
+  }
+  // localhost is allowed for development
+  return { valid: true };
+}
 
 export function isValidManifest(raw: unknown): raw is PluginManifest {
   if (typeof raw !== 'object' || raw === null) return false;
@@ -63,6 +82,8 @@ export function isValidManifest(raw: unknown): raw is PluginManifest {
     if (typeof ep.script !== 'string') return false;
   } else if (ep.kind === 'url') {
     if (typeof ep.url !== 'string' || ep.url.length === 0) return false;
+    const urlCheck = isValidUrlEntryPoint(ep.url);
+    if (!urlCheck.valid) return false;
   } else {
     return false;
   }
@@ -85,4 +106,7 @@ export function manifestToSign(manifest: PluginManifest): string {
 
 export function getCapabilities(): readonly PluginCapability[] {
   return ALLOWED_CAPABILITIES;
+}
+export function hasCapability(manifest: PluginManifest, capability: string): boolean {
+  return manifest.capabilities.includes(capability as PluginCapability);
 }

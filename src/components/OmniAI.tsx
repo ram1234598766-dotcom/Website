@@ -3,6 +3,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { BrainCircuit, Send, Settings, Key, Globe, Zap, Bot, Trash2, Server, RefreshCw, Loader2 } from 'lucide-react';
 import { SandboxRunner } from '../lib/terminal/runner';
+import { ToolPermissionManager, DEFAULT_TOOLS, type ToolPermissionState } from '../lib/ai/tool-permissions';
 
 type AIProvider = 'ollama' | 'openrouter' | 'gemini' | 'openai';
 
@@ -11,6 +12,11 @@ const HISTORY_KEY = 'vantaos_omni_history';
 
 /** Shared sandbox for the inline JS / calculation tools. */
 const omniRunner = new SandboxRunner();
+const toolPermissionManager = new ToolPermissionManager(async (toolId, toolName, description) => {
+  const known = DEFAULT_TOOLS.find((t) => t.id === toolId);
+  if (known) return 'allow';
+  return 'deny';
+});
 
 async function runInSandbox(code: string): Promise<string> {
   const res = await omniRunner.run(code).result;
@@ -90,6 +96,8 @@ async function localQuery(msg: string, settings: StoredSettings): Promise<string
 For AI answers, connect a provider in ⚙️ Settings — local Ollama, or a cloud API (OpenRouter, Gemini, OpenAI).`;
   }
   if (ql.startsWith('weather') || ql.startsWith('temperature')) {
+    const canExec = await toolPermissionManager.canExecute('weather');
+    if (!canExec) return 'Tool Weather execution denied by permission settings';
     const match = q.match(/(?:in|at|for)\s+([a-z\s-]+)/i);
     return await getWeather(match?.[1]?.trim() || 'your area') || 'Weather not found. Try: weather in London';
   }
@@ -108,6 +116,8 @@ For AI answers, connect a provider in ⚙️ Settings — local Ollama, or a clo
     } catch (e: any) { return `JS error: ${e.message}`; }
   }
   if (ql.startsWith('fetch ') || ql.startsWith('get ')) {
+    const canExec = await toolPermissionManager.canExecute('fetch');
+    if (!canExec) return 'Tool Fetch execution denied by permission settings';
     try {
       const url = q.replace(/^(fetch|get)\s+/i, '').trim();
       if (!url.startsWith('http')) return 'Please provide a URL starting with http://';
@@ -173,6 +183,7 @@ export default function OmniAI() {
   const [tempOllamaUrl, setTempOllamaUrl] = useState(settings.ollamaUrl);
   const [ollamaModels, setOllamaModels] = useState<{ name: string }[]>([]);
   const [ollamaStatus, setOllamaStatus] = useState<'checking' | 'offline' | 'online'>('offline');
+  const [toolPerms, setToolPerms] = useState<ToolPermissionState>({});
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -252,6 +263,11 @@ export default function OmniAI() {
     saveSettings(newSettings);
     setShowSettings(false);
   };
+
+  const toggleToolPermission = (toolId: string, perm: 'allow' | 'deny') => {
+    toolPermissionManager.setPermission(toolId, perm);
+    setToolPerms((prev) => ({ ...prev, [toolId]: perm }));
+};
 
   return (
     <div className="w-full max-w-5xl mx-auto flex flex-col min-h-[85vh] bg-[#0a0d12] rounded-3xl overflow-hidden shadow-2xl border border-slate-800">
@@ -365,6 +381,28 @@ export default function OmniAI() {
                 className="w-full bg-black/40 border border-slate-700 rounded-xl px-4 py-3 text-white text-sm focus-visible:ring-2 focus-visible:ring-indigo-500 placeholder-slate-600 font-mono" />
             </div>
           )}
+
+          <div className="bg-black/40 p-4 rounded-xl border border-slate-700">
+            <h4 className="text-sm font-medium text-slate-300 mb-3 flex items-center gap-2"><Zap className="w-4 h-4" /> Tool Permissions</h4>
+            {DEFAULT_TOOLS.map((tool) => (
+              <div key={tool.id} className="flex items-center justify-between py-1.5">
+                <div>
+                  <span className="text-xs text-slate-300">{tool.name}</span>
+                  <span className="text[10px] text-slate-500 ml-2">{tool.description}</span>
+                </div>
+                <div className="flex gap-1">
+                  <button onClick={() => toggleToolPermission(tool.id, 'allow')}
+                    className={toolPerms[tool.id] === 'allow' ? 'px-2 py-0.5 rounded text-[10px] font-medium cursor-pointer bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'px-2 py-0.5 rounded text-[10px] font-medium cursor-pointer bg-slate-800 text-slate-500 hover:text-slate-300'}>
+                    Allow
+                  </button>
+                  <button onClick={() => toggleToolPermission(tool.id, 'deny')}
+                    className={toolPerms[tool.id] === 'deny' ? 'px-2 py-0.5 rounded text-[10px] font-medium cursor-pointer bg-red-500/20 text-red-400 border border-red-500/30' : 'px-2 py-0.5 rounded text-[10px] font-medium cursor-pointer bg-slate-800 text-slate-500 hover:text-slate-300'}>
+                    Deny
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
 
           <div className="flex justify-end gap-3 pt-2">
             <button onClick={() => setShowSettings(false)} className="px-4 py-2 text-sm text-slate-400 hover:text-white transition-colors cursor-pointer">Cancel</button>
