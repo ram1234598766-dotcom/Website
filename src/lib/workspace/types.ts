@@ -39,6 +39,8 @@ export interface OperationBase {
   readonly source: 'user' | 'adapter' | 'system';
   /** Monotonically increasing sequence number per workspace. */
   readonly seq: number;
+  /** Optional idempotency key for deduplication across tabs/relaunches. */
+  readonly idempotencyKey?: string;
 }
 
 export interface CreateNodeOp extends OperationBase {

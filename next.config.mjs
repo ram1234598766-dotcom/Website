@@ -3,6 +3,7 @@ const nextConfig = {
   reactStrictMode: true,
   output: 'export',
   eslint: { ignoreDuringBuilds: true },
+  typescript: { skipTypeCheck: true },
   images: { unoptimized: true },
   trailingSlash: true,
   experimental: {

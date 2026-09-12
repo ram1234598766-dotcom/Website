@@ -223,7 +223,7 @@ export default function CloudOS() {
     return () => window.removeEventListener('save-active-file', handleSave as any);
   }, [activeFileId, secondaryActiveFileId, files, ws]);
 
-  const activeFile = files.find(f => f.id === activeFileId) || files[0];
+  const activeFile = files.find(f => f.id === activeFileId) || files[0] || { id: '', name: '', content: '', language: 'plaintext' } as FileNode;
 
   useEffect(() => {
     const handleKeyDown = async (e: KeyboardEvent) => {
@@ -490,7 +490,7 @@ export default function CloudOS() {
     setNewFileName('');
   };
 
-  const handleDeleteFile = async (id: string, e: React.MouseEvent) => {
+  const handleDeleteFile = async (id: string, e: React.SyntheticEvent) => {
     e.stopPropagation();
     const item = files.find(f => f.id === id);
     if (!item) return;
@@ -700,6 +700,7 @@ export default function CloudOS() {
             onClick={() => setSidebarOpen(!sidebarOpen)}
             className="p-1.5 rounded-lg bg-slate-900/50 hover:bg-slate-800 text-slate-400 hover:text-indigo-400 border border-slate-800 transition-colors mr-1 cursor-pointer"
             title={sidebarOpen ? "Collapse Sidebar" : "Expand Sidebar"}
+            aria-label={sidebarOpen ? "Collapse Sidebar" : "Expand Sidebar"}
           >
             <FolderTree className="w-4 h-4" />
           </button>
@@ -837,41 +838,44 @@ export default function CloudOS() {
       <div className="flex flex-1 overflow-hidden">
         {/* Sidebar / File Explorer */}
         {sidebarOpen && (
-          <div className="w-64 bg-slate-900 border-r border-slate-800 flex flex-col shrink-0">
+          <div data-testid="sidebar" className="w-64 bg-slate-900 border-r border-slate-800 flex flex-col shrink-0">
             <div className="p-4 flex items-center justify-between border-b border-slate-800">
               <div className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
                 <FolderTree className="w-4 h-4" />
                 Workspace
               </div>
               <div className="flex items-center gap-1">
-                <button 
-                  onClick={() => {
-                    setCreatingParentId(null);
-                    setCreatingType('file');
-                    setIsCreating(true);
-                  }}
-                  className="p-1 rounded text-slate-400 hover:text-indigo-400 hover:bg-indigo-500/10 transition-colors cursor-pointer"
-                  title="New File"
-                >
-                  <Plus className="w-4 h-4" />
-                </button>
-                <button 
-                  onClick={() => {
-                    setCreatingParentId(null);
-                    setCreatingType('folder');
-                    setIsCreating(true);
-                  }}
-                  className="p-1 rounded text-slate-400 hover:text-amber-400 hover:bg-amber-500/10 transition-colors cursor-pointer"
-                  title="New Folder"
-                >
-                  <Folder className="w-4 h-4" />
-                </button>
+                 <button 
+                   onClick={() => {
+                     setCreatingParentId(null);
+                     setCreatingType('file');
+                     setIsCreating(true);
+                   }}
+                   className="p-1 rounded text-slate-400 hover:text-indigo-400 hover:bg-indigo-500/10 transition-colors cursor-pointer"
+                   title="New File"
+                   aria-label="New File"
+                 >
+                   <Plus className="w-4 h-4" />
+                 </button>
+                 <button 
+                   onClick={() => {
+                     setCreatingParentId(null);
+                     setCreatingType('folder');
+                     setIsCreating(true);
+                   }}
+                   className="p-1 rounded text-slate-400 hover:text-amber-400 hover:bg-amber-500/10 transition-colors cursor-pointer"
+                   title="New Folder"
+                   aria-label="New Folder"
+                 >
+                   <Folder className="w-4 h-4" />
+                 </button>
               </div>
             </div>
             
             <div className="flex-1 overflow-y-auto overflow-x-hidden p-2 space-y-1">
               <div className="h-full w-full">
                 <Virtuoso
+                  role="tree"
                   style={{ height: 600, width: '100%' }}
                   totalCount={visibleNodes.length}
                   itemContent={(index) => {
@@ -916,7 +920,7 @@ export default function CloudOS() {
                     return (
                       <div className="pr-2 py-0.5" style={{ paddingLeft: `${node.depth * 14}px` }}>
                         <motion.div
-                          role="treeitem"
+                           role="treeitem"
                           tabIndex={0}
                           aria-selected={!node.isFolder && activeFileId === node.id}
                           aria-expanded={node.isFolder ? node.isOpen : undefined}
@@ -936,6 +940,15 @@ export default function CloudOS() {
                             if (e.key === 'Enter' || e.key === ' ') {
                               e.preventDefault();
                               e.currentTarget.click();
+                            }
+                            if (e.key === 'F2') {
+                              e.preventDefault();
+                              setRenamingFileId(node.id);
+                              setRenameValue(node.name);
+                            }
+                            if (e.key === 'Delete') {
+                              e.preventDefault();
+                              handleDeleteFile(node.id, e);
                             }
                           }}
                           whileHover={{ scale: 1.01, backgroundColor: "rgba(255, 255, 255, 0.03)" }}
@@ -1007,6 +1020,7 @@ export default function CloudOS() {
                                 }}
                                 className="p-1 hover:bg-slate-700 rounded text-slate-400 hover:text-indigo-400 transition-colors"
                                 title="New File"
+                                aria-label="New File"
                               >
                                 <Plus className="w-3 h-3" />
                               </button>
@@ -1019,6 +1033,7 @@ export default function CloudOS() {
                               }}
                               className="p-1 hover:bg-slate-700 rounded text-slate-400 hover:text-indigo-400 transition-colors"
                               title="Rename"
+                              aria-label="Rename"
                             >
                               <Edit2 className="w-3 h-3" />
                             </button>
@@ -1026,6 +1041,7 @@ export default function CloudOS() {
                               onClick={(e) => handleDeleteFile(node.id, e)}
                               className="p-1 hover:bg-slate-700 rounded text-slate-400 hover:text-red-400 transition-colors"
                               title="Delete"
+                              aria-label="Delete"
                             >
                               <Trash2 className="w-3 h-3" />
                             </button>
@@ -1182,6 +1198,7 @@ export default function CloudOS() {
                         }
                       }}
                       className="opacity-0 group-hover:opacity-100 hover:text-rose-400 p-0.5 rounded ml-1 cursor-pointer"
+                      aria-label="Close tab"
                     >
                       <X className="w-3 h-3" />
                     </button>
@@ -1193,13 +1210,14 @@ export default function CloudOS() {
             
             {/* Language Selector */}
             <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-xs font-mono text-slate-400">
-              <div className="flex items-center gap-2">
-                 <span className="opacity-60">Theme:</span>
-                 <select 
-                    value={editorTheme}
-                    onChange={(e) => setEditorTheme(e.target.value as EditorTheme)}
-                    className="bg-transparent border-none outline-none text-indigo-400 font-bold cursor-pointer"
-                 >
+               <div className="flex items-center gap-2">
+                  <label htmlFor="cloudos-theme" className="opacity-60">Theme:</label>
+                  <select 
+                     id="cloudos-theme"
+                     value={editorTheme}
+                     onChange={(e) => setEditorTheme(e.target.value as EditorTheme)}
+                     className="bg-transparent border-none outline-none text-indigo-400 font-bold cursor-pointer"
+                  >
                     {EDITOR_THEMES.map((theme) => (
                       <option key={theme} value={theme}>
                         {theme === 'vs-dark' ? 'Dark' : theme === 'vs' ? 'Light' : 'High Contrast'}
@@ -1284,8 +1302,8 @@ export default function CloudOS() {
                   exit={{ opacity: 0, y: -5 }}
                   transition={{ duration: 0.15 }}
                   className="absolute inset-0 flex"
-                >
-                                    <motion.div 
+                  >
+                    <motion.div
                     key={`${activeFileId}-${splitMode}-${secondaryActiveFileId}`}
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}

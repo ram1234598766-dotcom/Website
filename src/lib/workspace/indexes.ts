@@ -125,6 +125,12 @@ export function buildState(ops: readonly Operation[]): WorkspaceState {
             path: newPath,
             updatedAt: op.timestamp,
           });
+          for (const [, desc] of nodes) {
+            if (desc.id !== nodeId && desc.path.startsWith(node.path + '/')) {
+              const rebased = newPath + desc.path.slice(node.path.length);
+              nodes.set(desc.id, { ...desc, path: rebased });
+            }
+          }
         }
         break;
       }
@@ -138,11 +144,28 @@ export function buildState(ops: readonly Operation[]): WorkspaceState {
             path: newPath,
             updatedAt: op.timestamp,
           });
+          for (const [, desc] of nodes) {
+            if (desc.id !== nodeId && desc.path.startsWith(node.path + '/')) {
+              const rebased = newPath + desc.path.slice(node.path.length);
+              nodes.set(desc.id, { ...desc, path: rebased });
+            }
+          }
         }
         break;
       }
       case 'delete_node': {
         const { nodeId } = op.payload;
+        const deletedNode = nodes.get(nodeId);
+        if (deletedNode) {
+          const prefix = deletedNode.path + '/';
+          for (const [id] of nodes) {
+            const n = nodes.get(id);
+            if (id !== nodeId && n && n.path.startsWith(prefix)) {
+              nodes.delete(id);
+              dirtySet.delete(id);
+            }
+          }
+        }
         nodes.delete(nodeId);
         dirtySet.delete(nodeId);
         break;

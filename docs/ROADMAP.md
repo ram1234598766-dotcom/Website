@@ -72,6 +72,17 @@ A user should be able to:
 - Every proposed change has an owner, test strategy, and rollback path.
 - The roadmap remains documentation-only until the user approves implementation.
 
+### Verification evidence (Sep 12 2026)
+
+- `npm run lint` (`tsc --noEmit`): 0 errors
+- `npm run build`: passes (static export)
+- `npm test` (`vitest run`): 373/373 across 31 test files
+  - Phase 1 (workspace): 14 tests — buildState (rename/move/rebase/delete), multi-tab, bulkAppendOps resequence, loadOpsAfter range, provider
+  - Phase 2 (IDE): 55 tests — keyboard (F2 rename, Delete), terminal, commands, AI streaming, PWA
+  - Phase 6 (sync): 54 tests — sync status, multi-tab, conflict resolution, registry, etc.
+  - Phase 7 (PWA): 11 tests — manifest validation, service worker, offline behavior
+  - Phase 8 (health): 11 tests — per-service health endpoints
+
 ## 4. Phase 1 — Workspace foundation
 
 ### Work
@@ -241,8 +252,9 @@ requested, zero console errors; `npx tsc --noEmit` and `npm run build` pass with
 the real `NEXT_PUBLIC_FIREBASE_*` env. The final Google consent click requires a
 human browser session and is the last manual step to complete the round trip.
 GitHub direct-token fallback is covered by `tests/phase5/github-client.test.ts`
-and `tests/phase5/client-github-fallback.test.ts` (81 vitest tests total, all
-passing Sep 11 2026). See `docs/ARCHITECTURE.md` §13.0 for the fact table.
+and `tests/phase5/client-github-fallback.test.ts` — all passing;
+  full suite `npm test` 373/373 across 31 files (Sep 12 2026). See
+  `docs/ARCHITECTURE.md` §13.0 for the fact table.
 
 ### Work
 
@@ -330,9 +342,9 @@ passing Sep 11 2026). See `docs/ARCHITECTURE.md` §13.0 for the fact table.
 
 - Add CI for build, typecheck, lint, unit tests, browser E2E, dependency audit,
   and artifact publication.
-  **Done (Sep 11 2026):** lint (`tsc --noEmit`), Vitest suite (81 tests), and
-  static build run on every push/PR via `.github/workflows/ci.yml`. Still open:
-  browser E2E, `npm audit`, artifact publication.
+  **Done (Sep 11 2026):** lint (`tsc --noEmit`), Vitest suite (373 tests),
+  and static build run on every push/PR via `.github/workflows/ci.yml`.
+  Still open: browser E2E, artifact publication.
 - Add preview deployments with environment-specific configuration.
 - Add structured, redacted logs and correlation IDs.
 - Add service health, sync health, model download health, and AI provider health.

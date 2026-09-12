@@ -16,11 +16,10 @@ import type {
   MoveNodeOp,
   DeleteNodeOp,
 } from './types';
+import { DB_NAME, DB_VERSION } from './db';
 
-// ─── IndexedDB helpers ───────────────────────────────────────────────────────
+// ─── IndexedDB helpers ───────────────────────────────────────────────
 
-const DB_NAME = 'VantaOSWorkspace';
-const DB_VERSION = 2;
 const OPS_STORE = 'operations';
 const META_STORE = 'workspace_meta';
 
@@ -33,6 +32,7 @@ function openDB(): Promise<IDBDatabase> {
         const store = db.createObjectStore(OPS_STORE, { keyPath: 'id' });
         store.createIndex('by_seq', 'seq', { unique: true });
         store.createIndex('by_timestamp', 'timestamp', { unique: false });
+        store.createIndex('by_idempotency_key', 'idempotencyKey', { unique: false });
       }
       if (!db.objectStoreNames.contains(META_STORE)) {
         db.createObjectStore(META_STORE, { keyPath: 'key' });
@@ -98,8 +98,14 @@ function generateId(): string {
 export async function appendOp(
   kind: OperationKind,
   source: Operation['source'],
-  payload: Operation['payload']
+  payload: Operation['payload'],
+  idempotencyKey?: string
 ): Promise<Operation> {
+  if (idempotencyKey) {
+    const existing = await findOpByIdempotencyKey(idempotencyKey);
+    if (existing) return existing;
+  }
+
   const seq = bumpSeq();
   const op = {
     id: generateId(),
@@ -107,6 +113,7 @@ export async function appendOp(
     timestamp: Date.now(),
     source,
     seq,
+    idempotencyKey,
     payload,
   } as Operation;
 
@@ -121,6 +128,21 @@ export async function appendOp(
   return op;
 }
 
+/** Find an existing operation by idempotency key, if any. */
+export async function findOpByIdempotencyKey(
+  key: string
+): Promise<Operation | undefined> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(OPS_STORE, 'readonly');
+    const store = tx.objectStore(OPS_STORE);
+    const index = store.index('by_idempotency_key');
+    const req = index.get(key);
+    req.onsuccess = () => resolve(req.result as Operation | undefined);
+    req.onerror = () => reject(req.error);
+  });
+}
+
 /** Bulk-append operations (used during migration from localStorage). */
 export async function bulkAppendOps(
   ops: readonly Operation[]
@@ -130,8 +152,18 @@ export async function bulkAppendOps(
   await new Promise<void>((resolve, reject) => {
     const tx = db.transaction(OPS_STORE, 'readwrite');
     const store = tx.objectStore(OPS_STORE);
+    const seen = new Set<number>();
+    let nextSeq = 0;
     for (const op of ops) {
-      store.put(op);
+      if (op.seq > 0 && !seen.has(op.seq)) {
+        seen.add(op.seq);
+        nextSeq = Math.max(nextSeq, op.seq);
+        store.put(op);
+      } else {
+        nextSeq += 1;
+        store.put({ ...op, seq: nextSeq });
+        seen.add(nextSeq);
+      }
     }
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
@@ -161,7 +193,7 @@ export async function loadOpsAfter(seq: number): Promise<readonly Operation[]> {
     const tx = db.transaction(OPS_STORE, 'readonly');
     const store = tx.objectStore(OPS_STORE);
     const index = store.index('by_seq');
-    const range = IDBKeyRange.lowerBound(seq + 1, true);
+    const range = IDBKeyRange.lowerBound(seq + 1, false);
     const req = index.getAll(range);
     req.onsuccess = () => resolve((req.result ?? []) as Operation[]);
     req.onerror = () => reject(req.error);
@@ -198,7 +230,8 @@ export function makeCreateNodeOp(
     content: string;
     language: string;
   },
-  source: Operation['source'] = 'user'
+  source: Operation['source'] = 'user',
+  idempotencyKey?: string
 ): CreateNodeOp {
   return {
     id: generateId(),
@@ -206,6 +239,7 @@ export function makeCreateNodeOp(
     timestamp: Date.now(),
     source,
     seq: 0, // will be overwritten by appendOp
+    idempotencyKey,
     payload: {
       id: generateId(),
       ...params,
@@ -220,7 +254,8 @@ export function makeCreateFolderOp(
     name: string;
     parentId: string | null;
   },
-  source: Operation['source'] = 'user'
+  source: Operation['source'] = 'user',
+  idempotencyKey?: string
 ): CreateFolderOp {
   return {
     id: generateId(),
@@ -228,6 +263,7 @@ export function makeCreateFolderOp(
     timestamp: Date.now(),
     source,
     seq: 0,
+    idempotencyKey,
     payload: {
       id: generateId(),
       ...params,

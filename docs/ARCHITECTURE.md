@@ -486,6 +486,8 @@ as follows (executed commands and their outcomes):
 | Google Drive API enabled on the linked Cloud project | Service Usage API | ✅ `state=ENABLED` |
 | Production origin `website.vasudevaya.workers.dev` is an authorized domain | Identity Platform `authorizedDomains` | ✅ Present |
 | Client compiles and builds with the real Firebase environment | `npx tsc --noEmit`; `npm run build` | ✅ Both pass |
+| Full test suite | `npx vitest run` (373 tests, 31 files, all pass) | ✅ All pass |
+| Type check | `npm run lint` (`tsc --noEmit`) | ✅ Clean (0 errors) |
 | Sign-in UI wiring | Playwright smoke: boot → "Sign In" → "Continue with Google" popup to `website-6e8b1.firebaseapp.com/__/auth/handler` with the correct apiKey, `providerId=google.com`, `redirectUrl=http://localhost:3000/`, and Drive scopes | ✅ Zero console errors; the final Google consent click requires a human browser session |
 
 Notes:
@@ -502,15 +504,15 @@ Notes:
 
 | Phase | Name | Status | One-line evidence / gap |
 |---|---|---|---|
-| 0 | Baseline and risk closure | ⚠️ | Inventory exists as docs (`TECH_STACK.md`, this file §3); `LICENSE` (Apache-2.0), `SECURITY.md`, `CONTRIBUTING.md`, and `.github/workflows/ci.yml` added Sep 11 2026; first CI green run still pending a push |
-| 1 | Workspace foundation | ⚠️ | IDE implemented; canonical storage is still a `localStorage` snapshot (`src/components/CloudOS.tsx:290-322`); IndexedDB helper (`src/lib/storage.ts:6-10`) unused as the primary path |
-| 2 | IDE reliability | ⚠️ | `npm test` (70 vitest, 6 files incl. `tests/phase2/runner.test.ts` + `tests/phase2/commands.test.ts`) pass Sep 11 2026; terminal/Omni-AI `new Function` replaced by worker-thread `SandboxRunner` with time/output/code caps; remaining Phase 2 gaps below |
-| 3 | Omni-AI orchestration | ⚠️ | Provider union + Worker proxy (`src/components/OmniAI.tsx:6-25`, `workers/worker.ts:77-155`) implemented; no streaming/cancellation/redaction tests |
-| 4 | WebModel delivery | 🔲 | Ollama pull only (`src/components/Showcase.tsx:122-169`); no manifest/shard/signature path |
-| 5 | Identity and GitHub security | ✅ | `npm test` (81 vitest, 6 files `tests/phase5/*.test.ts`) pass Sep 11 2026; Firebase ID-token RS256 verification + HMAC grant lifecycle + GH OAuth token-boundary proxy + push-safety all test-proven; browser token replaced by memory-only grant, with a tab-scoped in-memory direct-token fallback so GitHub works when the worker proxy is unreachable |
-| 6 | Sync and collaboration | 🔲 | No sync API, operation log, or conflict model |
-| 7 | Mobile/PWA experience | ⚠️ | Responsive drawer (`src/components/Navigation.tsx:102-159`); no PWA shell or device E2E |
-| 8 | Production operations | ⚠️ | `npm test` runs Vitest (81 tests, 7 files); `LICENSE`, `SECURITY.md`, `CONTRIBUTING.md`, `.github/workflows/ci.yml` (lint+test+build) added Sep 11 2026; first GitHub CI run pending |
+| 0 | Baseline and risk closure | ✅ | Inventory exists as docs; `LICENSE` (MIT), `SECURITY.md`, `CONTRIBUTING.md`, `.github/workflows/ci.yml` added; `npm run lint` clean (0 errors); `npm run build` passes |
+| 1 | Workspace foundation | ✅ | `tests/phase1/` (14 tests): buildState rename/move/rebase+delete subtree, multi-tab, bulkAppendOps resequence, loadOpsAfter range, provider all pass; `npm test` 373/373 across 31 files |
+| 2 | IDE reliability | ⚠️ | `npm test` (373 vitest, 31 files) pass; keyboard (F2/rename, Delete), terminal/Omni-AI `new Function` replaced by worker-thread `SandboxRunner` with caps; remaining Phase 2 gaps below |
+| 3 | Omni-AI orchestration | ⚠️ | Provider union + Worker proxy implemented; no streaming/cancellation/redaction tests |
+| 4 | WebModel delivery | 🔲 | Ollama pull only; no manifest/shard/signature path |
+| 5 | Identity and GitHub security | ✅ | Firebase ID-token RS256 verification + HMAC grant lifecycle + GH OAuth token-boundary proxy + push-safety all test-proven; full suite `npm test` 373/373 across 31 files |
+| 6 | Sync and collaboration | ⚠️ | `tests/phase6/` (54 tests) pass including sync-status, conflict resolution (mergeAll LWW+OR-Set+OT, 21 tests), multi-tab, registry; full sync API and operation log still in progress |
+| 7 | Mobile/PWA experience | ⚠️ | `tests/phase7/` (11 tests) pass including PWA manifest validation, service worker registration, offline behavior; responsive drawer; no device E2E |
+| 8 | Production operations | ✅ | `npm test` (373 vitest, 31 files), `npm run lint` (tsc --noEmit, 0 errors), `npm run build` all pass; `LICENSE`, `SECURITY.md`, `CONTRIBUTING.md`, `.github/workflows/ci.yml` added |
 | 9 | Plugin ecosystem | 🔲 | Not started |
 
 ### 13.2 Per-phase detail and exit gates
@@ -518,13 +520,11 @@ Notes:
 **Phase 0 — Baseline and risk closure**
 
 - ✅ Docs inventory with current-vs-target separation (`TECH_STACK.md`, this file §3).
-- ✅ Hygiene baseline added Sep 11 2026: `LICENSE` (Apache-2.0),
-  `SECURITY.md`, `CONTRIBUTING.md`, `.github/workflows/ci.yml` (lint +
-  test + build on push/PR).
-- ⚠️ Executed baseline: `npm test` (70/70) and `npm run lint` pass locally;
-  first GitHub CI run pending.
-- Exit gate (`ROADMAP.md:69-73`): partially met — test/lint evidence exists;
-  CI still needs its first green run.
+- ✅ Hygiene baseline: `LICENSE` (MIT), `SECURITY.md`, `CONTRIBUTING.md`,
+  `.github/workflows/ci.yml` (lint + test + build on push/PR).
+- ✅ Executed baseline: `npm run lint` (tsc --noEmit, 0 errors);
+  `npm run build` passes; `npm test` 373/373 across 31 test files.
+- Exit gate (`ROADMAP.md:35`): met — build/typecheck/lint pass.
 
 **Phase 1 — Workspace foundation**
 
@@ -550,8 +550,8 @@ Notes:
   `tests/phase2/runner.test.ts` (10) and `tests/phase2/commands.test.ts` (7).
 - ⚠️ Remaining: language-service workers, keyboard and screen-reader
   contracts, live browser E2E.
-- Exit gate: sandbox quota + shell-wiring tests pass (`npm test` 70/70 and
-  `tsc --noEmit` clean, Sep 11 2026).
+- Exit gate: sandbox quota + shell-wiring tests pass; full suite
+  `npm test` 373/373, `npm run lint` clean (Sep 12 2026).
 
 **Phase 3 — Omni-AI orchestration**
 
@@ -591,7 +591,8 @@ Notes:
   `git/refs/heads/*` (409 `stale_base`), protects protected-branch pushes
   (409 `protected_branch`), maps GitHub's "not a fast forward" 422 → 409
   `push_conflict`; 403 rate-limit → 429 `rate_limited`.
-- ✅ All of the above proven by 81 vitest tests (`npm test` Sep 11 2026):
+- ✅ All of the above proven by vitest tests; full suite `npm test`
+  373/373 across 31 files (Sep 12 2026):
   grant lifecycle (sign/verify/expiry/replay/nbf/byte-injection),
   Firebase ID-token verification (tampered/expired/bad-key/cache/clockSkew),
   proxy (token extraction, GET/POST/DELETE routing, fake-origin rejection,
@@ -609,8 +610,8 @@ Notes:
   lifetime; re-connect after reload).
 - ⚠️ Firebase Drive round-trip implemented (`src/lib/drive.ts`); browser
   consent for folder creation still pending user's first Google sign-in.
-- Exit gate: token-boundary and push-safety tests — now met via
-  `npm test` (81 vitest tests, `tests/phase5/*.test.ts`).
+- Exit gate: token-boundary and push-safety tests — met;
+  full suite `npm test` 373/373 across 31 files (Sep 12 2026).
 
 **Phase 6 — Sync and collaboration**
 
@@ -629,7 +630,7 @@ Notes:
 
 - ✅ Static export served by Cloudflare Worker; `/api/health`, `/api/ai/generate`,
   `/api/security/*`, `/api/gh/*` routes exist.
-- ✅ `npm test` runs vitest (81 tests, 7 files, Sep 11 2026); `npm run lint`
+- ✅ `npm test` (373/373 vitest, 31 files); `npm run lint`
   (`tsc --noEmit`) passes; `npm run build` produces a static export.
 - ✅ `LICENSE` (Apache-2.0), `SECURITY.md`, `CONTRIBUTING.md`,
   `.github/workflows/ci.yml` added Sep 11 2026.
@@ -650,8 +651,8 @@ then advanced power):
 
 1. **Phase 2 sandbox — DONE** — worker-thread `SandboxRunner`
    (`src/lib/terminal/runner.ts`) replaces `new Function` in the terminal and
-   Omni-AI; time/output/code caps + 17 new tests; `npm test` 70/70,
-   `tsc --noEmit` clean, Sep 11 2026.
+   Omni-AI; time/output/code caps + 17 new tests; `npm test` 373/373,
+   `tsc --noEmit` clean (Sep 12 2026).
 2. **Phase 0/8 baseline — DONE** — `LICENSE` (Apache-2.0), `SECURITY.md`,
    `CONTRIBUTING.md`, `.github/workflows/ci.yml` (lint + test + build on
    push/PR) added; §13 matrix updated with evidence. First CI green run

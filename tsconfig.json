@@ -29,11 +29,11 @@
     "isolatedModules": true
   },
   "include": [
+    "**/*.cjs",
+    "**/*.js",
+    "**/*.mjs",
     "**/*.ts",
     "**/*.tsx",
-    "**/*.mjs",
-    "**/*.js",
-    "**/*.cjs",
     ".next/types/**/*.ts"
   ],
   "exclude": [

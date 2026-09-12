@@ -175,7 +175,8 @@ export function WorkspaceProvider({
         },
         'user'
       );
-      const sealed = await appendOp(op.kind, op.source, op.payload);
+      const sealed = await appendOp(op.kind, op.source, op.payload, op.idempotencyKey);
+      opsRef.current = [...opsRef.current, sealed];
 
       const node: WorkspaceNode = {
         id: op.payload.id,
@@ -189,7 +190,11 @@ export function WorkspaceProvider({
         updatedAt: sealed.timestamp,
       };
 
-      setState((prev) => applyOpToState(prev, sealed));
+      setState((prev) => {
+        const next = applyOpToState(prev, sealed);
+        stateRef.current = next;
+        return next;
+      });
       return node;
     },
     []
@@ -202,7 +207,8 @@ export function WorkspaceProvider({
       parentId: string | null = null
     ): Promise<WorkspaceNode> => {
       const op = makeCreateFolderOp({ path, name, parentId }, 'user');
-      const sealed = await appendOp(op.kind, op.source, op.payload);
+      const sealed = await appendOp(op.kind, op.source, op.payload, op.idempotencyKey);
+      opsRef.current = [...opsRef.current, sealed];
 
       const node: WorkspaceNode = {
         id: op.payload.id,
@@ -234,8 +240,13 @@ export function WorkspaceProvider({
         },
         'user'
       );
-      const sealed = await appendOp(op.kind, op.source, op.payload);
-      setState((prev) => applyOpToState(prev, sealed));
+      const sealed = await appendOp(op.kind, op.source, op.payload, op.idempotencyKey);
+      opsRef.current = [...opsRef.current, sealed];
+      setState((prev) => {
+        const next = applyOpToState(prev, sealed);
+        stateRef.current = next;
+        return next;
+      });
     },
     []
   );
@@ -257,8 +268,13 @@ export function WorkspaceProvider({
         },
         'user'
       );
-      const sealed = await appendOp(op.kind, op.source, op.payload);
-      setState((prev) => applyOpToState(prev, sealed));
+      const sealed = await appendOp(op.kind, op.source, op.payload, op.idempotencyKey);
+      opsRef.current = [...opsRef.current, sealed];
+      setState((prev) => {
+        const next = applyOpToState(prev, sealed);
+        stateRef.current = next;
+        return next;
+      });
     },
     []
   );
@@ -283,8 +299,13 @@ export function WorkspaceProvider({
         },
         'user'
       );
-      const sealed = await appendOp(op.kind, op.source, op.payload);
-      setState((prev) => applyOpToState(prev, sealed));
+      const sealed = await appendOp(op.kind, op.source, op.payload, op.idempotencyKey);
+      opsRef.current = [...opsRef.current, sealed];
+      setState((prev) => {
+        const next = applyOpToState(prev, sealed);
+        stateRef.current = next;
+        return next;
+      });
     },
     []
   );
@@ -301,8 +322,13 @@ export function WorkspaceProvider({
         },
         'user'
       );
-      const sealed = await appendOp(op.kind, op.source, op.payload);
-      setState((prev) => applyOpToState(prev, sealed));
+      const sealed = await appendOp(op.kind, op.source, op.payload, op.idempotencyKey);
+      opsRef.current = [...opsRef.current, sealed];
+      setState((prev) => {
+        const next = applyOpToState(prev, sealed);
+        stateRef.current = next;
+        return next;
+      });
     },
     []
   );
@@ -335,7 +361,6 @@ export function WorkspaceProvider({
 
   const getContent = useCallback((nodeId: string): string | undefined => {
     const ops = opsRef.current;
-    // Scan backwards — the last update_content or create_node wins.
     for (let i = ops.length - 1; i >= 0; i--) {
       const op = ops[i];
       if (
