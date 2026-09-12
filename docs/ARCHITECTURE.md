@@ -504,23 +504,23 @@ Notes:
 
 | Phase | Name | Status | One-line evidence / gap |
 |---|---|---|---|
-| 0 | Baseline and risk closure | ✅ | Inventory exists as docs; `LICENSE` (MIT), `SECURITY.md`, `CONTRIBUTING.md`, `.github/workflows/ci.yml` added; `npm run lint` clean (0 errors); `npm run build` passes |
+| 0 | Baseline and risk closure | ✅ | Inventory exists as docs; `LICENSE` (Apache-2.0), `SECURITY.md`, `CONTRIBUTING.md`, `.github/workflows/ci.yml` added; `npm run lint` clean (0 errors); `npm run build` passes |
 | 1 | Workspace foundation | ✅ | `tests/phase1/` (14 tests): buildState rename/move/rebase+delete subtree, multi-tab, bulkAppendOps resequence, loadOpsAfter range, provider all pass; `npm test` 373/373 across 31 files |
 | 2 | IDE reliability | ⚠️ | `npm test` (373 vitest, 31 files) pass; keyboard (F2/rename, Delete), terminal/Omni-AI `new Function` replaced by worker-thread `SandboxRunner` with caps; remaining Phase 2 gaps below |
 | 3 | Omni-AI orchestration | ⚠️ | Provider union + Worker proxy implemented; no streaming/cancellation/redaction tests |
-| 4 | WebModel delivery | 🔲 | Ollama pull only; no manifest/shard/signature path |
+| 4 | WebModel delivery | ⚠️ | Models API route + ModelManager UI wired in; manifest/shard/signature tests pending (11 tests written) |
 | 5 | Identity and GitHub security | ✅ | Firebase ID-token RS256 verification + HMAC grant lifecycle + GH OAuth token-boundary proxy + push-safety all test-proven; full suite `npm test` 373/373 across 31 files |
 | 6 | Sync and collaboration | ⚠️ | `tests/phase6/` (54 tests) pass including sync-status, conflict resolution (mergeAll LWW+OR-Set+OT, 21 tests), multi-tab, registry; full sync API and operation log still in progress |
 | 7 | Mobile/PWA experience | ⚠️ | `tests/phase7/` (11 tests) pass including PWA manifest validation, service worker registration, offline behavior; responsive drawer; no device E2E |
 | 8 | Production operations | ✅ | `npm test` (373 vitest, 31 files), `npm run lint` (tsc --noEmit, 0 errors), `npm run build` all pass; `LICENSE`, `SECURITY.md`, `CONTRIBUTING.md`, `.github/workflows/ci.yml` added |
-| 9 | Plugin ecosystem | 🔲 | Not started |
+| 9 | Plugin ecosystem | ⚠️ | Plugins API route + PluginManager UI wired in; permission/isolation tests pending |
 
 ### 13.2 Per-phase detail and exit gates
 
 **Phase 0 — Baseline and risk closure**
 
 - ✅ Docs inventory with current-vs-target separation (`TECH_STACK.md`, this file §3).
-- ✅ Hygiene baseline: `LICENSE` (MIT), `SECURITY.md`, `CONTRIBUTING.md`,
+- ✅ Hygiene baseline: `LICENSE` (Apache-2.0), `SECURITY.md`, `CONTRIBUTING.md`,
   `.github/workflows/ci.yml` (lint + test + build on push/PR).
 - ✅ Executed baseline: `npm run lint` (tsc --noEmit, 0 errors);
   `npm run build` passes; `npm test` 373/373 across 31 test files.
