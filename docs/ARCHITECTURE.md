@@ -583,13 +583,17 @@ as follows (executed commands and their outcomes):
 | Fact | Verification | Result |
 |---|---|---|
 | Firebase project `website-6e8b1` exists and holds web app "VantaOS Website" (App ID `1:545509873123:web:e100fdee71cdc833e4bcd6`) | `firebase projects:list` | ✅ Project + App ID confirmed |
+| Firestore database `(default)` exists in location `nam5` (created Sep 11 2026) | Firestore Admin API `GET /v1/projects/website-6e8b1/databases` | ✅ `FIRESTORE_NATIVE`, freeTier=true |
+| Firestore security rules deployed | `firebase deploy --only firestore:rules` | ✅ Rules compiled and released |
+| Firestore indexes deployed | `firebase deploy --only firestore:indexes` | ✅ Indexes deployed for `(default)` |
+| gcloud auth configured via service account | `gcloud auth list` | ✅ `firebase-adminsdk-fbsvc@website-6e8b1.iam.gserviceaccount.com` active |
 | Identity Platform provisioned; `google.com` IdP `enabled=true` with auto-created OAuth client `545509873123-6g180oc512l81nes733v7kbk1knd3f24.apps.googleusercontent.com`; `github.com` `enabled=true` | Identity Platform Admin API `config` (Bearer token) | ✅ HTTP 200 |
 | Google Drive API enabled on the linked Cloud project | Service Usage API | ✅ `state=ENABLED` |
 | Production origin `website.vasudevaya.workers.dev` is an authorized domain | Identity Platform `authorizedDomains` | ✅ Present |
-| Client compiles and builds with the real Firebase environment | `npx tsc --noEmit`; `npm run build` | ✅ Both pass (tsc clean on fresh checkout after build generates .next/types/) |
-| Full test suite | `npx vitest run` (393 tests, 33 files, all pass) | ✅ All pass |
+| Client compiles and builds with the real Firebase environment | `npx tsc --noEmit`; `npm run build` | ✅ Both pass |
+| Full test suite | `npx vitest run` (411 tests, 36 files, all pass) | ✅ All pass |
 | Type check | `npm run lint` (`tsc --noEmit`) | ✅ Clean (0 errors) |
-| Sign-in UI wiring | Playwright smoke: boot → "Sign In" → "Continue with Google" popup to `website-6e8b1.firebaseapp.com/__/auth/handler` with the correct apiKey, `providerId=google.com`, `redirectUrl=http://localhost:3000/`, and Drive scopes | ✅ Zero console errors; the final Google consent click requires a human browser session |
+| Sign-in UI wiring | Playwright smoke: boot → "Sign In" → "Continue with Google" popup to `website-6e8b1.firebaseapp.com/__/auth/handler` with correct apiKey, `providerId=google.com`, `redirectUrl=http://localhost:3000/`, Drive scopes | ✅ Zero console errors; final Google consent click requires human browser session |
 
 Notes:
 
