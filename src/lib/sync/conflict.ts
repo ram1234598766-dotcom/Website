@@ -238,13 +238,12 @@ export function mergeAll<TMeta, TTag>(
   mergeORSet(mergedTags, localTags);
   mergeORSet(mergedTags, remoteTags);
 
-  let text = localText;
-  const allOps: TextOp[] = [...localOps];
-  for (const remoteOp of remoteOps) {
-    const transformed = allOps.map((localOp) => transformTextOp(localOp, remoteOp));
-    allOps.push(transformed[transformed.length - 1]?.op ?? remoteOp);
-  }
-  text = applyTextOps(text, allOps);
+  const allOps: TextOp[] = [...localOps, ...remoteOps];
+  allOps.sort((a, b) => {
+    if (a.lamport !== b.lamport) return a.lamport - b.lamport;
+    return a.deviceId.localeCompare(b.deviceId);
+  });
+  const text = applyTextOps(localText, allOps);
 
   const hasConflict = false;
   const conflicts: ConflictInfo[] = [];

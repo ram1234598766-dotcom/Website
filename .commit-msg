@@ -1,1 +1,9 @@
-chore: remove temp git hook file
+fix: mergeAll OT convergence + mergeORSet void-return test contracts
+
+- mergeAll in conflict.ts: sort all ops by (lamport, deviceId) before
+  applying so concurrent inserts converge regardless of delivery order
+  (was building ops asymmetrically — remote ops untransformed against local).
+- tests/phase6/convergence-recovery.test.ts: bind mergeORSet assertions
+  to in-place state (mergeORSet returns void, never the set), fix
+  buildRespondingTransport push_ack to carry payload: {accepted,conflicts,serverLamport}
+  per buildPushAck shape in protocol.ts:58, import ConflictInfo from types.ts.

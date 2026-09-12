@@ -16,7 +16,7 @@ import type {
   MoveNodeOp,
   DeleteNodeOp,
 } from './types';
-import { DB_NAME, DB_VERSION } from './db';
+import { openWorkspaceDB } from './db';
 
 // ─── IndexedDB helpers ───────────────────────────────────────────────
 
@@ -24,23 +24,11 @@ const OPS_STORE = 'operations';
 const META_STORE = 'workspace_meta';
 
 function openDB(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, DB_VERSION);
-    request.onupgradeneeded = () => {
-      const db = request.result;
-      if (!db.objectStoreNames.contains(OPS_STORE)) {
-        const store = db.createObjectStore(OPS_STORE, { keyPath: 'id' });
-        store.createIndex('by_seq', 'seq', { unique: true });
-        store.createIndex('by_timestamp', 'timestamp', { unique: false });
-        store.createIndex('by_idempotency_key', 'idempotencyKey', { unique: false });
-      }
-      if (!db.objectStoreNames.contains(META_STORE)) {
-        db.createObjectStore(META_STORE, { keyPath: 'key' });
-      }
-    };
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
-  });
+  // Delegate to the centralized schema (db.ts) so the operations store,
+  // meta store, and outbox store are all created together. A duplicated
+  // local schema previously dropped the 'outbox' store when this module
+  // opened the database first.
+  return openWorkspaceDB();
 }
 
 // ─── Sequence Counter ────────────────────────────────────────────────────────

@@ -19,6 +19,7 @@ export function openWorkspaceDB(): Promise<IDBDatabase> {
         const ops = db.createObjectStore('operations', { keyPath: 'id' });
         ops.createIndex('by_seq', 'seq', { unique: true });
         ops.createIndex('by_timestamp', 'timestamp', { unique: false });
+        ops.createIndex('by_idempotency_key', 'idempotencyKey', { unique: false });
       }
 
       if (!db.objectStoreNames.contains('workspace_meta')) {
