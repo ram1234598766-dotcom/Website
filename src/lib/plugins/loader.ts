@@ -100,10 +100,9 @@ self.onmessage = async function(e) {
       return;
     }
     try {
-      const fn = new Function('api', 'capabilities', 'self', msg.script);
+      const fn = new Function('api', 'capabilities', msg.script);
       const api = buildApi(msg.id);
-      const result = await fn(api, capabilities, self);
-      self.postMessage({ type: 'result', runId: msg.id, value: String(result ?? 'undefined') });
+      const result = await fn(api, capabilities);
     } catch (err) {
       self.postMessage({ type: 'error', runId: msg.id, error: err?.message ?? String(err) });
     }

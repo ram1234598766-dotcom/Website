@@ -45,34 +45,13 @@ export function isDriveConfigured(): boolean {
   return isFirebaseConfigured();
 }
 
-function readStoredToken(): StoredToken | null {
-  try {
-    const raw = sessionStorage.getItem(TOKEN_KEY);
-    return raw ? (JSON.parse(raw) as StoredToken) : null;
-  } catch {
-    return null;
-  }
-}
-
 export function isDriveConnected(): boolean {
-  if (driveAccessToken && Date.now() < driveAccessExpiresAt) return true;
-  const stored = readStoredToken();
-  if (stored && stored.token && Date.now() < stored.expiresAtMs) {
-    driveAccessToken = stored.token;
-    driveAccessExpiresAt = stored.expiresAtMs;
-    return true;
-  }
-  return false;
+  return driveAccessToken !== null && Date.now() < driveAccessExpiresAt;
 }
 
 export function clearDriveAccessToken(): void {
   driveAccessToken = null;
   driveAccessExpiresAt = 0;
-  try {
-    sessionStorage.removeItem(TOKEN_KEY);
-  } catch {
-    // ignore — storage may be unavailable
-  }
 }
 
 /** Open the Google Drive consent popup and persist the resulting access token. */
@@ -83,11 +62,6 @@ export async function connectDrive(): Promise<void> {
   }
   driveAccessToken = accessToken;
   driveAccessExpiresAt = Date.now() + TOKEN_TTL_MS;
-  try {
-    sessionStorage.setItem(TOKEN_KEY, JSON.stringify({ token: accessToken, expiresAtMs: driveAccessExpiresAt }));
-  } catch {
-    // Token still held in memory for this tab.
-  }
 }
 
 async function getToken(): Promise<string> {

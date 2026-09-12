@@ -204,6 +204,7 @@ export function createSyncEngine(
         transport.onMessage(handler);
         transport.send(req).then(() => {
           setTimeout(() => {
+            (transport as { offMessage?: (h: (msg: SyncMessage) => void) => void }).offMessage?.(handler);
             resolve({ ops: [], tombstones: [], hasMore: false });
           }, 5000);
         });
@@ -225,8 +226,9 @@ export function createSyncEngine(
         transport.onMessage(handler);
         transport.send(req).then(() => {
           setTimeout(() => {
+            (transport as { offMessage?: (h: (msg: SyncMessage) => void) => void }).offMessage?.(handler);
             state.state = 'offline';
-            resolve({ accepted: false, conflicts: [], serverLamport: state.lamport });
+            resolve({ accepted: false, conflicts: [], serverLamport: state.lamport, reason: 'timeout', retryAfterMs: 5000 });
           }, 5000);
         });
       });
@@ -312,5 +314,5 @@ export function getSyncStatus(state: ProtocolState): SyncStatus {
 }
 
 export function countOnlinePeers(state: ProtocolState): number {
-  return state.peers.values ? Array.from(state.peers.values()).filter((p) => p.online && Date.now() - p.lastSeen < 30_000).length : 0;
+  return Array.from(state.peers.values()).filter((p) => p.online && Date.now() - p.lastSeen < 30_000).length;
 }

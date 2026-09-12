@@ -424,13 +424,20 @@ export function mapUnprocessableEntity(
   return null;
 }
 
-function json(body: unknown, status = 200): Response {
+const CORS_ALLOWED_ORIGINS = ['http://localhost:3000', 'https://website.vasudevaya.workers.dev', 'https://www.vantaos.org'];
+function corsHeaders(origin: string | undefined): Record<string, string> {
+  const safe = (origin && CORS_ALLOWED_ORIGINS.includes(origin)) ? origin : 'http://localhost:3000';
+  return {
+    'Access-Control-Allow-Origin': safe,
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS',
+    'Access-Control-Allow-Credentials': 'true',
+  };
+}
+function json(body: unknown, status = 200, origin?: string): Response {
   const res = new Response(JSON.stringify(body), {
     status,
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...corsHeaders(origin) },
   });
-  res.headers.set('Access-Control-Allow-Origin', '*');
-  res.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  res.headers.set('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS');
   return res;
 }

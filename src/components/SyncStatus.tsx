@@ -101,7 +101,7 @@ export default function SyncStatus({
                     <span className="text-white/80 truncate max-w-[140px]">{peer.label || peer.deviceId.slice(0, 8)}</span>
                     {peer.cursor && (
                       <span className="w-3 h-3 text-indigo-400 ml-auto text-[10px] font-bold" title={`Editing ${peer.cursor.nodeId}`}>
-                        â
+                        →
                       </span>
                     )}
                   </div>

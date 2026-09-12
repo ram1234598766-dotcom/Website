@@ -102,3 +102,10 @@ if (typeof window !== 'undefined') {
   Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1280 });
   Object.defineProperty(window, 'innerHeight', { configurable: true, value: 800 });
 }
+
+// jsdom may not expose localStorage on globalThis in all configurations.
+// Modules like src/lib/plugins/registry.ts:96 reference localStorage directly,
+// so ensure it is always available for test execution.
+if (typeof window !== 'undefined' && typeof window.localStorage !== 'undefined' && !(globalThis as any).localStorage) {
+  (globalThis as any).localStorage = window.localStorage;
+}

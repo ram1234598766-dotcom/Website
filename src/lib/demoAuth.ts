@@ -1,5 +1,5 @@
 /**
- * DemoAuth — A localStorage-backed authentication system that works
+ * DemoAuth — A memory-only authentication system that works
  * entirely in the browser without any external service.
  *
  * Used only when no Firebase project is configured
@@ -26,6 +26,10 @@ interface StoredUser {
 
 const USERS_KEY = 'vantaos_demo_users';
 const SESSION_KEY = 'vantaos_demo_session';
+
+let memoryUsers: StoredUser[] = [];
+let memorySession: Omit<DemoUser, never> | null = null;
+const memoryResetTokens = new Map<string, string>();
 
 function generateId(): string {
   return crypto.randomUUID ? crypto.randomUUID() : 
@@ -62,11 +66,7 @@ async function hashPassword(password: string): Promise<string> {
  * synthetic one here to keep onAuthStateChange subscribers in sync.
  */
 function setSession(user: Omit<DemoUser, never> | null) {
-  if (user) {
-    localStorage.setItem(SESSION_KEY, JSON.stringify(user));
-  } else {
-    localStorage.removeItem(SESSION_KEY);
-  }
+  memorySession = user;
   try {
     window.dispatchEvent(
       new StorageEvent('storage', {
@@ -80,14 +80,11 @@ function setSession(user: Omit<DemoUser, never> | null) {
 }
 
 function getUsers(): StoredUser[] {
-  try {
-    const data = localStorage.getItem(USERS_KEY);
-    return data ? JSON.parse(data) : [];
-  } catch { return []; }
+  return memoryUsers;
 }
 
 function saveUsers(users: StoredUser[]) {
-  localStorage.setItem(USERS_KEY, JSON.stringify(users));
+  memoryUsers = users;
 }
 
 export async function demoAuth(): Promise<{
@@ -151,13 +148,9 @@ export async function demoAuth(): Promise<{
       },
 
       async getSession() {
-        try {
-          const data = localStorage.getItem(SESSION_KEY);
-          if (data) {
-            const session = JSON.parse(data);
-            return { data: { session }, error: null };
-          }
-        } catch {}
+        if (memorySession) {
+          return { data: { session: memorySession }, error: null };
+        }
         return { data: { session: null }, error: null };
       },
 
@@ -191,7 +184,7 @@ export async function demoAuth(): Promise<{
         console.log('[DemoAuth] Password reset requested for:', email);
         // Store a reset token
         const resetToken = generateId();
-        localStorage.setItem(`vantaos_reset_${email}`, resetToken);
+        memoryResetTokens.set(email, resetToken);
         return { error: null };
       },
     },
@@ -199,11 +192,8 @@ export async function demoAuth(): Promise<{
 }
 
 export async function getDemoSession(): Promise<{ session: DemoUser | null; error: string | null }> {
-  try {
-    const data = localStorage.getItem(SESSION_KEY);
-    if (data) {
-      return { session: JSON.parse(data), error: null };
-    }
-  } catch {}
+  if (memorySession) {
+    return { session: memorySession, error: null };
+  }
   return { session: null, error: null };
 }

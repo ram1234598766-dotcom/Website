@@ -243,10 +243,24 @@ export function mergeAll<TMeta, TTag>(
     if (a.lamport !== b.lamport) return a.lamport - b.lamport;
     return a.deviceId.localeCompare(b.deviceId);
   });
-  const text = applyTextOps(localText, allOps);
 
-  const hasConflict = false;
+  // Bug 1: Detect conflicts - if LWW picks one side but other had different data
+  const metaConflicted = localMeta.value !== remoteMeta.value;
+
+  // Bug 2: Base text reconciliation - use LWW winner text when local and remote differ
+  const baseText = localText === remoteText ? localText :
+    mergeLWW(
+      { value: localText, timestamp: localMeta.timestamp, deviceId: localMeta.deviceId },
+      { value: remoteText, timestamp: remoteMeta.timestamp, deviceId: remoteMeta.deviceId },
+      localLamport,
+      remoteLamport
+    ).value;
+  const text = applyTextOps(baseText, allOps);
+
   const conflicts: ConflictInfo[] = [];
+  if (metaConflicted) {
+    conflicts.push({ nodeId: remoteMeta.deviceId, localLamport, remoteLamport });
+  }
 
-  return { metadata, tags: orSetValues(mergedTags), text, hasConflict, conflicts };
+  return { metadata, tags: orSetValues(mergedTags), text, hasConflict: metaConflicted, conflicts };
 }

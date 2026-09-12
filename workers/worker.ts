@@ -233,7 +233,9 @@ async function handleGitHubRoutes(
   const pathAfterPrefix = path.replace(/^\/api\/gh/, '') || '/';
   const upstream = await service.proxy(pathAfterPrefix, request, grantRes.claims);
   const out = new Response(upstream.body, upstream);
-  out.headers.set('Access-Control-Allow-Origin', '*');
+  const reqOrigin = request.headers.get('origin') || undefined;
+  const allowedOrigins = ['http://localhost:3000', 'https://website.vasudevaya.workers.dev', 'https://www.vantaos.org'];
+  out.headers.set('Access-Control-Allow-Origin', (reqOrigin && allowedOrigins.includes(reqOrigin)) ? reqOrigin : 'http://localhost:3000');
   return out;
 }
 

@@ -267,7 +267,7 @@ describe('mapUnprocessableEntity', () => {
   it('maps non-fast-forward messages to a 409 push_conflict', () => {
     const res = mapUnprocessableEntity({ message: 'Update is not a fast forward' }, '/repos/o/r/git/refs/heads/main');
     expect(res!.status).toBe(409);
-    expect(res!.headers.get('Access-Control-Allow-Origin')).toBe('*');
+    expect(res!.headers.get('Access-Control-Allow-Origin')).toBe('http://localhost:3000');
     return res!.json().then((b) => expect(b.code).toBe('push_conflict'));
   });
 

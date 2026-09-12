@@ -218,7 +218,10 @@ describe('mergeAll — three-way merge', () => {
     );
 
     expect((result.metadata.value as Record<string, unknown>).v).toBe('b');
-    expect(result.hasConflict).toBe(false);
+    expect(result.hasConflict).toBe(true);
+    expect(result.conflicts).toHaveLength(1);
+    expect(result.conflicts[0].localLamport).toBe(100);
+    expect(result.conflicts[0].remoteLamport).toBe(100);
   });
 });
 
