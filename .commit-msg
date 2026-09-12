@@ -1,9 +1,6 @@
-fix: mergeAll OT convergence + mergeORSet void-return test contracts
+fix: tsc errors in convergence-recovery test (lamport arg, payload shape, Operation type)
 
-- mergeAll in conflict.ts: sort all ops by (lamport, deviceId) before
-  applying so concurrent inserts converge regardless of delivery order
-  (was building ops asymmetrically — remote ops untransformed against local).
-- tests/phase6/convergence-recovery.test.ts: bind mergeORSet assertions
-  to in-place state (mergeORSet returns void, never the set), fix
-  buildRespondingTransport push_ack to carry payload: {accepted,conflicts,serverLamport}
-  per buildPushAck shape in protocol.ts:58, import ConflictInfo from types.ts.
+- mergeLWW now called with 4 args (local, remote, lamport, remoteLamport)
+- push_ack payload carries serverLamport from (message as {lamport?: number}).lamport
+- buildBatch ops use valid Operation kind (create_node) with proper payload
+- tsc --noEmit now clean (0 errors) — was contradicting §13.0 claim

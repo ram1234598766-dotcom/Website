@@ -71,7 +71,7 @@ function buildRespondingTransport(): {
     if (message.type === 'push_request') {
       const ack: SyncMessage = {
         type: 'push_ack',
-        payload: { accepted: true, conflicts: [] as unknown as ConflictInfo[], serverLamport: message.lamport + 1 } as unknown as Record<string, unknown>,
+        payload: { accepted: true, conflicts: [] as unknown as ConflictInfo[], serverLamport: ((message as { lamport?: number }).lamport ?? 0) + 1 } as unknown as Record<string, unknown>,
         timestamp: message.timestamp + 1,
         deviceId: 'srv',
       };
@@ -93,13 +93,15 @@ describe('phase6 convergence — same ops in different orders converge', () => {
     const ab = mergeLWW(
       { value: { v: 1 }, timestamp: 20, deviceId: 'dev-a' },
       { value: { v: 2 }, timestamp: 40, deviceId: 'dev-b' },
+      1, 2,
     );
     const ba = mergeLWW(
       { value: { v: 2 }, timestamp: 40, deviceId: 'dev-b' },
       { value: { v: 1 }, timestamp: 20, deviceId: 'dev-a' },
+      2, 1,
     );
     expect(ab.value).toEqual(ba.value);
-    expect(mergeLWW(ab, ab)).toEqual(ab);
+    expect(mergeLWW(ab, ab, 1, 2)).toEqual(ab);
   });
 
   it('mergeORSet is commutative and idempotent (real OR-set instances)', () => {
@@ -214,11 +216,18 @@ describe('phase6 interrupted pushes — NACK keeps engine bounded', () => {
     const batch = buildBatch(
       [{
         id: 'o1',
-        kind: 'insert' as const,
+        kind: 'create_node' as const,
         timestamp: 1,
-        deviceId: 'dev-a',
-        lamport: 1,
-        payload: {},
+        source: 'user' as const,
+        seq: 0,
+        payload: {
+          id: 'o1',
+          path: 'o1.ts',
+          name: 'o1.ts',
+          parentId: null,
+          content: '// hi',
+          language: 'typescript',
+        },
       }],
       'dev-a',
       1,
