@@ -677,3 +677,30 @@ then advanced power):
 
 The original target architecture was produced without runtime changes; the
 §13.0 verified states document subsequent live wiring.
+
+## 14. Core architectural types
+
+The website is built on three core architectural types that define how
+content is rendered, how it interacts with users, and how it balances
+performance with dynamism.
+
+### 14.1 Dynamic Websites
+
+Built using server-side scripting languages (like PHP, Python, or Ruby) and
+databases, allowing the content to change automatically based on user
+interaction, time, or location. [1]
+(https://estrrado.com/blogs/a-look-at-the-three-types-of-websites/), [2]
+(https://learning.mlytics.com/origin-server/types-of-websites-and-web-contents/)
+
+### 14.2 Web Applications
+
+Highly interactive, full-stack software programs that run inside a web
+browser (e.g., Google Docs, dashboard tracking tools, or SaaS platforms). [1]
+(https://www.thezeroagency.in/blogs/types-of-websites-explained-static-dynamic-e-commerce-more), [2]
+(https://www.slideshare.net/slideshow/types-of-websites-136446506/136446506)
+
+### 14.3 Hybrid Websites
+
+Modern websites that combine static rendering for fast page speeds with
+dynamic client-side elements for interactive features. [1]
+(https://www.thezeroagency.in/blogs/types-of-websites-explained-static-dynamic-e-commerce-more)
