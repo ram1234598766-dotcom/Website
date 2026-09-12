@@ -20,9 +20,9 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 // @ts-ignore Module resolution works at runtime via Next.js bundler
-import { ModelManifest, DeviceProfile } from '../../lib/models/manifest';
+import { ModelManifest, DeviceProfile } from '@/src/lib/models/manifest';
 // @ts-ignore Module resolution works at runtime via Next.js bundler
-import { detectDevice, meetsRequirements } from '../../lib/models/device';
+import { detectDevice, meetsRequirements } from '@/src/lib/models/device';
 
 /* ------------------------------------------------------------------ */
 /*  Demo data — in production this comes from a registry endpoint.     */

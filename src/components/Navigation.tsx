@@ -1,5 +1,5 @@
 import { ViewState } from '../types';
-import { Box, Menu, X, Code2, BrainCircuit, TerminalSquare, ShieldAlert, UserPlus, LogIn } from 'lucide-react';
+import { Box, Menu, X, Code2, BrainCircuit, TerminalSquare, ShieldAlert, UserPlus, LogIn, Cpu, Puzzle } from 'lucide-react';
 import React, { useState, useEffect } from 'react';
 import Logo from './Logo';
 
@@ -32,6 +32,8 @@ export default function Navigation({ currentView, setCurrentView, userEmail, isS
     { view: 'omni-ai', label: 'Omni-AI', icon: <BrainCircuit className="w-4 h-4" /> },
     { view: 'ollama', label: 'Ollama', icon: <TerminalSquare className="w-4 h-4" /> },
     { view: 'showcase', label: 'Models', icon: <Box className="w-4 h-4" /> },
+    { view: 'models', label: 'WebModels', icon: <Cpu className="w-4 h-4" /> },
+    { view: 'plugins', label: 'Plugins', icon: <Puzzle className="w-4 h-4" /> },
   ];
 
   if (isAdmin) {

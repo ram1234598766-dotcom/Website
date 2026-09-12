@@ -13,6 +13,8 @@ import CloudOS from './components/CloudOS';
 import OmniAI from './components/OmniAI';
 import AdminPanel from './components/AdminPanel';
 import OllamaLocal from './components/OllamaLocal';
+import ModelManager from './components/ModelManager';
+import PluginManager from './components/PluginManager';
 import AuthModal from './components/AuthModal';
 import { client } from './lib/client';
 import { WorkspaceProvider } from './lib/workspace/workspace';
@@ -133,6 +135,8 @@ export default function App() {
               {currentView === 'omni-ai' && <OmniAI />}
               {currentView === 'admin' && <AdminPanel />}
               {currentView === 'ollama' && <OllamaLocal />}
+              {currentView === 'models' && <ModelManager />}
+              {currentView === 'plugins' && <PluginManager onClose={() => setCurrentView('home')} />}
             </motion.div>
           </AnimatePresence>
         </main>
