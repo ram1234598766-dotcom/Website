@@ -148,8 +148,7 @@ export default function ModelManager() {
     async (manifest: ModelManifest) => {
       updateStatus(manifest.id, { phase: 'downloading', progress: 0 });
       try {
-        // @ts-expect-error Module resolved at runtime via dynamic import
-        const { downloadModel } = await import('../../lib/models/downloader');
+        const { downloadModel } = await import('../lib/models/downloader');
         await downloadModel(manifest, (p) => {
           const pct = p.totalBytes > 0 ? (p.bytesReceived / p.totalBytes) * 100 : 0;
           updateStatus(manifest.id, { phase: p.phase, progress: Math.round(pct), error: p.error });

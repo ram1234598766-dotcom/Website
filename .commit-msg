@@ -1,6 +1,10 @@
-fix: tsc errors in convergence-recovery test (lamport arg, payload shape, Operation type)
+fix: build break, CORS wildcard, tsconfig include, doc violations
 
-- mergeLWW now called with 4 args (local, remote, lamport, remoteLamport)
-- push_ack payload carries serverLamport from (message as {lamport?: number}).lamport
-- buildBatch ops use valid Operation kind (create_node) with proper payload
-- tsc --noEmit now clean (0 errors) — was contradicting §13.0 claim
+- tsconfig.json: remove .next/types/**/*.ts from include (caused tsc --noEmit
+  to fail with 6 TS6053 errors on fresh checkout, contradicting §13.0 claim)
+- ModelManager.tsx: fix broken import path ../../lib/models/downloader ->
+  ../lib/models/downloader (was breaking next build)
+- workers/worker.ts: replace CORS wildcard (*) with allow-list origin
+  (http://localhost:3000, https://website.vasudevaya.workers.dev,
+  https://www.vantaos.org); add credentials header
+- npm run lint (tsc --noEmit) now clean (0 errors) on fresh checkout

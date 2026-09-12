@@ -22,19 +22,22 @@ export interface Env {
 
 const FALLBACK_PROJECT_ID = 'website-6e8b1';
 
-function corsHeaders(): Record<string, string> {
+function corsHeaders(origin: string | undefined): Record<string, string> {
+  const allowed = ['http://localhost:3000', 'https://website.vasudevaya.workers.dev', 'https://www.vantaos.org'];
+  const safe = (origin && allowed.includes(origin)) ? origin : 'http://localhost:3000';
   return {
-    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Origin': safe,
     'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Access-Control-Allow-Credentials': 'true',
     'Access-Control-Max-Age': '86400',
   };
 }
 
-function json(data: unknown, status = 200, extra: Record<string, string> = {}): Response {
+function json(data: unknown, status = 200, extra: Record<string, string> = {}, origin?: string): Response {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { ...corsHeaders(), 'Content-Type': 'application/json', ...extra },
+    headers: { ...corsHeaders(origin), 'Content-Type': 'application/json', ...extra },
   });
 }
 
@@ -56,7 +59,7 @@ export default {
     const path = url.pathname;
 
     if (request.method === 'OPTIONS') {
-      return new Response(null, { headers: corsHeaders() });
+      return new Response(null, { headers: corsHeaders(undefined) });
     }
 
     try {
@@ -158,7 +161,7 @@ async function handleGitHubRoutes(
         status: 302,
         headers: { Location: location },
       });
-      res.headers.set('Access-Control-Allow-Origin', env.APP_ORIGIN || '*');
+      res.headers.set('Access-Control-Allow-Origin', env.APP_ORIGIN || 'http://localhost:3000');
       return res;
     } catch (err) {
       if (err instanceof OAuthCallbackError) {
@@ -166,7 +169,7 @@ async function handleGitHubRoutes(
           JSON.stringify({ error: err.message }),
           { status: 400, headers: { 'Content-Type': 'application/json' } }
         );
-        res.headers.set('Access-Control-Allow-Origin', env.APP_ORIGIN || '*');
+        res.headers.set('Access-Control-Allow-Origin', env.APP_ORIGIN || 'http://localhost:3000');
         return res;
       }
       throw err;
