@@ -1,7 +1,7 @@
 #!/bin/bash
 # VantaOS — Firebase Firestore setup script
 # Run this once to provision a Firestore database for the website-6e8b1 project.
-# Prerequisites: Firebase CLI installed (npm install -g firebase-tools) and logged in.
+# Prerequisites: Firebase CLI (npm install -g firebase-tools) and gcloud auth.
 
 set -e
 
@@ -13,9 +13,12 @@ if ! command -v firebase &> /dev/null; then
   npm install -g firebase-tools
 fi
 
-# 2. Login (interactive — opens browser)
-echo "Logging in to Firebase..."
-firebase login --reauth
+# 2. Ensure gcloud auth is configured (headless-compatible)
+echo "Checking gcloud auth..."
+if ! gcloud auth list --filter=status:ACTIVE --format="value(account)" 2>/dev/null | grep -q .; then
+  echo "No active gcloud auth. Authenticating..."
+  gcloud auth login --no-launch-browser
+fi
 
 # 3. Use the VantaOS project
 echo "Using project: website-6e8b1"
