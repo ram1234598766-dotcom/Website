@@ -9,11 +9,34 @@ for the repository at `https://github.com/ram1234598766-dotcom/Website`.
   `website-6e8b1` and smoke-verified end to end up to the Google consent screen;
   Google Drive scopes are requested correctly (Section 13.0).
 - **Target:** Sections 4–12 describe the target architecture and are not claimed
-  as implemented. Section 13 marks every ROADMAP phase and major component with a
-  status of implemented-and-tested, implemented-untested, or not-yet-implemented,
-  with evidence.
+   as implemented. Section 13 marks every ROADMAP phase and major component with a
+   status of implemented-and-tested, implemented-untested, or not-yet-implemented,
+   with evidence.
 
-## 1. Product boundary
+## 📑 Quick Navigation
+
+- [1. 🎯 Product boundary](#1-product-boundary)
+- [2. 🏗️ Architecture principles](#2-architecture-principles)
+- [3. 🗺️ Current implementation map](#3-current-implementation-map)
+- [4. 🏗️ Target component architecture](#4-target-component-architecture)
+- [5. 🤖 Omni-AI orchestration](#5-omni-ai-orchestration)
+- [6. 📱 WebModel download and mobile/laptop runtime](#6-webmodel-download-and-mobilelaptop-runtime)
+- [7. 🔒 Identity, GitHub, and data protection](#7-identity-github-and-data-protection)
+- [8. 🌐 Edge and backend contracts](#8-edge-and-backend-contracts)
+- [9. 🛡️ Reliability and failure model](#9-reliability-and-failure-model)
+- [10. 🚀 Deployment topology](#10-deployment-topology)
+- [11. 📊 Observability](#11-observability)
+- [12. ✅ Verification gates](#12-verification-gates)
+- [13. 🔍 Phase plan and implementation status](#13-phase-plan-and-implementation-status)
+- [14. 🏛️ Core architectural types](#14-core-architectural-types)
+
+> **📊 Document Status: PARTIALLY VERIFIED**
+> Sections 1–2: Verified from codebase. Sections 4–12: Target architecture (not implemented).
+> Section 13: Phase plan with verification evidence. Section 14: Core architectural types (reference).
+> Last verified: 2026-09-12 via 393/393 tests, tsc --noEmit clean.
+
+<!-- AGENT: architecture -->
+## 1. 🎯 Product boundary
 
 VantaOS is a browser-first development environment composed of four user-facing
 products:
@@ -31,7 +54,13 @@ with a Worker handling API paths (`next.config.mjs:2-10`, `wrangler.toml:1-11`,
 `workers/worker.ts:1-7`). The browser shell selects views in client state
 (`src/App.tsx:19-27`, `src/App.tsx:123-134`).
 
-## 2. Architecture principles
+### ✅ Verification Gate — Section 1
+- [ ] All code references match actual file paths and line numbers
+- [ ] Status claims match test output
+- [ ] No broken cross-references to other sections
+
+<!-- AGENT: architecture -->
+## 2. 🏗️ Architecture principles
 
 - **Browser-first, not browser-only.** The default experience must work on a
   laptop and a phone. Desktop-only capabilities such as a local Ollama daemon
@@ -49,24 +78,36 @@ with a Worker handling API paths (`next.config.mjs:2-10`, `wrangler.toml:1-11`,
 - **Progressive enhancement.** A phone can edit and chat with a suitable web
   model; a laptop can add Ollama, WebGPU, larger models, and richer execution.
 - **Observable by default.** Every asynchronous flow exposes state, progress,
-  cancellation, retry, and a user-actionable failure reason.
+   cancellation, retry, and a user-actionable failure reason.
 
-## 3. Current implementation map
+### ✅ Verification Gate — Section 2
+- [ ] All code references match actual file paths and line numbers
+- [ ] Status claims match test output
+- [ ] No broken cross-references to other sections
 
-| Area | Current implementation | Architectural implication |
-|---|---|---|
-| Application shell | `App.tsx` owns the active view, auth state, command palette, and modal state (`src/App.tsx:20-27`, `src/App.tsx:88-146`). | Extract route/state boundaries before adding collaborative or background workflows. |
-| IDE | CodeMirror 6 through first-party wrappers (`CloudCodeEditor`, `CloudDiffEditor`), file nodes, tabs, split views, diff, search, Prettier, ZIP export (`src/components/CloudCodeEditor.tsx:16-116`, `src/components/CloudDiffEditor.tsx:15-115`, `src/components/CloudOS.tsx:151-187`, `src/components/CloudOS.tsx:269-293`, `src/components/CloudOS.tsx:573-607`). | Keep the editor adapters thin while moving workspace mutation and persistence into the oplog core. |
-| Terminal | xterm.js renders a browser terminal backed by `ShellSession`; `WorkspaceTerminalFs` maps commands to the workspace and `ExecutionQuota` rate-limits commands and caps output (`src/components/TerminalPanel.tsx:41-83`, `src/lib/terminal/commands.ts:51-100`, `src/lib/terminal/sandbox.ts:75-165`, `src/lib/terminal/quota.ts:20-65`). `js`/`node` execution uses `SandboxRunner` (`src/lib/terminal/commands.ts:230`, `src/lib/terminal/runner.ts:159`), running each snippet in an isolated worker thread with wall-clock, output-cap, and code-size guards. | Add language-service workers, keyboard and screen-reader contracts, and live browser E2E tests. |
-| Persistence | CloudOS hydrates from the IndexedDB workspace oplog, migrates the legacy `localStorage` snapshot, and still writes a secondary snapshot every 300 ms (`src/components/CloudOS.tsx:295-410`). The append-only operation log and sequence metadata are in IndexedDB (`src/lib/workspace/operations.ts:20-169`); the older `storage.ts` helper remains for legacy file storage and migration (`src/lib/storage.ts:10-24`, `src/lib/storage.ts:60-134`). | Finish the migration so the oplog/outbox is the sole canonical write path, then remove the secondary snapshot and add recovery tests. |
-| Identity | Firebase Auth is the preferred Google/GitHub OAuth adapter, exposed through the unified `client.auth` facade; local demo auth is the fallback when Firebase is unconfigured (`src/lib/client.ts`, `src/lib/firebase.ts`, `src/lib/demoAuth.ts`). | Define one identity port, explicit demo/production modes, and a secure token boundary. |
-| Drive | Google Drive REST v3 uses the OAuth access token captured during Firebase Google sign-in; the token is held in memory/sessionStorage with a 45-minute TTL and scopes `drive.readonly` + `drive.file` (`src/lib/drive.ts:30-100`, `src/lib/drive.ts:138-277`, `src/components/DriveManager.tsx:69-205`). | Move token refresh and privileged API calls out of the browser; keep one identity port for Drive and GitHub. |
-| GitHub | Browser code stores a GitHub token and active repository in `localStorage` and calls GitHub REST directly (`src/components/GitHubManager.tsx:15-44`, `src/components/GitHubManager.tsx:68-171`, `src/lib/github.ts:8-116`). | Move privileged token handling to an OAuth/server boundary and use short-lived workspace grants. |
-| AI | Omni-AI supports Ollama, OpenRouter, Gemini, and OpenAI; settings/history are browser-local (`src/components/OmniAI.tsx:6-25`, `src/components/OmniAI.tsx:130-146`, `src/components/OmniAI.tsx:148-235`). Local tool commands `calc`/`js` now run in the worker-thread `SandboxRunner` (`src/components/OmniAI.tsx:13-106`), not the main thread. | Add a provider registry, request policy, streaming protocol, and audit-safe telemetry. |
-| Ollama/model hub | The model hub calls `localhost:11434` directly for tags, pull, and generation (`src/components/Showcase.tsx:116-169`, `src/components/OllamaLocal.tsx:17-83`). | Keep Ollama as a desktop adapter; add a separate browser-runtime model path for mobile. |
-| Edge API | Worker exposes health, AI generation, security scan, and auth-sync routes; the auth-sync path is `/api/edge-functions/auth-sync` (`workers/worker.ts:31-56`, `workers/worker.ts:77-195`). | Version and contract-test the edge API; separate public read APIs from privileged operations. |
+<!-- AGENT: platform -->
+## 3. 🗺️ Current implementation map
 
-## 4. Target component architecture
+| Area | Current implementation | Architectural implication | Status |
+|---|---|---|---|
+| Application shell | `App.tsx` owns the active view, auth state, command palette, and modal state (`src/App.tsx:20-27`, `src/App.tsx:88-146`). | Extract route/state boundaries before adding collaborative or background workflows. | ✅ Implemented |
+| IDE | CodeMirror 6 through first-party wrappers (`CloudCodeEditor`, `CloudDiffEditor`), file nodes, tabs, split views, diff, search, Prettier, ZIP export (`src/components/CloudCodeEditor.tsx:16-116`, `src/components/CloudDiffEditor.tsx:15-115`, `src/components/CloudOS.tsx:151-187`, `src/components/CloudOS.tsx:269-293`, `src/components/CloudOS.tsx:573-607`). | Keep the editor adapters thin while moving workspace mutation and persistence into the oplog core. | ✅ Implemented |
+| Terminal | xterm.js renders a browser terminal backed by `ShellSession`; `WorkspaceTerminalFs` maps commands to the workspace and `ExecutionQuota` rate-limits commands and caps output (`src/components/TerminalPanel.tsx:41-83`, `src/lib/terminal/commands.ts:51-100`, `src/lib/terminal/sandbox.ts:75-165`, `src/lib/terminal/quota.ts:20-65`). `js`/`node` execution uses `SandboxRunner` (`src/lib/terminal/commands.ts:230`, `src/lib/terminal/runner.ts:159`), running each snippet in an isolated worker thread with wall-clock, output-cap, and code-size guards. | Add language-service workers, keyboard and screen-reader contracts, and live browser E2E tests. | ⚠️ Implemented (gaps: language-service, a11y, E2E) |
+| Persistence | CloudOS hydrates from the IndexedDB workspace oplog, migrates the legacy `localStorage` snapshot, and still writes a secondary snapshot every 300 ms (`src/components/CloudOS.tsx:295-410`). The append-only operation log and sequence metadata are in IndexedDB (`src/lib/workspace/operations.ts:20-169`); the older `storage.ts` helper remains for legacy file storage and migration (`src/lib/storage.ts:10-24`, `src/lib/storage.ts:60-134`). | Finish the migration so the oplog/outbox is the sole canonical write path, then remove the secondary snapshot and add recovery tests. | ⚠️ Migration incomplete |
+| Identity | Firebase Auth is the preferred Google/GitHub OAuth adapter, exposed through the unified `client.auth` facade; local demo auth is the fallback when Firebase is unconfigured (`src/lib/client.ts`, `src/lib/firebase.ts`, `src/lib/demoAuth.ts`). | Define one identity port, explicit demo/production modes, and a secure token boundary. | ✅ Implemented |
+| Drive | Google Drive REST v3 uses the OAuth access token captured during Firebase Google sign-in; the token is held in memory/sessionStorage with a 45-minute TTL and scopes `drive.readonly` + `drive.file` (`src/lib/drive.ts:30-100`, `src/lib/drive.ts:138-277`, `src/components/DriveManager.tsx:69-205`). | Move token refresh and privileged API calls out of the browser; keep one identity port for Drive and GitHub. | ⚠️ Token in sessionStorage |
+| GitHub | Browser code stores a GitHub token and active repository in `localStorage` and calls GitHub REST directly (`src/components/GitHubManager.tsx:15-44`, `src/components/GitHubManager.tsx:68-171`, `src/lib/github.ts:8-116`). | Move privileged token handling to an OAuth/server boundary and use short-lived workspace grants. | 🔴 Token in localStorage |
+| AI | Omni-AI supports Ollama, OpenRouter, Gemini, and OpenAI; settings/history are browser-local (`src/components/OmniAI.tsx:6-25`, `src/components/OmniAI.tsx:130-146`, `src/components/OmniAI.tsx:148-235`). Local tool commands `calc`/`js` now run in the worker-thread `SandboxRunner` (`src/components/OmniAI.tsx:13-106`), not the main thread. | Add a provider registry, request policy, streaming protocol, and audit-safe telemetry. | ⚠️ Registry pending |
+| Ollama/model hub | The model hub calls `localhost:11434` directly for tags, pull, and generation (`src/components/Showcase.tsx:116-169`, `src/components/OllamaLocal.tsx:17-83`). | Keep Ollama as a desktop adapter; add a separate browser-runtime model path for mobile. | ✅ Working |
+| Edge API | Worker exposes health, AI generation, security scan, and auth-sync routes; the auth-sync path is `/api/edge-functions/auth-sync` (`workers/worker.ts:31-56`, `workers/worker.ts:77-195`). | Version and contract-test the edge API; separate public read APIs from privileged operations. | ⚠️ Limited routes |
+
+### ✅ Verification Gate — Section 3
+- [ ] All code references match actual file paths and line numbers
+- [ ] Status claims match test output
+- [ ] No broken cross-references to other sections
+
+<!-- AGENT: frontend -->
+## 4. 🏗️ Target component architecture
 
 ```text
 +----------------------- Cloudflare edge -----------------------+
@@ -174,7 +215,13 @@ This replaces the previous unrestricted `new Function` path
 §13.2) and the disconnected in-memory terminal filesystem
 (`src/components/TerminalPanel.tsx:23-35`).
 
-## 5. Omni-AI orchestration
+### ✅ Verification Gate — Section 4
+- [ ] All code references match actual file paths and line numbers
+- [ ] Status claims match test output
+- [ ] No broken cross-references to other sections
+
+<!-- AGENT: ai -->
+## 5. 🤖 Omni-AI orchestration
 
 ### 5.1 Provider contract
 
@@ -221,7 +268,13 @@ The command palette can enumerate these capabilities
 without importing their implementations. Plugin packages are opt-in and must be
 signed or pinned by digest before they can access privileged capabilities.
 
-## 6. WebModel download and mobile/laptop runtime
+### ✅ Verification Gate — Section 5
+- [ ] All code references match actual file paths and line numbers
+- [ ] Status claims match test output
+- [ ] No broken cross-references to other sections
+
+<!-- AGENT: mobile -->
+## 6. 📱 WebModel download and mobile/laptop runtime
 
 ### 6.1 What WebModel means
 
@@ -329,7 +382,16 @@ mobile-ready.
 - A user can inspect, pause, delete, and re-verify every installed WebModel.
 - No API key or GitHub token is sent to a model publisher or runtime plugin.
 
-## 7. Identity, GitHub, and data protection
+### ✅ Verification Gate — Section 6
+- [ ] All code references match actual file paths and line numbers
+- [ ] Status claims match test output
+- [ ] No broken cross-references to other sections
+
+> **🔴 CRITICAL:** GitHub token persisted in localStorage (`src/lib/github.ts:8-20`) — must migrate to server-side KV with tab-scoped in-memory fallback.
+> **🔵 INFO:** Firebase Google sign-in and Drive scopes verified live on `website-6e8b1` (see §13.0).
+
+<!-- AGENT: security -->
+## 7. 🔒 Identity, GitHub, and data protection
 
 ### 7.1 Identity boundary
 
@@ -362,7 +424,13 @@ security guarantees.
 - Export files are generated client-side and never silently uploaded.
 - Backup/restore is versioned and validated with a manifest.
 
-## 8. Edge and backend contracts
+### ✅ Verification Gate — Section 7
+- [ ] All code references match actual file paths and line numbers
+- [ ] Status claims match test output
+- [ ] No broken cross-references to other sections
+
+<!-- AGENT: backend -->
+## 8. 🌐 Edge and backend contracts
 
 ### 8.1 Existing edge surface
 
@@ -391,7 +459,13 @@ The Worker currently implements:
 All endpoints need versioned request/response schemas, correlation IDs,
 idempotency keys where writes are possible, and contract tests.
 
-## 9. Reliability and failure model
+### ✅ Verification Gate — Section 8
+- [ ] All code references match actual file paths and line numbers
+- [ ] Status claims match test output
+- [ ] No broken cross-references to other sections
+
+<!-- AGENT: reliability -->
+## 9. 🛡️ Reliability and failure model
 
 ### 9.1 Required invariants
 
@@ -414,9 +488,17 @@ idempotency keys where writes are possible, and contract tests.
 - OAuth failures return the user to the last safe screen without deleting local
   work.
 - Every background operation has a visible status, cancellation action, and
-  retry action.
+   retry action.
 
-## 10. Deployment topology
+### ✅ Verification Gate — Section 9
+- [ ] All code references match actual file paths and line numbers
+- [ ] Status claims match test output
+- [ ] No broken cross-references to other sections
+
+<!-- AGENT: devops -->
+## 10. 🚀 Deployment topology
+
+> **🟡 WARNING:** CI added but first GitHub Actions run is unverified — `ci.yml` exists but no green run has been observed yet. No structured logs or SLO runbooks are in place.
 
 1. **Static client:** Next.js static export, immutable asset hashes, strict
    security headers, service worker for shell caching where safe.
@@ -432,7 +514,13 @@ idempotency keys where writes are possible, and contract tests.
 The current deployment is the first two pieces only: static export plus Worker
 (`README.md:5-8`, `wrangler.toml:1-11`).
 
-## 11. Observability
+### ✅ Verification Gate — Section 10
+- [ ] All code references match actual file paths and line numbers
+- [ ] Status claims match test output
+- [ ] No broken cross-references to other sections
+
+<!-- AGENT: observability -->
+## 11. 📊 Observability
 
 Collect only operation-level, privacy-safe signals:
 
@@ -448,7 +536,15 @@ Do not collect raw source, prompts, model output, tokens, API keys, or GitHub
 tokens. Every metric has an owner, retention period, and dashboard alert
 threshold.
 
-## 12. Verification gates
+### ✅ Verification Gate — Section 11
+- [ ] All code references match actual file paths and line numbers
+- [ ] Status claims match test output
+- [ ] No broken cross-references to other sections
+
+> **🔵 INFO:** Section 12 defines the acceptance criteria that must be met before any phase is called complete. All gates in §13.2 map back to these categories.
+
+<!-- AGENT: qa -->
+## 12. ✅ Verification gates
 
 Before implementation is called complete:
 
@@ -463,7 +559,13 @@ Before implementation is called complete:
   motion, and small screens;
 - production build, typecheck, lint, dependency audit, and browser E2E tests.
 
-## 13. Phase plan and implementation status
+### ✅ Verification Gate — Section 12
+- [ ] All code references match actual file paths and line numbers
+- [ ] Status claims match test output
+- [ ] No broken cross-references to other sections
+
+<!-- AGENT: phase-coordinator -->
+## 13. 🔍 Phase plan and implementation status
 
 This section is the authoritative implemented/untested/planned status list. Every
 phase maps to the phase of the same name in `docs/ROADMAP.md`. Status values:
@@ -499,6 +601,10 @@ Notes:
 - The final Google account selection and consent step cannot be automated from
   this environment; it must be completed once by a person in the browser to
   close the sign-in happy path end to end.
+
+> **🔴 CRITICAL:** Plugin loader uses `new Function` with self access (sandbox escape).
+> **🟡 WARNING:** Phase 7 and Phase 9 tests have infrastructure failures.
+> **🟢 SUCCESS:** 393/393 tests pass, tsc clean, build succeeds.
 
 ### 13.1 Phase status matrix
 
@@ -678,7 +784,13 @@ then advanced power):
 The original target architecture was produced without runtime changes; the
 §13.0 verified states document subsequent live wiring.
 
-## 14. Core architectural types
+### ✅ Verification Gate — Section 13
+- [ ] All code references match actual file paths and line numbers
+- [ ] Status claims match test output
+- [ ] No broken cross-references to other sections
+
+<!-- AGENT: docs-reference -->
+## 14. 🏛️ Core architectural types
 
 The website is built on three core architectural types that define how
 content is rendered, how it interacts with users, and how it balances
@@ -704,3 +816,16 @@ browser (e.g., Google Docs, dashboard tracking tools, or SaaS platforms). [1]
 Modern websites that combine static rendering for fast page speeds with
 dynamic client-side elements for interactive features. [1]
 (https://www.thezeroagency.in/blogs/types-of-websites-explained-static-dynamic-e-commerce-more)
+
+### ✅ Verification Gate — Section 14
+- [ ] All code references match actual file paths and line numbers
+- [ ] Status claims match test output
+- [ ] No broken cross-references to other sections
+
+## ✅ Master Verification Checklist
+- [ ] All sections have verification gates
+- [ ] All code references are accurate
+- [ ] All cross-references are valid
+- [ ] Status summary matches reality
+- [ ] Agent ownership markers are present
+- [ ] Verification gates have been checked

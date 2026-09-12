@@ -1,6 +1,30 @@
 # WebModel Download and Runtime Specification
 
-## 1. Purpose
+> **📋 Status:** This is a design contract — not all features are implemented. Sections marked as implemented have been verified against the current codebase; all others describe intended future behavior.
+
+> **🔵 INFO:** WebModel is a browser-runnable, signed, quantized model package that enables on-device AI in supported phones and laptops. Ollama remains a separate desktop/local-daemon path and is not a substitute for WebModel on mobile.
+
+## Quick Navigation
+
+- [1. Purpose](#1-purpose)
+- [2. Product behavior](#2-product-behavior)
+- [3. Terminology](#3-terminology)
+- [4. Out of scope for the first release](#4-out-of-scope-for-the-first-release)
+- [5. Model catalog contract](#5-model-catalog-contract)
+- [6. Device capability detection](#6-device-capability-detection)
+- [7. Download manager contract](#7-download-manager-contract)
+- [8. Storage contract](#8-storage-contract)
+- [9. Runtime adapter contract](#9-runtime-adapter-contract)
+- [10. Omni-AI integration](#10-omni-ai-integration)
+- [11. API surface](#11-api-surface)
+- [12. Security requirements](#12-security-requirements)
+- [13. Accessibility and mobile requirements](#13-accessibility-and-mobile-requirements)
+- [14. Verification plan](#14-verification-plan)
+- [15. Rollout plan](#15-rollout-plan)
+- [16. Success metrics](#16-success-metrics)
+
+## 1. Purpose 🎯
+<!-- AGENT: Product -->
 
 Add a **WebModel** path to Omni-AI and the model hub so a supported phone or
 laptop can discover, download, verify, load, and use a browser-runnable model.
@@ -11,7 +35,15 @@ not state that WebModel downloads currently work. The current model hub calls a
 local Ollama daemon at `http://localhost:11434` for tags, pulls, and generation
 (`src/components/Showcase.tsx:122-169`, `src/components/OllamaLocal.tsx:17-83`).
 
-## 2. Product behavior
+> **✅ VERIFIED:** The current model hub implementation uses a local Ollama daemon at `http://localhost:11434` (`src/components/Showcase.tsx:122-169`, `src/components/OllamaLocal.tsx:17-83`). WebModel download path is not yet implemented.
+
+### ✅ Verification Gate — Section 1
+- [ ] All contracts match implementation or are clearly marked as future
+- [ ] All JSON/TYPE blocks are valid
+- [ ] No contradictions between sections
+
+## 2. Product behavior 🛒
+<!-- AGENT: Product -->
 
 A user can:
 
@@ -27,7 +59,17 @@ A user can:
 The UI must never say that a model is mobile-ready solely because it appears in
 the catalog.
 
-## 3. Terminology
+### ✅ Verification Gate — Section 2
+- [ ] All contracts match implementation or are clearly marked as future
+- [ ] All JSON/TYPE blocks are valid
+- [ ] No contradictions between sections
+
+## 3. Terminology 📖
+<!-- AGENT: Backend -->
+
+> **🔵 INFO:** These definitions govern how all subsequent sections use
+> key terms. If a section uses a term not defined here, it inherits the
+> definition below. Ambiguity between sections is a contradiction to fix.
 
 - **WebModel:** a browser-runnable, signed, quantized model package.
 - **Ollama model:** a model managed by a local Ollama daemon, normally on a
@@ -40,7 +82,17 @@ the catalog.
 - **Ready:** the package is fully downloaded, verified, installed atomically,
   and successfully loaded by the selected runtime.
 
-## 4. Out of scope for the first release
+### ✅ Verification Gate — Section 3
+- [ ] All contracts match implementation or are clearly marked as future
+- [ ] All JSON/TYPE blocks are valid
+- [ ] No contradictions between sections
+
+## 4. Out of scope for the first release 🚫
+<!-- AGENT: Security -->
+
+> **🟡 WARNING:** These items are explicitly NOT in scope for the first
+> release. Do not implement them without updating this specification.
+> Adding any of these without a spec change is out of scope.
 
 - Arbitrary multi-gigabyte desktop models on low-memory phones.
 - Treating Ollama as available on mobile browsers.
@@ -49,7 +101,13 @@ the catalog.
 - Claiming offline AI when no local model is installed and no cloud provider is
   connected.
 
-## 5. Model catalog contract
+### ✅ Verification Gate — Section 4
+- [ ] All contracts match implementation or are clearly marked as future
+- [ ] All JSON/TYPE blocks are valid
+- [ ] No contradictions between sections
+
+## 5. Model catalog contract 📦
+<!-- AGENT: API -->
 
 ### 5.1 Catalog response
 
@@ -140,7 +198,13 @@ The exact runtime name is a decision to be validated by a proof-of-concept. The
 contract intentionally does not require a specific model runtime before one is
 tested on mobile and laptop browsers.
 
-## 6. Device capability detection
+### ✅ Verification Gate — Section 5
+- [ ] All contracts match implementation or are clearly marked as future
+- [ ] All JSON/TYPE blocks are valid
+- [ ] No contradictions between sections
+
+## 6. Device capability detection 📱
+<!-- AGENT: Client -->
 
 Detect and cache:
 
@@ -160,17 +224,23 @@ model manifest and the runtime's actual load result.
 
 ### Device profiles
 
-| Profile | Typical target | Default policy |
-|---|---|---|
-| `low-mobile` | constrained phone | Small quantized models only; short context; cloud fallback |
-| `modern-mobile` | current phone/tablet | Small/medium quantized models; WebGPU preferred |
-| `laptop` | laptop browser | Medium models; larger context; optional Ollama |
-| `desktop` | workstation | Larger models; advanced runtime settings |
+| Profile | Typical target | Default policy | Status | Owner |
+|---|---|---|---|---|
+| `low-mobile` | constrained phone | Small quantized models only; short context; cloud fallback | Design | Client |
+| `modern-mobile` | current phone/tablet | Small/medium quantized models; WebGPU preferred | Design | Client |
+| `laptop` | laptop browser | Medium models; larger context; optional Ollama | Design | Client |
+| `desktop` | workstation | Larger models; advanced runtime settings | Design | Client |
 
 The UI should show the detected profile and the reason a model is allowed or
 blocked.
 
-## 7. Download manager contract
+### ✅ Verification Gate — Section 6
+- [ ] All contracts match implementation or are clearly marked as future
+- [ ] All JSON/TYPE blocks are valid
+- [ ] No contradictions between sections
+
+## 7. Download manager contract ⬇️
+<!-- AGENT: Download -->
 
 ### 7.1 Operations
 
@@ -239,7 +309,13 @@ available
 - Re-verification command for an installed package.
 - No executable code is run while a shard is being downloaded.
 
-## 8. Storage contract
+### ✅ Verification Gate — Section 7
+- [ ] All contracts match implementation or are clearly marked as future
+- [ ] All JSON/TYPE blocks are valid
+- [ ] No contradictions between sections
+
+## 8. Storage contract 💾
+<!-- AGENT: Storage -->
 
 Use IndexedDB or OPFS for model bytes and metadata. Store:
 
@@ -257,7 +333,13 @@ The browser's storage quota is not a promise of permanence. The UI must offer
 delete and re-verify actions and must handle quota errors without corrupting a
 previously ready model.
 
-## 9. Runtime adapter contract
+### ✅ Verification Gate — Section 8
+- [ ] All contracts match implementation or are clearly marked as future
+- [ ] All JSON/TYPE blocks are valid
+- [ ] No contradictions between sections
+
+## 9. Runtime adapter contract ⚡
+<!-- AGENT: Runtime -->
 
 ```ts
 interface WebModelRuntime {
@@ -282,7 +364,13 @@ A runtime adapter must report:
 The first release should support one tested WebGPU/WASM runtime and one cloud
 fallback. Additional runtimes are adapters, not forks of the model UI.
 
-## 10. Omni-AI integration
+### ✅ Verification Gate — Section 9
+- [ ] All contracts match implementation or are clearly marked as future
+- [ ] All JSON/TYPE blocks are valid
+- [ ] No contradictions between sections
+
+## 10. Omni-AI integration 🤖
+<!-- AGENT: Integration -->
 
 ### 10.1 Provider selection
 
@@ -309,29 +397,47 @@ must show the active model and device/runtime in the chat header.
 
 ### 10.3 Copy examples
 
-- “This model needs more memory than this device reports. Choose a smaller
-  WebModel or use cloud AI.”
-- “Download paused. Your workspace is safe; resume when you have enough
-  storage.”
-- “The model package failed verification and was not installed.”
-- “Ollama is not available in this browser. Use a WebModel or connect a cloud
-  provider.”
+- "This model needs more memory than this device reports. Choose a smaller
+  WebModel or use cloud AI."
+- "Download paused. Your workspace is safe; resume when you have enough
+  storage."
+- "The model package failed verification and was not installed."
+- "Ollama is not available in this browser. Use a WebModel or connect a cloud
+  provider."
 
-## 11. API surface
+### ✅ Verification Gate — Section 10
+- [ ] All contracts match implementation or are clearly marked as future
+- [ ] All JSON/TYPE blocks are valid
+- [ ] No contradictions between sections
 
-| Method and path | Purpose |
-|---|---|
-| `GET /api/v1/models` | List signed catalog entries |
-| `GET /api/v1/models/:id/manifests/:version` | Fetch immutable manifest |
-| `GET /api/v1/models/:id/manifests/:version.sig` | Fetch publisher signature |
-| `GET /api/v1/models/:id/shards/:version/:shard` | Range-request a shard |
-| `POST /api/v1/models/:id/installs` | Reserve storage and create an install plan |
-| `GET /api/v1/models/installs/:id/events` | SSE progress and state events |
+## 11. API surface 🔌
+<!-- AGENT: API surface -->
+
+| Method and path | Purpose | Status | Owner |
+|---|---|---|---|
+| `GET /api/v1/models` | List signed catalog entries | Design | API |
+| `GET /api/v1/models/:id/manifests/:version` | Fetch immutable manifest | Design | API |
+| `GET /api/v1/models/:id/manifests/:version.sig` | Fetch publisher signature | Design | API |
+| `GET /api/v1/models/:id/shards/:version/:shard` | Range-request a shard | Design | API |
+| `POST /api/v1/models/:id/installs` | Reserve storage and create an install plan | Design | API |
+| `GET /api/v1/models/installs/:id/events` | SSE progress and state events | Design | API |
 
 The browser must still verify signatures and digests; an HTTPS response is not
 a substitute for package integrity.
 
-## 12. Security requirements
+### ✅ Verification Gate — Section 11
+- [ ] All contracts match implementation or are clearly marked as future
+- [ ] All JSON/TYPE blocks are valid
+- [ ] No contradictions between sections
+
+## 12. Security requirements 🔒
+<!-- AGENT: Security -->
+
+> **🔴 CRITICAL:** These security requirements are non-negotiable. Every
+> implementation MUST satisfy all ten items before release. Failure to meet
+> any of these is a release blocker. An HTTPS response does not substitute
+> for package integrity verification — signatures and digests must always
+> be checked independently by the browser.
 
 1. Catalog and shard origins are allowlisted.
 2. Manifests and shards use immutable versions and digests.
@@ -345,7 +451,13 @@ a substitute for package integrity.
    arbitrary network endpoints through the runtime adapter.
 10. License and acceptable-use metadata are visible before download.
 
-## 13. Accessibility and mobile requirements
+### ✅ Verification Gate — Section 12
+- [ ] All contracts match implementation or are clearly marked as future
+- [ ] All JSON/TYPE blocks are valid
+- [ ] No contradictions between sections
+
+## 13. Accessibility and mobile requirements ♿
+<!-- AGENT: Mobile -->
 
 - Every model action is available by keyboard and touch.
 - Progress is exposed through `role="status"`/live regions without announcing
@@ -357,7 +469,13 @@ a substitute for package integrity.
   knowledge.
 - A failed download always offers the next safe action.
 
-## 14. Verification plan
+### ✅ Verification Gate — Section 13
+- [ ] All contracts match implementation or are clearly marked as future
+- [ ] All JSON/TYPE blocks are valid
+- [ ] No contradictions between sections
+
+## 14. Verification plan ✅
+<!-- AGENT: Testing -->
 
 ### Unit tests
 
@@ -389,7 +507,13 @@ a substitute for package integrity.
 - storage-pressure pause/delete flow;
 - background/refresh recovery where supported.
 
-## 15. Rollout plan
+### ✅ Verification Gate — Section 14
+- [ ] All contracts match implementation or are clearly marked as future
+- [ ] All JSON/TYPE blocks are valid
+- [ ] No contradictions between sections
+
+## 15. Rollout plan 🚀
+<!-- AGENT: Rollout -->
 
 1. Add catalog/manifest contracts behind a feature flag.
 2. Ship device detection and a no-download compatibility screen.
@@ -400,7 +524,13 @@ a substitute for package integrity.
 7. Publish the capability matrix and known limitations.
 8. Promote only after mobile and laptop E2E tests pass.
 
-## 16. Success metrics
+### ✅ Verification Gate — Section 15
+- [ ] All contracts match implementation or are clearly marked as future
+- [ ] All JSON/TYPE blocks are valid
+- [ ] No contradictions between sections
+
+## 16. Success metrics 📊
+<!-- AGENT: Metrics -->
 
 - percentage of eligible devices that can discover a compatible model;
 - download completion and resume rate;
@@ -413,3 +543,14 @@ a substitute for package integrity.
 
 No metric should include raw prompts, source code, model output, tokens, or
 credentials.
+
+### ✅ Verification Gate — Section 16
+- [ ] All contracts match implementation or are clearly marked as future
+- [ ] All JSON/TYPE blocks are valid
+- [ ] No contradictions between sections
+
+## ✅ Master Verification Checklist
+- [ ] All contracts are testable
+- [ ] All security requirements have verification plans
+- [ ] All device profiles are tested
+- [ ] All agent markers are present

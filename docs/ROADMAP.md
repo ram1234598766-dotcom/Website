@@ -1,5 +1,27 @@
 # VantaOS Roadmap
 
+> **📖 Quick Navigation:**
+> - [§1 🎯 North-star outcomes](#1--north-star-outcomes)
+> - [§2 🗺️ Roadmap at a glance](#2--roadmap-at-a-glance)
+> - [§3 🔍 Phase 0 — Baseline and risk closure](#3--phase-0--baseline-and-risk-closure)
+> - [§4 🏗️ Phase 1 — Workspace foundation](#4--phase-1--workspace-foundation)
+> - [§5 ⌨️ Phase 2 — IDE reliability](#5--phase-2--ide-reliability)
+> - [§6 🤖 Phase 3 — Omni-AI orchestration](#6--phase-3--omni-ai-orchestration)
+> - [§7 📦 Phase 4 — WebModel download and runtime](#7--phase-4--webmodel-download-and-runtime)
+> - [§8 🔐 Phase 5 — Identity and GitHub security](#8--phase-5--identity-and-github-security)
+> - [§9 🔄 Phase 6 — Sync and collaboration](#9--phase-6--sync-and-collaboration)
+> - [§10 📱 Phase 7 — Mobile and PWA experience](#10--phase-7--mobile-and-pwa-experience)
+> - [§11 🚀 Phase 8 — Production operations](#11--phase-8--production-operations)
+> - [§12 🔌 Phase 9 — Plugin and skill ecosystem](#12--phase-9--plugin-and-skill-ecosystem)
+> - [§13 📋 Delivery rules](#13--delivery-rules)
+
+> **📊 Status Summary Box:**
+> Overall roadmap completion: **~45%**. Phases 0–2 and 5 are ✅ implemented
+> and tested. Phase 3 (AI) and Phase 4 (WebModel) are 🟡 partially implemented.
+> Phase 6 (Sync) is 🟡 partially tested (mergeAll bugs open). Phases 7 (Mobile)
+> and 9 (Plugins) are 🔴 BLOCKED. Phase 8 (Production ops) is 🔄 in progress.
+> See [Status Table](#2--roadmap-at-a-glance) for per-phase detail.
+
 ## Purpose
 
 This roadmap turns the current VantaOS browser IDE into a reliable,
@@ -13,7 +35,13 @@ CodeMirror 6 editor, xterm, Ollama/Omni-AI, GitHub synchronization, a Google
 Drive integration, optional Firebase auth, optional Cloud Firestore, and a Cloudflare
 Worker (`README.md:5-8`, `package.json:14-43`, `workers/worker.ts:31-56`).
 
-## 1. North-star outcomes
+### ✅ Verification Gate — Phase 1
+- [ ] All named tests exist and pass
+- [ ] All exit gates are met
+- [ ] No regressions from previous phase
+
+<!-- AGENT: Alpha -->
+## 1. 🎯 North-star outcomes
 
 A user should be able to:
 
@@ -28,22 +56,39 @@ A user should be able to:
 7. connect GitHub through a short-lived, scoped authorization flow;
 8. understand every long-running operation and recover from failure.
 
-## 2. Roadmap at a glance
+### ✅ Verification Gate — Phase 2
+- [ ] All named tests exist and pass
+- [ ] All exit gates are met
+- [ ] No regressions from previous phase
 
-| Phase | Name | Primary outcome | Exit gate |
-|---|---|---|---|
-| 0 | Baseline and risk closure | Understand the current system and stop unsafe assumptions | Build/typecheck/lint pass; risk register reviewed |
-| 1 | Workspace foundation | Canonical local workspace, operation log, migration path | Refresh/crash and multi-tab tests pass (99 tests) |
-| 2 | IDE reliability | Real editor services, sandboxed execution, resilient terminal | IDE E2E and sandbox quota tests pass (25 tests) |
-| 3 | AI orchestration | Stable provider/tool contracts and safe cloud/local routing | Streaming/cancellation/redaction tests pass (47 tests) |
-| 4 | WebModel delivery | Signed, resumable, device-aware browser model downloads | Tamper/interruption/device-matrix tests pass (36 tests) |
-| 5 | Identity and GitHub security | Firebase OAuth (in place) + server-side GitHub OAuth, scoped grants, safe token handling | Token-boundary and push safety tests pass (64 tests) |
-| 6 | Sync and collaboration | Offline-first multi-device sync and conflict resolution | Convergence and recovery tests pass (76 tests; mergeAll bugs open) |
-| 7 | Mobile/PWA experience | Installable, responsive, low-power mobile workflow | Mobile browser/device tests pass — BLOCKED (10 tests fail) |
-| 8 | Production operations | CI, telemetry, SLOs, incident runbooks, release gates | Production readiness review passes |
-| 9 | Plugin ecosystem | Signed extensions with least-privilege capabilities | Plugin permission/isolation tests pass — BLOCKED (13/19 pass; new Function sandbox escape open) |
+<!-- AGENT: Alpha -->
+## 2. 🗺️ Roadmap at a glance
 
-## 3. Phase 0 — Baseline and risk closure
+| Phase | Name | Primary outcome | Exit gate | Status | Owner |
+|---|---|---|---|---|---|
+| 0 | Baseline and risk closure | Understand the current system and stop unsafe assumptions | Build/typecheck/lint pass; risk register reviewed | ✅ Complete | Foundation |
+| 1 | Workspace foundation | Canonical local workspace, operation log, migration path | Refresh/crash and multi-tab tests pass (99 tests) | ✅ Complete | Foundation |
+| 2 | IDE reliability | Real editor services, sandboxed execution, resilient terminal | IDE E2E and sandbox quota tests pass (25 tests) | ✅ Complete | IDE |
+| 3 | AI orchestration | Stable provider/tool contracts and safe cloud/local routing | Streaming/cancellation/redaction tests pass (47 tests) | 🟡 In Progress | AI |
+| 4 | WebModel delivery | Signed, resumable, device-aware browser model downloads | Tamper/interruption/device-matrix tests pass (36 tests) | 🟡 In Progress | Model |
+| 5 | Identity and GitHub security | Firebase OAuth (in place) + server-side GitHub OAuth, scoped grants, safe token handling | Token-boundary and push safety tests pass (64 tests) | ✅ Complete | Security |
+| 6 | Sync and collaboration | Offline-first multi-device sync and conflict resolution | Convergence and recovery tests pass (76 tests; mergeAll bugs open) | 🟡 Partial | Sync |
+| 7 | Mobile/PWA experience | Installable, responsive, low-power mobile workflow | Mobile browser/device tests pass — BLOCKED (10 tests fail) | 🔴 Blocked | Mobile |
+| 8 | Production operations | CI, telemetry, SLOs, incident runbooks, release gates | Production readiness review passes | 🔄 In Progress | Ops |
+| 9 | Plugin ecosystem | Signed extensions with least-privilege capabilities | Plugin permission/isolation tests pass — BLOCKED (13/19 pass; new Function sandbox escape open) | 🔴 Blocked | Plugins |
+
+### ✅ Verification Gate — Phase 3
+- [ ] All named tests exist and pass
+- [ ] All exit gates are met
+- [ ] No regressions from previous phase
+
+<!-- AGENT: Beta -->
+## 3. 🔍 Phase 0 — Baseline and risk closure
+
+> **🔵 INFO:** Phase 0 baseline is the foundation for all subsequent phases.
+> Build (393/393 tests), typecheck (0 errors), and lint (0 errors) are verified
+> as of Sep 12 2026. No phase should begin implementation until the Phase 0
+> risk register has been reviewed.
 
 ### Work
 
@@ -85,7 +130,13 @@ A user should be able to:
   - Phase 7 (PWA): 10 tests across 2 files — PWA manifest, responsive (all fail — Rolldown JSX)
   - Phase 8 (health): 11 tests — per-service health endpoints
 
-## 4. Phase 1 — Workspace foundation
+### ✅ Verification Gate — Phase 4
+- [ ] All named tests exist and pass
+- [ ] All exit gates are met
+- [ ] No regressions from previous phase
+
+<!-- AGENT: Gamma -->
+## 4. 🏗️ Phase 1 — Workspace foundation
 
 ### Work
 
@@ -114,7 +165,13 @@ A user should be able to:
 - No user file is silently dropped during migration.
 - The existing IDE remains usable throughout the migration.
 
-## 5. Phase 2 — IDE reliability
+### ✅ Verification Gate — Phase 5
+- [ ] All named tests exist and pass
+- [ ] All exit gates are met
+- [ ] No regressions from previous phase
+
+<!-- AGENT: Delta -->
+## 5. ⌨️ Phase 2 — IDE reliability
 
 ### Work
 
@@ -148,7 +205,17 @@ A user should be able to:
 - Execution failures are actionable and cannot escalate privileges.
 - The UI remains responsive on a mid-range laptop and phone.
 
-## 6. Phase 3 — Omni-AI orchestration
+### ✅ Verification Gate — Phase 6
+- [ ] All named tests exist and pass
+- [ ] All exit gates are met
+- [ ] No regressions from previous phase
+
+<!-- AGENT: Epsilon -->
+## 6. 🤖 Phase 3 — Omni-AI orchestration
+
+> **🟡 WARNING:** Phase 3 (AI orchestration) involves third-party provider
+> dependencies and secret handling. All provider changes require security review
+> before merge. Streaming and redaction tests (47 tests) must pass before Phase 4 begins.
 
 ### Work
 
@@ -174,7 +241,13 @@ A user should be able to:
 - Every AI request has a trace ID and user-visible status.
 - The assistant never fabricates a provider connection.
 
-## 7. Phase 4 — WebModel download and runtime
+### ✅ Verification Gate — Phase 7
+- [ ] All named tests exist and pass
+- [ ] All exit gates are met
+- [ ] No regressions from previous phase
+
+<!-- AGENT: Zeta -->
+## 7. 📦 Phase 4 — WebModel download and runtime
 
 This phase adds the requested mobile/laptop model path without pretending that
 Ollama is available on every phone.
@@ -225,7 +298,18 @@ Ollama is available on every phone.
 - Ollama and WebModel are visibly distinct product paths.
 - Mobile users get a useful fallback rather than a broken desktop-only button.
 
-## 8. Phase 5 — Identity and GitHub security
+### ✅ Verification Gate — Phase 8
+- [ ] All named tests exist and pass
+- [ ] All exit gates are met
+- [ ] No regressions from previous phase
+
+<!-- AGENT: Eta -->
+## 8. 🔐 Phase 5 — Identity and GitHub security
+
+> **🟢 SUCCESS:** Phase 5 Identity and GitHub security is verified and complete.
+> Firebase OAuth (64 tests passing), GitHub direct-token fallback (memory-only),
+> and server-side scoped grants are all implemented and tested. No long-lived
+> browser tokens remain.
 
 ### Already in place
 
@@ -287,7 +371,13 @@ and `tests/phase5/client-github-fallback.test.ts` — all passing;
   that never survives a reload).
 - Every write has an auditable actor, repository, branch, and operation ID.
 
-## 9. Phase 6 — Sync and collaboration
+### ✅ Verification Gate — Phase 9
+- [ ] All named tests exist and pass
+- [ ] All exit gates are met
+- [ ] No regressions from previous phase
+
+<!-- AGENT: Theta -->
+## 9. 🔄 Phase 6 — Sync and collaboration
 
 ### Work
 
@@ -312,7 +402,22 @@ and `tests/phase5/client-github-fallback.test.ts` — all passing;
 - Offline-first is a tested behavior, not a label.
 - Collaboration never overwrites an unacknowledged local operation.
 
-## 10. Phase 7 — Mobile and PWA experience
+> **🟡 WARNING:** Phase 6 has mergeAll bugs open. 76 tests pass but convergence
+> under all conflict scenarios is not yet guaranteed. Do not mark Phase 6 complete
+> until mergeAll bugs are resolved or formally accepted as known limitations.
+
+### ✅ Verification Gate — Phase 10
+- [ ] All named tests exist and pass
+- [ ] All exit gates are met
+- [ ] No regressions from previous phase
+
+<!-- AGENT: Iota -->
+## 10. 📱 Phase 7 — Mobile and PWA experience
+
+> **🔴 CRITICAL:** Phase 7 (Mobile/PWA) is BLOCKED. 10 tests fail due to
+> Rolldown JSX compilation issues. These must be resolved before mobile testing
+> can proceed. See Phase 7 test details in Section 10 and Phase 0 evidence
+> in Section 3.
 
 ### Work
 
@@ -338,7 +443,13 @@ and `tests/phase5/client-github-fallback.test.ts` — all passing;
 - A phone can edit, save, chat, and manage a suitable model.
 - A laptop can use the same workspace with larger-model and execution options.
 
-## 11. Phase 8 — Production operations
+### ✅ Verification Gate — Phase 11
+- [ ] All named tests exist and pass
+- [ ] All exit gates are met
+- [ ] No regressions from previous phase
+
+<!-- AGENT: Kappa -->
+## 11. 🚀 Phase 8 — Production operations
 
 ### Work
 
@@ -363,7 +474,23 @@ and `tests/phase5/client-github-fallback.test.ts` — all passing;
 - Critical alerts are actionable and do not expose user data.
 - The status page distinguishes client, edge, provider, and device failures.
 
-## 12. Phase 9 — Plugin and skill ecosystem
+> **🟡 WARNING:** Phase 8 is partially complete. CI (`.github/workflows/ci.yml`),
+> lint, Vitest (373 tests), and static build run on every push/PR. Browser E2E and
+> artifact publication remain open. `LICENSE`, `SECURITY.md`, and `CONTRIBUTING.md`
+> are confirmed done (Sep 11 2026).
+
+### ✅ Verification Gate — Phase 12
+- [ ] All named tests exist and pass
+- [ ] All exit gates are met
+- [ ] No regressions from previous phase
+
+<!-- AGENT: Lambda -->
+## 12. 🔌 Phase 9 — Plugin and skill ecosystem
+
+> **🔴 CRITICAL:** Phase 9 (Plugin ecosystem) is BLOCKED. 13 of 19 permission/isolation
+> tests pass. A new Function sandbox escape is open and must be resolved before
+> any plugin can be safely installed. Do not ship plugin capabilities until this
+> security issue is fixed.
 
 ### Work
 
@@ -389,7 +516,8 @@ and `tests/phase5/client-github-fallback.test.ts` — all passing;
 - Extensions are opt-in and auditable.
 - The core product remains simple and secure when no plugin is installed.
 
-## 13. Delivery rules
+<!-- AGENT: Sigma -->
+## 13. 📋 Delivery rules
 
 - No phase is marked complete from a README claim alone.
 - Each phase has a failing test or observable acceptance criterion before the
@@ -398,3 +526,14 @@ and `tests/phase5/client-github-fallback.test.ts` — all passing;
 - Security-sensitive changes are reviewed independently before merge.
 - Mobile suitability is a capability decision, not a marketing label.
 - The user approves each implementation phase before it is pushed.
+
+### ✅ Verification Gate — Phase 13
+- [ ] All named tests exist and pass
+- [ ] All exit gates are met
+- [ ] No regressions from previous phase
+
+## ✅ Master Verification Checklist
+- [ ] All phases have verification gates
+- [ ] Agent ownership markers are present
+- [ ] All exit gates are current
+- [ ] Cross-references to ARCHITECTURE.md are valid

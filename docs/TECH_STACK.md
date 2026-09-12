@@ -11,25 +11,70 @@ model hub, Omni-AI, GitHub synchronization, a Google Drive integration, optional
 Firebase auth, optional Cloud Firestore, and a Cloudflare
 Worker (`README.md:3-8`, `package.json:14-43`, `workers/worker.ts:31-56`).
 
-## 1. Stack decision summary
+> **📋 Quick Navigation**
+>
+> - [1. 🏗️ Stack decision summary](#1-stack-decision-summary)
+> - [2. 📦 Current stack inventory](#2-current-stack-inventory)
+> - [3. 🎯 Target stack](#3-target-stack)
+> - [4. 💻 Browser and device matrix](#4-browser-and-device-matrix)
+> - [5. 📚 Package and dependency policy](#5-package-and-dependency-policy)
+> - [6. 🧪 Testing stack](#6-testing-stack)
+> - [7. 📊 Observability stack](#7-observability-stack)
+> - [8. 🔒 Security stack](#8-security-stack)
+> - [9. 🚀 Deployment and release stack](#9-deployment-and-release-stack)
+> - [10. 📝 Architecture decisions to record](#10-architecture-decisions-to-record)
 
-| Layer | Current | Target | Reason |
-|---|---|---|---|
-| Application | Next.js 15 static export, React 19, TypeScript (`next.config.mjs:2-10`, `package.json:28-34`) | Keep Next.js/React/TypeScript for the web shell; introduce service boundaries and route-level loading | Preserves the existing product while making state and integrations testable |
-| UI | Tailwind CSS v4, Motion, Lucide (`package.json:17-27`) | Keep the design system; add semantic component primitives and responsive/mobile contracts | Improves consistency without replacing the visual language |
-| Editor | CodeMirror 6 through `@codemirror/*` with custom React wrappers (`package.json:15-29`, `src/components/CloudCodeEditor.tsx`, `src/components/CloudDiffEditor.tsx`) | Keep CodeMirror as the editor core; add language-service-style workers for diagnostics and completions | Ships in the bundle (no CDN, no ~3MB runtime) while retaining 35+ language modes, diffing, and search |
-| Terminal | xterm.js plus in-page shell (`package.json:18-19`, `src/components/TerminalPanel.tsx:23-35`) | Keep xterm as the terminal surface; add a sandboxed command/execution broker | Separates terminal UI from unsafe execution |
-| Local data | IndexedDB helper exists (`src/lib/storage.ts:1-10`); CloudOS currently uses localStorage JSON (`src/components/CloudOS.tsx:290-322`) | IndexedDB/OPFS operation log and outbox | Provides durable, bounded, migratable offline storage |
-| AI | Ollama plus OpenRouter/Gemini/OpenAI through browser/Worker calls (`src/components/OmniAI.tsx:6-25`, `workers/worker.ts:77-155`) | Provider registry, streaming protocol, server-mediated cloud path, WebModel runtime adapter | Makes providers interchangeable and mobile-capable |
-| Models | Ollama model cards and localhost pull (`src/components/Showcase.tsx:14-105`, `src/components/Showcase.tsx:122-169`) | Signed WebModel catalog, resumable downloads, device profiles, Ollama adapter | Adds a real browser/mobile path without misrepresenting Ollama support |
-| Auth | Optional Firebase client (Google/GitHub OAuth) with a localStorage demo fallback, exposed through the unified `client` facade (`src/lib/client.ts`, `src/lib/firebase.ts`, `src/lib/demoAuth.ts`) | Keep Firebase as the production identity provider; add server-side OAuth and short-lived grants | Provides real Google/GitHub sign-in with a single adapter surface |
-| Drive | Google Drive REST v3 (readonly + app-owned files) using the OAuth access token captured during Firebase Google sign-in (`src/lib/drive.ts:4-279`, `src/components/DriveManager.tsx`) | Move long-lived tokens out of the browser; server-side token refresh | Browser-only token expiry/refresh is the current limit |
-| GitHub | Direct REST calls with a browser-stored token (`src/lib/github.ts:8-40`, `src/components/GitHubManager.tsx:15-44`) | Server-side OAuth, scoped grants, fresh-parent push protection | Removes long-lived credentials from the browser |
-| Edge | Cloudflare Worker API proxy (`wrangler.toml:1-11`, `workers/worker.ts:13-75`) | Versioned API gateway, model proxy, OAuth exchange, rate limits, health | Provides a stable trust boundary and operational surface |
-| Tests | No test script is present in `package.json:6-13` | Vitest/Playwright plus contract, worker, security, and mobile E2E suites | Makes reliability claims testable |
-| CI/CD | No workflow files are present in the cloned repository | GitHub Actions build/typecheck/lint/test/E2E/dependency audit/deploy gates | Prevents regressions from reaching production |
+> **📊 Status Summary**
+>
+> | Area | Current | Target |
+> |---|---|---|
+> | Application shell | ✅ Implemented (Next.js 15, React 19, TS) | ✅ Keep + service boundaries |
+> | Editor & terminal | ✅ Implemented (CodeMirror 6, xterm) | ✅ Keep + language-service workers |
+> | Local data | 🔄 Partial (IndexedDB helper present; localStorage still in use) | ✅ IndexedDB/OPFS operation log |
+> | AI & models | ✅ Implemented (Ollama + cloud) | ✅ Provider registry + WebModel adapter |
+> | Auth & integrations | 🔄 Partial (Firebase optional, tokens in browser) | ✅ Server-side OAuth |
+> | Edge (Cloudflare) | ✅ Implemented (Worker API proxy) | ✅ Versioned gateway |
+> | Testing | ❌ Missing (no test script) | 🎯 Vitest + Playwright E2E |
+> | CI/CD | ❌ Missing (no workflow files) | 🎯 GitHub Actions gates |
 
-## 2. Current stack inventory
+<!-- AGENT: Platform -->
+## 1. 🏗️ Stack decision summary
+
+| Layer | Current | Target | Status | Reason |
+|---|---|---|---|---|
+| Application | Next.js 15 static export, React 19, TypeScript (`next.config.mjs:2-10`, `package.json:28-34`) | Keep Next.js/React/TypeScript for the web shell; introduce service boundaries and route-level loading | ✅ Keep | Preserves the existing product while making state and integrations testable |
+| UI | Tailwind CSS v4, Motion, Lucide (`package.json:17-27`) | Keep the design system; add semantic component primitives and responsive/mobile contracts | ✅ Keep | Improves consistency without replacing the visual language |
+| Editor | CodeMirror 6 through `@codemirror/*` with custom React wrappers (`package.json:15-29`, `src/components/CloudCodeEditor.tsx`, `src/components/CloudDiffEditor.tsx`) | Keep CodeMirror as the editor core; add language-service-style workers for diagnostics and completions | ✅ Keep | Ships in the bundle (no CDN, no ~3mb runtime) while retaining 35+ language modes, diffing, and search |
+| Terminal | xterm.js plus in-page shell (`package.json:18-19`, `src/components/TerminalPanel.tsx:23-35`) | Keep xterm as the terminal surface; add a sandboxed command/execution broker | ✅ Keep | Separates terminal UI from unsafe execution |
+| Local data | IndexedDB helper exists (`src/lib/storage.ts:1-10`); CloudOS currently uses localStorage JSON (`src/components/CloudOS.tsx:290-322`) | IndexedDB/OPFS operation log and outbox | 🔄 Migrate | Provides durable, bounded, migratable offline storage |
+| AI | Ollama plus OpenRouter/Gemini/OpenAI through browser/Worker calls (`src/components/OmniAI.tsx:6-25`, `workers/worker.ts:77-155`) | Provider registry, streaming protocol, server-mediated cloud path, WebModel runtime adapter | ✅ Keep | Makes providers interchangeable and mobile-capable |
+| Models | Ollama model cards and localhost pull (`src/components/Showcase.tsx:14-105`, `src/components/Showcase.tsx:122-169`) | Signed WebModel catalog, resumable downloads, device profiles, Ollama adapter | 🔄 Extend | Adds a real browser/mobile path without misrepresenting Ollama support |
+| Auth | Optional Firebase client (Google/GitHub OAuth) with a localStorage demo fallback, exposed through the unified `client` facade (`src/lib/client.ts`, `src/lib/firebase.ts`, `src/lib/demoAuth.ts`) | Keep Firebase as the production identity provider; add server-side OAuth and short-lived grants | 🔄 Harden | Provides real Google/GitHub sign-in with a single adapter surface |
+| Drive | Google Drive REST v3 (readonly + app-owned files) using the OAuth access token captured during Firebase Google sign-in (`src/lib/drive.ts:4-279`, `src/components/DriveManager.tsx`) | Move long-lived tokens out of the browser; server-side token refresh | 🔄 Harden | Browser-only token expiry/refresh is the current limit |
+| GitHub | Direct REST calls with a browser-stored token (`src/lib/github.ts:8-40`, `src/components/GitHubManager.tsx:15-44`) | Server-side OAuth, scoped grants, fresh-parent push protection | 🔄 Harden | Removes long-lived credentials from the browser |
+| Edge | Cloudflare Worker API proxy (`wrangler.toml:1-11`, `workers/worker.ts:13-75`) | Versioned API gateway, model proxy, OAuth exchange, rate limits, health | ✅ Keep | Provides a stable trust boundary and operational surface |
+| Tests | No test script is present in `package.json:6-13` | Vitest/Playwright plus contract, worker, security, and mobile E2E suites | ❌ Add | Makes reliability claims testable |
+| CI/CD | No workflow files are present in the cloned repository | GitHub Actions build/typecheck/lint/test/E2E/dependency audit/deploy gates | ❌ Add | Prevents regressions from reaching production |
+
+> **🔴 CRITICAL:** No test script exists in `package.json:6-13` and no CI workflow files are present — reliability claims cannot be verified today.
+
+> **🔵 INFO:** The `npm run lint` command currently runs `tsc --noEmit` (`package.json:6-13`); this is a typecheck, not a linter.
+
+### ✅ Verification Gate — Section 1
+- [ ] All current statements match repo files
+- [ ] All target statements are clearly marked as recommendations
+- [ ] No dead references to removed features
+
+<!-- AGENT: Platform -->
+## 2. 📦 Current stack inventory
+
+> **🟢 SUCCESS:** An IndexedDB database with `files` and `metadata` stores already exists at `src/lib/storage.ts:6-10`.
+
+> **🔴 CRITICAL:** The IDE bypasses the IndexedDB helper and persists workspace state as a full JSON snapshot in `localStorage` (`src/components/CloudOS.tsx:290-322`).
+
+> **🔴 CRITICAL:** The current terminal executes supplied JavaScript with `new Function` (`src/components/TerminalPanel.tsx:157-169`) and uses a separate in-memory filesystem from the IDE workspace (`src/components/TerminalPanel.tsx:23-35`).
+
+> **🟡 WARNING:** Firebase auth is optional; when `NEXT_PUBLIC_FIREBASE_*` variables are unset the app falls back to localStorage demo auth (`src/lib/client.ts`, `src/lib/firebase.ts:37-73`), which is not production-grade.
 
 ### 2.1 Framework and language
 
@@ -121,7 +166,15 @@ needs a formal small-screen interaction contract.
 - `npm run lint` currently runs `tsc --noEmit`; there is no lint/test/E2E
   script in the current package file (`package.json:6-13`).
 
-## 3. Target stack
+> **🔴 CRITICAL:** No lint/test/E2E script in `package.json:6-13`; the deployment section has no CI verification.
+
+### ✅ Verification Gate — Section 2
+- [ ] All current statements match repo files
+- [ ] All target statements are clearly marked as recommendations
+- [ ] No dead references to removed features
+
+<!-- AGENT: Editor/Terminal -->
+## 3. 🎯 Target stack
 
 ### 3.1 Client application
 
@@ -184,6 +237,8 @@ The target makes the existing storage direction consistent and testable.
 - Add remote/native adapters for languages that cannot run safely in a browser.
 - Enforce CPU, memory, wall-clock, output, and network quotas.
 - Return run IDs, structured logs, exit codes, and cancellation events.
+
+> **🔴 CRITICAL:** Terminal still uses `new Function` execution (`src/components/TerminalPanel.tsx:157-169`) — must be replaced with sandboxed runner before production.
 
 This is required because the current terminal executes supplied JavaScript with
 `new Function` (`src/components/TerminalPanel.tsx:157-169`) and uses a separate
@@ -277,7 +332,13 @@ See `docs/WEB_MODEL_SPEC.md` for the detailed contract.
 - resource quotas;
 - artifact retention policies.
 
-## 4. Browser and device matrix
+### ✅ Verification Gate — Section 3
+- [ ] All current statements match repo files
+- [ ] All target statements are clearly marked as recommendations
+- [ ] No dead references to removed features
+
+<!-- AGENT: Editor/Terminal -->
+## 4. 💻 Browser and device matrix
 
 | Capability | Low mobile | Modern mobile | Laptop | Desktop |
 |---|---|---|---|---|
@@ -293,10 +354,15 @@ See `docs/WEB_MODEL_SPEC.md` for the detailed contract.
 | Google Drive (read + app-owned write) | Supported | Supported | Supported | Supported |
 | PWA install | Target | Target | Optional | Optional |
 
-A feature is shown as available only after capability detection. A missing
-runtime produces a clear alternative, never a dead control.
+> **🔵 INFO:** Capability detection gates every feature — a missing runtime produces a clear alternative, never a dead control.
 
-## 5. Package and dependency policy
+### ✅ Verification Gate — Section 4
+- [ ] All current statements match repo files
+- [ ] All target statements are clearly marked as recommendations
+- [ ] No dead references to removed features
+
+<!-- AGENT: Data -->
+## 5. 📚 Package and dependency policy
 
 ### Keep and justify
 
@@ -328,7 +394,15 @@ runtime produces a clear alternative, never a dead control.
 4. Keep secrets out of client dependencies and bundles.
 5. Record the reason for every production dependency in a decision log.
 
-## 6. Testing stack
+> **🔵 INFO:** Dependency rules are intentionally conservative — every addition requires design review and supply-chain assessment.
+
+### ✅ Verification Gate — Section 5
+- [ ] All current statements match repo files
+- [ ] All target statements are clearly marked as recommendations
+- [ ] No dead references to removed features
+
+<!-- AGENT: GitHub -->
+## 6. 🧪 Testing stack
 
 | Test class | Target tooling | Coverage goal |
 |---|---|---|
@@ -343,10 +417,18 @@ runtime produces a clear alternative, never a dead control.
 | Mobile behavior | Playwright WebKit/Chromium device contexts | Small viewport, backgrounding, storage pressure |
 | Production build | CI build/typecheck/lint | Every push and pull request |
 
+> **🔴 CRITICAL:** No test script in `package.json:6-13` — no tests can be run today. The first implementation phase must add the test surface before any reliability claims can be made.
+
 The current package has no test script (`package.json:6-13`), so the first
 implementation phase must add the test surface before claiming reliability.
 
-## 7. Observability stack
+### ✅ Verification Gate — Section 6
+- [ ] All current statements match repo files
+- [ ] All target statements are clearly marked as recommendations
+- [ ] No dead references to removed features
+
+<!-- AGENT: Deploy -->
+## 7. 📊 Observability stack
 
 Use structured, privacy-safe events with:
 
@@ -367,7 +449,13 @@ Expose:
 - GitHub clone/push outcomes;
 - edge health and dependency health.
 
-## 8. Security stack
+### ✅ Verification Gate — Section 7
+- [ ] All current statements match repo files
+- [ ] All target statements are clearly marked as recommendations
+- [ ] No dead references to removed features
+
+<!-- AGENT: Browser -->
+## 8. 🔒 Security stack
 
 - HTTPS-only deployment and secure cookies where cookies are used.
 - Strict security headers from the edge.
@@ -380,12 +468,20 @@ Expose:
 - Role-based authorization on every privileged endpoint.
 - Explicit demo-mode labeling.
 
+> **🔴 CRITICAL:** Current code inherits browser-stored GitHub tokens (`src/lib/github.ts:8-20`) and unrestricted terminal evaluation (`src/components/TerminalPanel.tsx:157-169`) — these are NOT production guarantees.
+
 The current code provides useful starting functionality, but the target stack
 must not inherit browser-stored GitHub tokens (`src/lib/github.ts:8-20`) or
 unrestricted terminal evaluation (`src/components/TerminalPanel.tsx:157-169`)
 as production guarantees.
 
-## 9. Deployment and release stack
+### ✅ Verification Gate — Section 8
+- [ ] All current statements match repo files
+- [ ] All target statements are clearly marked as recommendations
+- [ ] No dead references to removed features
+
+<!-- AGENT: Packages -->
+## 9. 🚀 Deployment and release stack
 
 1. Pull request checks: typecheck, lint, unit tests, contract tests, dependency
    audit, and static analysis.
@@ -395,9 +491,15 @@ as production guarantees.
 5. Post-deploy checks: health, model catalog, AI proxy, auth, and browser smoke
    tests.
 6. Release notes: distinguish implemented/tested, implemented/untested, and
-   planned capabilities.
+    planned capabilities.
 
-## 10. Architecture decisions to record
+### ✅ Verification Gate — Section 9
+- [ ] All current statements match repo files
+- [ ] All target statements are clearly marked as recommendations
+- [ ] No dead references to removed features
+
+<!-- AGENT: Testing -->
+## 10. 📝 Architecture decisions to record
 
 Before implementation, create short ADRs for:
 
@@ -413,3 +515,14 @@ Before implementation, create short ADRs for:
 
 Each ADR should include context, decision, consequences, alternatives, and a
 verification plan.
+
+### ✅ Verification Gate — Section 10
+- [ ] All current statements match repo files
+- [ ] All target statements are clearly marked as recommendations
+- [ ] No dead references to removed features
+
+## ✅ Master Verification Checklist
+- [ ] All current statements are grounded in repo files
+- [ ] All target choices are labeled as recommendations
+- [ ] All file references are accurate
+- [ ] All agent markers are present
