@@ -1,63 +1,63 @@
 /**
- * Cloud Firestore data layer for VantaOS.
+ * Firebase Realtime Database data layer for VantaOS.
  *
- * Forum threads, replies, and Admin metrics live in Cloud Firestore inside
- * the same Firebase project used for sign-in:
+ * Forum threads, replies, and Admin metrics live in the Firebase Realtime
+ * Database inside the same Firebase project used for sign-in:
  *
  *   profiles/{uid}                        denormalized user profile
  *   threads/{id}                          forum threads
  *   replies/{id}                          forum replies
  *   upvotes/{uid}_{tid}_{rid}             deterministic id — dedupes votes
  *
- * Thread/reply docs carry denormalized author fields (author_username,
- * author_avatar_url), so lists render without an extra join.
+ * Thread/reply nodes carry denormalized author fields (author_username,
+ * author_avatar_url), so lists render without an extra join. Counters are
+ * updated atomically with `increment()`, and real-time updates are streamed
+ * via `onValue()` subscriptions.
  *
  * Every function is a safe no-op / empty-data fallback when no Firebase
  * project is configured (demo mode).
  */
 
 import {
-  getFirestore,
-  collection,
-  doc,
-  getDoc,
-  getDocs,
-  setDoc,
-  addDoc,
-  updateDoc,
-  deleteDoc,
+  getDatabase,
+  ref,
+  push,
+  set,
+  update,
+  remove,
+  get,
+  onValue,
+  query,
+  orderByChild,
+  equalTo,
   increment,
   serverTimestamp,
-  onSnapshot,
-  query,
-  orderBy,
-  where,
-  type Firestore,
-  type DocumentData,
-  type QuerySnapshot,
+  type Database,
+  type DataSnapshot,
   type Unsubscribe,
-} from 'firebase/firestore';
+} from 'firebase/database';
 import { getFirebaseApp, getCurrentFireUser, isFirebaseConfigured } from './firebase';
 import type { Thread, Reply } from '../types';
 
-/** Firestore shares the Firebase project config — no extra env vars. */
+/** Realtime Database shares the Firebase project config — no extra env vars. */
 export function isFirestoreAvailable(): boolean {
   return isFirebaseConfigured();
 }
 
-let db: Firestore | null = null;
+let db: Database | null = null;
 
-function getFireStore(): Firestore {
+function getDb(): Database {
   if (db) return db;
-  db = getFirestore(getFirebaseApp());
+  db = getDatabase(getFirebaseApp());
   return db;
 }
 
 /* ------------------------------------------------------------------ */
-/* Doc mapping (Firestore snake_case <-> types.ts)                     */
+/* Node mapping (RTDB values <-> types.ts)                             */
 /* ------------------------------------------------------------------ */
 
 function toIso(value: unknown): string {
+  if (typeof value === 'number') return new Date(value).toISOString();
   if (value && typeof value === 'object' && typeof (value as any).toDate === 'function') {
     return (value as any).toDate().toISOString();
   }
@@ -66,40 +66,50 @@ function toIso(value: unknown): string {
   return new Date().toISOString();
 }
 
-function mapThread(docData: DocumentData, id: string): Thread {
-  return {
-    id,
-    title: docData.title || '',
-    content: docData.content || '',
-    author_id: docData.author_id || '',
-    category: docData.category || 'General',
-    created_at: toIso(docData.created_at ?? docData.createdAt),
-    upvotes_count: docData.upvotes_count ?? docData.upvotesCount ?? 0,
-    replies_count: docData.replies_count ?? docData.repliesCount ?? 0,
-    author: {
-      id: docData.author_id || '',
-      username: docData.author_username || docData.author_display_name || 'Unknown',
-      avatar_url: docData.author_avatar_url || undefined,
-      created_at: '',
-    },
-  };
+function snapshotToThreads(snap: DataSnapshot): Thread[] {
+  const threads: Thread[] = [];
+  snap.forEach((child) => {
+    const v = child.val() || {};
+    threads.push({
+      id: child.key || '',
+      title: v.title || '',
+      content: v.content || '',
+      author_id: v.author_id || '',
+      category: v.category || 'General',
+      created_at: toIso(v.created_at),
+      upvotes_count: v.upvotes_count ?? 0,
+      replies_count: v.replies_count ?? 0,
+      author: {
+        id: v.author_id || '',
+        username: v.author_username || v.author_display_name || 'Unknown',
+        avatar_url: v.author_avatar_url || undefined,
+        created_at: '',
+      },
+    });
+  });
+  return threads;
 }
 
-function mapReply(docData: DocumentData, id: string): Reply {
-  return {
-    id,
-    thread_id: docData.thread_id || '',
-    content: docData.content || '',
-    author_id: docData.author_id || '',
-    created_at: toIso(docData.created_at ?? docData.createdAt),
-    upvotes_count: docData.upvotes_count ?? docData.upvotesCount ?? 0,
-    author: {
-      id: docData.author_id || '',
-      username: docData.author_username || docData.author_display_name || 'Unknown',
-      avatar_url: docData.author_avatar_url || undefined,
-      created_at: '',
-    },
-  };
+function snapshotToReplies(snap: DataSnapshot): Reply[] {
+  const replies: Reply[] = [];
+  snap.forEach((child) => {
+    const v = child.val() || {};
+    replies.push({
+      id: child.key || '',
+      thread_id: v.thread_id || '',
+      content: v.content || '',
+      author_id: v.author_id || '',
+      created_at: toIso(v.created_at),
+      upvotes_count: v.upvotes_count ?? 0,
+      author: {
+        id: v.author_id || '',
+        username: v.author_username || v.author_display_name || 'Unknown',
+        avatar_url: v.author_avatar_url || undefined,
+        created_at: '',
+      },
+    });
+  });
+  return replies;
 }
 
 /* ------------------------------------------------------------------ */
@@ -112,11 +122,11 @@ export async function syncProfileForCurrentUser(): Promise<void> {
   if (!isFirestoreAvailable() || !user) return;
   const username = user.displayName || (user.email ? user.email.split('@')[0] : 'unknown');
   try {
-    await setDoc(
-      doc(getFireStore(), 'profiles', user.uid),
-      { username, avatar_url: user.photoURL || null, created_at: serverTimestamp() },
-      { merge: true }
-    );
+    await update(ref(getDb(), `profiles/${user.uid}`), {
+      username,
+      avatar_url: user.photoURL || null,
+      created_at: serverTimestamp(),
+    });
   } catch {
     // Non-fatal — author data is denormalized onto threads/replies anyway.
   }
@@ -133,13 +143,12 @@ export async function createThread(input: {
 }): Promise<{ id: string | null; error: string | null }> {
   const user = getCurrentFireUser();
   if (!isFirestoreAvailable() || !user) {
-    return { id: null, error: 'Sign in to create a thread. Firestore requires a configured Firebase project.' };
+    return { id: null, error: 'Sign in to create a thread. Realtime Database requires a configured Firebase project.' };
   }
   const username = user.displayName || (user.email ? user.email.split('@')[0] : 'Unknown');
-  const db0 = getFireStore();
   try {
     await syncProfileForCurrentUser();
-    const ref = await addDoc(collection(db0, 'threads'), {
+    const childRef = await push(ref(getDb(), 'threads'), {
       title: input.title,
       content: input.content,
       category: input.category,
@@ -150,7 +159,7 @@ export async function createThread(input: {
       upvotes_count: 0,
       replies_count: 0,
     });
-    return { id: ref.id, error: null };
+    return { id: childRef.key, error: null };
   } catch (err: any) {
     return { id: null, error: err?.message || 'Failed to create thread.' };
   }
@@ -162,12 +171,11 @@ export async function createReply(
 ): Promise<{ id: string | null; error: string | null }> {
   const user = getCurrentFireUser();
   if (!isFirestoreAvailable() || !user) {
-    return { id: null, error: 'Sign in to reply. Firestore requires a configured Firebase project.' };
+    return { id: null, error: 'Sign in to reply. Realtime Database requires a configured Firebase project.' };
   }
   const username = user.displayName || (user.email ? user.email.split('@')[0] : 'Unknown');
-  const db0 = getFireStore();
   try {
-    const ref = await addDoc(collection(db0, 'replies'), {
+    const childRef = await push(ref(getDb(), 'replies'), {
       thread_id: threadId,
       content,
       author_id: user.uid,
@@ -176,15 +184,15 @@ export async function createReply(
       created_at: serverTimestamp(),
       upvotes_count: 0,
     });
-    await updateDoc(doc(db0, 'threads', threadId), { replies_count: increment(1) });
-    return { id: ref.id, error: null };
+    await update(ref(getDb(), `threads/${threadId}`), { replies_count: increment(1) });
+    return { id: childRef.key, error: null };
   } catch (err: any) {
     return { id: null, error: err?.message || 'Failed to post reply.' };
   }
 }
 
 /* ------------------------------------------------------------------ */
-/* Upvotes — deterministic doc id replaces the old 23505 dedupe         */
+/* Upvotes — deterministic doc id + atomic increment                    */
 /* ------------------------------------------------------------------ */
 
 export async function setUpvote(input: {
@@ -195,28 +203,28 @@ export async function setUpvote(input: {
   const tId = input.threadId || '';
   const rId = input.replyId || '';
   if (!isFirestoreAvailable() || !user) {
-    return { upvoted: false, error: 'Sign in to upvote. Firestore requires a configured Firebase project.' };
+    return { upvoted: false, error: 'Sign in to upvote. Realtime Database requires a configured Firebase project.' };
   }
   if (!tId && !rId) {
     return { upvoted: false, error: 'A thread or reply is required.' };
   }
-  const db0 = getFireStore();
-  const upRef = doc(db0, `upvotes/${user.uid}_${tId || 'thread'}_${rId || 'reply'}`);
-  const targetRef = tId ? doc(db0, 'threads', tId) : doc(db0, 'replies', rId);
+  const key = `${user.uid}_${tId || 'thread'}_${rId || 'reply'}`;
+  const upRef = ref(getDb(), `upvotes/${key}`);
+  const targetRef = ref(getDb(), tId ? `threads/${tId}` : `replies/${rId}`);
   try {
-    const existing = await getDoc(upRef);
+    const existing = await get(upRef);
     if (existing.exists()) {
-      await deleteDoc(upRef);
-      await updateDoc(targetRef, { upvotes_count: increment(-1) });
+      await remove(upRef);
+      await update(targetRef, { upvotes_count: increment(-1) });
       return { upvoted: false, error: null };
     }
-    await setDoc(upRef, {
+    await set(upRef, {
       user_id: user.uid,
       thread_id: tId || null,
       reply_id: rId || null,
       created_at: serverTimestamp(),
     });
-    await updateDoc(targetRef, { upvotes_count: increment(1) });
+    await update(targetRef, { upvotes_count: increment(1) });
     return { upvoted: true, error: null };
   } catch (err: any) {
     return { upvoted: false, error: err?.message || 'Failed to update vote.' };
@@ -232,9 +240,10 @@ export function subscribeThreads(cb: (threads: Thread[]) => void): Unsubscribe {
     cb([]);
     return () => {};
   }
-  const q = query(collection(getFireStore(), 'threads'), orderBy('created_at', 'desc'));
-  return onSnapshot(q, (snap) => {
-    cb(snap.docs.map((d) => mapThread(d.data(), d.id)));
+  return onValue(ref(getDb(), 'threads'), (snap) => {
+    const threads = snapshotToThreads(snap);
+    threads.sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
+    cb(threads);
   });
 }
 
@@ -243,13 +252,11 @@ export function subscribeReplies(threadId: string, cb: (replies: Reply[]) => voi
     cb([]);
     return () => {};
   }
-  const q = query(
-    collection(getFireStore(), 'replies'),
-    where('thread_id', '==', threadId),
-    orderBy('created_at', 'asc')
-  );
-  return onSnapshot(q, (snap) => {
-    cb(snap.docs.map((d) => mapReply(d.data(), d.id)));
+  const q = query(ref(getDb(), 'replies'), orderByChild('thread_id'), equalTo(threadId));
+  return onValue(q, (snap) => {
+    const replies = snapshotToReplies(snap);
+    replies.sort((a, b) => (a.created_at > b.created_at ? 1 : -1));
+    cb(replies);
   });
 }
 
@@ -267,39 +274,47 @@ export async function getMetrics(): Promise<Metrics> {
   if (!isFirestoreAvailable()) return { users: 0, threads: 0, replies: 0 };
   try {
     const [users, threads, replies] = await Promise.all([
-      getDocs(collection(getFireStore(), 'profiles')),
-      getDocs(collection(getFireStore(), 'threads')),
-      getDocs(collection(getFireStore(), 'replies')),
+      get(ref(getDb(), 'profiles')),
+      get(ref(getDb(), 'threads')),
+      get(ref(getDb(), 'replies')),
     ]);
-    return { users: users.size, threads: threads.size, replies: replies.size };
+    return {
+      users: users.size,
+      threads: threads.size,
+      replies: replies.size,
+    };
   } catch {
     return { users: 0, threads: 0, replies: 0 };
   }
 }
 
-/** Fires whenever a profiles/threads/replies doc changes (replaces postgres_changes). */
+/** Fires whenever a profiles/threads/replies node changes (replaces postgres_changes). */
 export function subscribeMetrics(cb: (m: Metrics) => void): Unsubscribe {
   if (!isFirestoreAvailable()) {
     cb({ users: 0, threads: 0, replies: 0 });
     return () => {};
   }
-  const db0 = getFireStore();
-  let threadSnap: QuerySnapshot | null = null;
-  let replySnap: QuerySnapshot | null = null;
-  let profileSnap: QuerySnapshot | null = null;
+  const d = getDb();
+  let threadSnap: DataSnapshot | null = null;
+  let replySnap: DataSnapshot | null = null;
+  let profileSnap: DataSnapshot | null = null;
   const push = () => {
     if (!threadSnap || !replySnap || !profileSnap) return;
-    cb({ threads: threadSnap.size, replies: replySnap.size, users: profileSnap.size });
+    cb({
+      threads: threadSnap.size,
+      replies: replySnap.size,
+      users: profileSnap.size,
+    });
   };
-  const unsubThreads = onSnapshot(collection(db0, 'threads'), (snap) => {
+  const unsubThreads = onValue(ref(d, 'threads'), (snap) => {
     threadSnap = snap;
     push();
   });
-  const unsubReplies = onSnapshot(collection(db0, 'replies'), (snap) => {
+  const unsubReplies = onValue(ref(d, 'replies'), (snap) => {
     replySnap = snap;
     push();
   });
-  const unsubProfiles = onSnapshot(collection(db0, 'profiles'), (snap) => {
+  const unsubProfiles = onValue(ref(d, 'profiles'), (snap) => {
     profileSnap = snap;
     push();
   });

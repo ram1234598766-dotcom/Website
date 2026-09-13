@@ -24,7 +24,7 @@ export default function AdminPanel() {
       });
     });
 
-    // Realtime counts via Firestore onSnapshot (replaces postgres_changes).
+    // Realtime counts via Firebase Realtime Database onValue (replaces postgres_changes).
     unsub = forum.subscribeMetrics((m) => {
       setMetrics({
         usersCount: m.users,

@@ -28,7 +28,7 @@ export default function PrivacyPolicy() {
             <p className="text-slate-400 leading-relaxed">
               Your code workspace and demo account are stored entirely in your browser (localStorage).
               When you connect a Firebase project, your data moves to <em>your own</em> Firebase
-              project, protected by that project's authentication and Firestore security rules. No data
+              project, protected by that project's authentication and Realtime Database security rules. No data
               is ever sent to a VantaOS-operated server.
             </p>
           </div>

@@ -1,0 +1,32 @@
+{
+  "rules": {
+    "profiles": {
+      "$uid": {
+        ".read": true,
+        ".write": "auth != null && $uid === auth.uid",
+        ".validate": "newData.hasChildren(['username']) && newData.child('username').isString() && newData.child('username').val().length > 0"
+      }
+    },
+    "threads": {
+      ".read": true,
+      "$id": {
+        ".write": "auth != null && (!data.exists() || newData.exists() ? true : data.child('author_id').val() === auth.uid)",
+        ".validate": "data.exists() == false ? (newData.hasChildren(['title','content','category','author_id','created_at']) && newData.child('author_id').val() === auth.uid && newData.child('title').isString() && newData.child('content').isString()) : (!newData.hasChild('title') && !newData.hasChild('content') && !newData.hasChild('category') && !newData.hasChild('author_id') && !newData.hasChild('created_at') && ((newData.hasChild('upvotes_count') && (newData.child('upvotes_count').val() === data.child('upvotes_count').val() + 1 || newData.child('upvotes_count').val() === data.child('upvotes_count').val() - 1)) || (newData.hasChild('replies_count') && newData.child('replies_count').val() === data.child('replies_count').val() + 1)))"
+      }
+    },
+    "replies": {
+      ".read": true,
+      "$id": {
+        ".write": "auth != null && (!data.exists() || newData.exists() ? true : data.child('author_id').val() === auth.uid)",
+        ".validate": "data.exists() == false ? (newData.hasChildren(['thread_id','content','author_id','created_at']) && newData.child('author_id').val() === auth.uid && newData.child('content').isString()) : !newData.hasChild('content') && !newData.hasChild('author_id')"
+      }
+    },
+    "upvotes": {
+      ".read": "auth != null",
+      "$id": {
+        ".write": "auth != null && (data.exists() == false || data.child('user_id').val() === auth.uid)",
+        ".validate": "newData.exists() == false ? true : newData.child('user_id').val() === auth.uid"
+      }
+    }
+  }
+}

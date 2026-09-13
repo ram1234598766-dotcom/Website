@@ -2,8 +2,8 @@
  * Unified auth client for VantaOS.
  *
  * AUTH (sign-in / sign-out): Firebase when configured (preferred), else the
- * localStorage demo auth. The Forum and Admin data tier lives in Cloud
- * Firestore (src/lib/firestore.ts).
+ * localStorage demo auth. The Forum and Admin data tier lives in the Firebase
+ * Realtime Database (src/lib/firestore.ts).
  *
  * The exported `client.auth.*` keeps the exact surface consumers already use:
  *   client.auth.getSession() / getUser() / onAuthStateChange() /

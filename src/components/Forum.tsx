@@ -47,9 +47,9 @@ const categories = ["All Topics", "General", "AI Research", "Announcements", "He
     return () => subscription.unsubscribe();
   }, []);
 
-  // Realtime data: Firestore onSnapshot replaces the old postgres_changes
-  // channels. Listening to the threads collection (or the replies collection
-  // while a thread is open) also picks up upvote/reply-count changes.
+  // Realtime data: Firebase Realtime Database onValue replaces the old
+  // postgres_changes channels. Listening to threads (or replies while a thread
+  // is open) also picks up upvote/reply-count changes.
   useEffect(() => {
     if (activeThread) {
       return forum.subscribeReplies(activeThread.id, setReplies);
@@ -170,7 +170,7 @@ const categories = ["All Topics", "General", "AI Research", "Announcements", "He
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-3xl font-extrabold tracking-tight text-white">Community Forum</h2>
-          <p className="text-slate-300 mt-1">Live, real-time discussions powered by Firebase Firestore.</p>
+          <p className="text-slate-300 mt-1">Live, real-time discussions powered by the Firebase Realtime Database.</p>
         </div>
         
         {session ? (
