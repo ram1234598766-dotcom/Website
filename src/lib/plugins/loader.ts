@@ -78,13 +78,28 @@ function base64UrlToBytes(input: string): Uint8Array {
 
 // ─── Worker source ───────────────────────────────────────────────────────────
 
-const WORKER_SOURCE = `
+const SANDBOX_GLOBALS = ['window', 'document', 'fetch', 'Function', 'eval', 'self', 'globalThis'];
+const BLOCKED_GLOBALS = SANDBOX_GLOBALS.map(() => undefined);
+
+export const WORKER_SOURCE = `
 'use strict';
+
+const SANDBOX_GLOBALS = ['window', 'document', 'fetch', 'Function', 'eval', 'self', 'globalThis'];
+const BLOCKED_GLOBALS = SANDBOX_GLOBALS.map(() => undefined);
 
 let capabilities = [];
 let initialized = false;
 let callId = 0;
 const callResolvers = new Map();
+
+function requireCap(capability) {
+  return capabilities.includes(capability);
+}
+
+function buildSandboxedFunction(script, api) {
+  const fn = new Function('api', 'requireCap', 'SANDBOX_GLOBALS', 'BLOCKED_GLOBALS', '"use strict";' + String.fromCharCode(10) + script);
+  return fn(api, requireCap, SANDBOX_GLOBALS, BLOCKED_GLOBALS);
+}
 
 self.onmessage = async function(e) {
   const msg = e.data;
@@ -100,9 +115,10 @@ self.onmessage = async function(e) {
       return;
     }
     try {
-      const fn = new Function('api', 'capabilities', msg.script);
       const api = buildApi(msg.id);
-      const result = await fn(api, capabilities);
+      const fn = buildSandboxedFunction(msg.script, api);
+      const result = await fn(api);
+      self.postMessage({ type: 'output', runId: msg.id, text: String(result ?? '') });
     } catch (err) {
       self.postMessage({ type: 'error', runId: msg.id, error: err?.message ?? String(err) });
     }
@@ -122,6 +138,9 @@ self.onmessage = async function(e) {
 function buildApi(runId) {
   const selfRef = self;
   function requestApi(capability, method, args) {
+    if (!requireCap(capability)) {
+      throw new Error('Capability required: ' + capability);
+    }
     return new Promise((resolve, reject) => {
       const cid = ++callId;
       callResolvers.set(cid, { resolve, reject });

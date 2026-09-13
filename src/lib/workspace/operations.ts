@@ -65,17 +65,17 @@ async function setNextSeq(value: number): Promise<void> {
 let _seqCounter = 0;
 
 export function initSeqCounter(startFrom: number): void {
-  _seqCounter = startFrom;
+  _seqCounter = Math.max(startFrom, _seqCounter);
 }
 
-function bumpSeq(): number {
+export function bumpSeq(): number {
   _seqCounter += 1;
   // Persist asynchronously — don't block the caller.
   setNextSeq(_seqCounter).catch(console.error);
   return _seqCounter;
 }
 
-function generateId(): string {
+export function generateId(): string {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) {
     return crypto.randomUUID();
   }
@@ -141,7 +141,7 @@ export async function bulkAppendOps(
     const tx = db.transaction(OPS_STORE, 'readwrite');
     const store = tx.objectStore(OPS_STORE);
     const seen = new Set<number>();
-    let nextSeq = 0;
+    let nextSeq = _seqCounter;
     for (const op of ops) {
       if (op.seq > 0 && !seen.has(op.seq)) {
         seen.add(op.seq);
@@ -153,7 +153,7 @@ export async function bulkAppendOps(
         seen.add(nextSeq);
       }
     }
-    tx.oncomplete = () => resolve();
+    tx.oncomplete = () => { _seqCounter = nextSeq; resolve(); };
     tx.onerror = () => reject(tx.error);
   });
 }
@@ -181,7 +181,7 @@ export async function loadOpsAfter(seq: number): Promise<readonly Operation[]> {
     const tx = db.transaction(OPS_STORE, 'readonly');
     const store = tx.objectStore(OPS_STORE);
     const index = store.index('by_seq');
-    const range = IDBKeyRange.lowerBound(seq + 1, false);
+    const range = IDBKeyRange.lowerBound(seq === 0 ? 0 : seq + 1, false);
     const req = index.getAll(range);
     req.onsuccess = () => resolve((req.result ?? []) as Operation[]);
     req.onerror = () => reject(req.error);
@@ -190,10 +190,12 @@ export async function loadOpsAfter(seq: number): Promise<readonly Operation[]> {
 
 /** Delete all operations (used during compaction). */
 export async function clearOps(): Promise<void> {
+  _seqCounter = 0;
   const db = await openDB();
   return new Promise((resolve, reject) => {
-    const tx = db.transaction(OPS_STORE, 'readwrite');
+    const tx = db.transaction([OPS_STORE, META_STORE], 'readwrite');
     tx.objectStore(OPS_STORE).clear();
+    tx.objectStore(META_STORE).put({ key: 'nextSeq', value: 0 });
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
   });

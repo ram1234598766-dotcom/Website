@@ -47,6 +47,28 @@ if (hasFirebase) {
 githubClient.captureGitHubGrantFromUrl();
 
 /* ------------------------------------------------------------------ */
+/* Input validation helpers                                            */
+/* ------------------------------------------------------------------ */
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function validateEmail(email: unknown): string | null {
+  if (typeof email !== 'string' || !EMAIL_RE.test(email)) {
+    return 'A valid email address is required.';
+  }
+  if (email.length > 254) return 'Email address is too long.';
+  return null;
+}
+
+function validatePassword(password: unknown): string | null {
+  if (typeof password !== 'string' || password.length < 6) {
+    return 'Password must be at least 6 characters.';
+  }
+  if (password.length > 128) return 'Password is too long.';
+  return null;
+}
+
+/* ------------------------------------------------------------------ */
 /* Local session types for the unified client                         */
 /* ------------------------------------------------------------------ */
 
@@ -160,6 +182,10 @@ function firebaseAuthValue(authProp: string) {
     }
     case 'signUp': {
       return async ({ email, password, options }: any) => {
+        const emailErr = validateEmail(email);
+        if (emailErr) return { data: null, error: { message: emailErr } };
+        const passErr = validatePassword(password);
+        if (passErr) return { data: null, error: { message: passErr } };
         try {
           const user = await signUpWithEmail(email, password, options?.data?.username);
           const { data } = await buildSessionResult(user);
@@ -174,6 +200,10 @@ function firebaseAuthValue(authProp: string) {
     }
     case 'signInWithPassword': {
       return async ({ email, password }: any) => {
+        const emailErr = validateEmail(email);
+        if (emailErr) return { data: null, error: { message: emailErr } };
+        const passErr = validatePassword(password);
+        if (passErr) return { data: null, error: { message: passErr } };
         try {
           const user = await signInWithEmail(email, password);
           const { data } = await buildSessionResult(user);
@@ -244,6 +274,8 @@ function firebaseAuthValue(authProp: string) {
         if (!email) {
           return { data: null, error: { message: 'An email address is required.' } };
         }
+        const emailErr = validateEmail(email);
+        if (emailErr) return { data: null, error: { message: emailErr } };
         try {
           await sendPasswordResetLink(email);
           return { data: {}, error: null };
@@ -271,6 +303,10 @@ function demoAuthValue(authProp: string) {
   switch (authProp) {
     case 'signUp': {
       return async ({ email, password, options }: any) => {
+        const emailErr = validateEmail(email);
+        if (emailErr) return { data: null, error: { message: emailErr } };
+        const passErr = validatePassword(password);
+        if (passErr) return { data: null, error: { message: passErr } };
         const demo = await getDemoAuth();
         const result = await demo.auth.signUp(email, password, options?.data?.username);
         return { data: result.error ? null : { user: { id: '' as string, email } }, error: result.error ? { message: result.error } : null };
@@ -278,6 +314,10 @@ function demoAuthValue(authProp: string) {
     }
     case 'signInWithPassword': {
       return async ({ email, password }: any) => {
+        const emailErr = validateEmail(email);
+        if (emailErr) return { data: null, error: { message: emailErr } };
+        const passErr = validatePassword(password);
+        if (passErr) return { data: null, error: { message: passErr } };
         const demo = await getDemoAuth();
         const result = await demo.auth.signInWithPassword(email, password);
         return { data: result.error ? null : { user: { id: '' as string, email } }, error: result.error ? { message: result.error } : null };
@@ -325,6 +365,8 @@ function demoAuthValue(authProp: string) {
     }
     case 'resetPasswordForEmail': {
       return async ({ email }: any) => {
+        const emailErr = validateEmail(email);
+        if (emailErr) return { data: null, error: { message: emailErr } };
         const demo = await getDemoAuth();
         const result = await demo.auth.resetPasswordForEmail(email);
         return { data: result.error ? null : {}, error: result.error ? { message: result.error } : null };

@@ -34,10 +34,12 @@ export function isGitHubGrantError(err: unknown): err is GitHubError {
   return err instanceof GitHubError;
 }
 
-/* ── Token holder (memory only — explicit by design) ─────────────────────── */
+/* ── Token holder (memory only — explicit by design) ─────────────── */
 
 let grant: string | null = null;
 let directToken: string | null = null;
+let directTokenTimestamp: number = 0;
+const DIRECT_TOKEN_EXPIRY_MS = 8 * 60 * 60 * 1000; // 8 hours
 let firebaseTokenGetter: (() => Promise<string | null>) | null = null;
 
 type GrantListener = (token: string | null) => void;
@@ -53,6 +55,7 @@ export function setFirebaseTokenGetter(
 export function __resetGitHubStateForTests(): void {
   grant = null;
   directToken = null;
+  directTokenTimestamp = 0;
   firebaseTokenGetter = null;
   grantListeners.clear();
 }
@@ -76,7 +79,13 @@ export function onGitHubGrantChange(listener: GrantListener): () => void {
 }
 
 function effectiveToken(): string | null {
-  return grant ?? directToken;
+  if (grant) return grant;
+  if (directToken && !isDirectTokenExpired()) return directToken;
+  if (directToken && isDirectTokenExpired()) {
+    // Token expired — clear it
+    setDirectToken(null);
+  }
+  return null;
 }
 
 function notifyListeners(): void {
@@ -97,7 +106,14 @@ function setGrant(value: string | null): void {
 
 function setDirectToken(value: string | null): void {
   directToken = value;
+  directTokenTimestamp = value ? Date.now() : 0;
   notifyListeners();
+}
+
+/** Check if the direct token has expired. */
+function isDirectTokenExpired(): boolean {
+  if (!directToken) return true;
+  return Date.now() - directTokenTimestamp > DIRECT_TOKEN_EXPIRY_MS;
 }
 
 /**
@@ -126,7 +142,7 @@ export function captureGitHubGrantFromUrl(): boolean {
   return true;
 }
 
-/* ── Server routes (same-origin Worker) ──────────────────────────────────── */
+/* ── Server routes (same-origin Worker) ──────────────────────────── */
 
 function apiBase(): string {
   // `GITHUB_API_ORIGIN` lets tests/advanced setups point at a Worker in dev.
@@ -171,6 +187,16 @@ export async function connectGitHubWithFirebase(firebaseToken: string): Promise<
     );
   }
   if (typeof window !== 'undefined') {
+    // Prevent URL/credentials from leaking as HTTP Referer to the OAuth provider.
+    // A <meta name="referrer" content="no-referrer"> tag in the HTML head is
+    // also strongly recommended. Strip any sensitive hash fragments before redirecting.
+    try {
+      if (window.location.hash) {
+        window.history.replaceState(null, '', window.location.pathname + window.location.search);
+      }
+    } catch {
+      // non-critical — redirect proceeds without hash stripping
+    }
     window.location.href = data.url;
   }
   return data.url;
@@ -225,8 +251,16 @@ export async function connectGitHubWithDirectToken(accessToken: string): Promise
   setDirectToken(accessToken);
 }
 
+/** Time remaining on the direct token in milliseconds, or 0 if none/expired. */
+export function directTokenRemainingMs(): number {
+  if (!directToken) return 0;
+  const remaining = Date.now() - directTokenTimestamp - DIRECT_TOKEN_EXPIRY_MS;
+  return Math.max(0, -remaining);
+}
+
 /** Revokes: drops the server-side KV entry (grants fail closed) and any
- *  tab-scoped direct token. */
+ *  tab-scoped direct token.
+ */
 export async function revokeGitHub(): Promise<void> {
   try {
     if (grant) await postJson('/api/gh/revoke', {}, grant);
@@ -236,7 +270,7 @@ export async function revokeGitHub(): Promise<void> {
   }
 }
 
-/* ── Proxied / direct GitHub API ────────────────────────────────────────── */
+/* ── Proxied / direct GitHub API ────────────────────────────────── */
 
 async function ensureAuth(): Promise<{ kind: 'grant' | 'direct'; value: string }> {
   if (grant) return { kind: 'grant', value: grant };
@@ -355,7 +389,7 @@ export async function fetchGitHub(
   return parseGitHubResponse(res);
 }
 
-/* ── High-level GitHub operations (unchanged surface) ────────────────────── */
+/* ── High-level GitHub operations (unchanged surface) ────────────── */
 
 export async function getUserRepos() {
   return fetchGitHub('/user/repos?sort=updated&per_page=100');

@@ -133,7 +133,7 @@ export default function CloudOS() {
     window.dispatchEvent(new CustomEvent("terminal-send", { detail: "js " + code }));
   };
 
-  const handleRun = () => {
+  const handleRun = useCallback(() => {
     setIsTerminalOpen(true);
     // The terminal is mounted on demand — wait for it to signal it is ready
     // before sending the command so a run is never silently dropped.
@@ -146,7 +146,7 @@ export default function CloudOS() {
       };
       window.addEventListener('terminal-ready', onReady);
     }
-  };
+  }, [])
 
   const [dirtyTabs, setDirtyTabs] = useState<string[]>([]);
   const [splitMode, setSplitMode] = useState<'none' | 'side-by-side' | 'stacked'>('none');
@@ -411,7 +411,7 @@ export default function CloudOS() {
 
     const contentSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  const handleEditorChange = (value: string | undefined, isSecondary: boolean = false) => {
+  const handleEditorChange = useCallback((value: string | undefined, isSecondary: boolean = false) => {
     const fileId = isSecondary ? secondaryActiveFileId : activeFileId;
     if (value !== undefined && fileId) {
       setFiles(prev => prev.map(f => f.id === fileId ? { ...f, content: value } : f));
@@ -426,13 +426,13 @@ export default function CloudOS() {
         ws.updateContent(fileId, value).catch(console.error);
       }, 800);
     }
-  };
+  }, [activeFileId, secondaryActiveFileId, ws])
 
-  const detectLanguage = (filename: string) => {
+  const detectLanguage = useCallback((filename: string) => {
     const ext = filename.split('.').pop()?.toLowerCase();
     const lang = LANGUAGES.find(l => l.ext === ext);
     return lang ? lang.id : 'plaintext';
-  };
+  }, [])
 
   const getDescendantIds = (folderId: string, allFiles: FileNode[]): string[] => {
     const children = allFiles.filter(f => (f.parentId || null) === folderId);
@@ -445,7 +445,7 @@ export default function CloudOS() {
     return ids;
   };
 
-  const handleCreateFile = async (e: React.FormEvent) => {
+  const handleCreateFile = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newFileName.trim()) return;
     
@@ -466,9 +466,9 @@ export default function CloudOS() {
     setIsCreating(false);
     setCreatingParentId(null);
     setNewFileName('');
-  };
+  }, [newFileName, creatingParentId, setCreatingType, setCreatingParentId, setNewFileName, setIsCreating, setActiveFileId, setOpenTabs])
 
-  const handleCreateFolder = async (e: React.FormEvent) => {
+  const handleCreateFolder = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newFileName.trim()) return;
 
@@ -488,9 +488,9 @@ export default function CloudOS() {
     setIsCreating(false);
     setCreatingParentId(null);
     setNewFileName('');
-  };
+  }, [newFileName, creatingParentId, setCreatingType, setCreatingParentId, setNewFileName, setIsCreating])
 
-  const handleDeleteFile = async (id: string, e: React.SyntheticEvent) => {
+  const handleDeleteFile = useCallback(async (id: string, e: React.SyntheticEvent) => {
     e.stopPropagation();
     const item = files.find(f => f.id === id);
     if (!item) return;
@@ -526,9 +526,9 @@ export default function CloudOS() {
         setActiveFileId(remainingFile.id);
       }
     }
-  };
+  }, [files, activeFileId, secondaryActiveFileId, setActiveFileId, setOpenTabs])
 
-  const handleRenameSubmit = async (id: string, e: React.FormEvent) => {
+  const handleRenameSubmit = useCallback(async (id: string, e: React.FormEvent) => {
     e.preventDefault();
     if (!renameValue.trim()) {
       setRenamingFileId(null);
@@ -541,13 +541,13 @@ export default function CloudOS() {
       language: f.isFolder ? 'folder' : detectLanguage(renameValue) 
     } : f));
     setRenamingFileId(null);
-  };
+  }, [renameValue, ws])
 
-  const handleMoveNode = async (nodeId: string, destParentId: string | null) => {
+  const handleMoveNode = useCallback(async (nodeId: string, destParentId: string | null) => {
     await ws.moveNode(nodeId, destParentId);
     setFiles(prev => prev.map(f => f.id === nodeId ? { ...f, parentId: destParentId } : f));
     setMovingFileId(null);
-  };
+  }, [ws])
 
   
     const handleFormat = async () => {
@@ -570,7 +570,7 @@ export default function CloudOS() {
   };
 
   
-  const handleExportProject = async () => {
+  const handleExportProject = useCallback(async () => {
     setIsExporting(true);
     // JSZip is lazy-loaded so the ~100KB library is only fetched on export.
     const JSZip = (await import('jszip')).default;
@@ -605,9 +605,9 @@ export default function CloudOS() {
         setIsExporting(false);
       }, 1000);
     }
-  };
+  }, [files])
 
-  const getFileIcon = (lang: string) => {
+  const getFileIcon = useCallback((lang: string) => {
     switch (lang) {
       case 'javascript': return <FileJson className="w-4 h-4 opacity-70 shrink-0 text-yellow-400" />;
       case 'html': return <FileCode2 className="w-4 h-4 opacity-70 shrink-0 text-orange-400" />;
@@ -619,7 +619,7 @@ export default function CloudOS() {
       case 'rust': return <Code2 className="w-4 h-4 opacity-70 shrink-0 text-orange-500" />;
       default: return <FileType className="w-4 h-4 opacity-70 shrink-0 text-slate-400" />;
     }
-  };
+  }, [])
 
   const visibleNodes = useMemo(() => {
     const list: (FileNode & { depth: number; isPlaceholder?: boolean })[] = [];

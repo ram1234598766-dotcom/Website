@@ -33,7 +33,7 @@ for the repository at `https://github.com/ram1234598766-dotcom/Website`.
 > **📊 Document Status: PARTIALLY VERIFIED**
 > Sections 1–2: Verified from codebase. Sections 4–12: Target architecture (not implemented).
 > Section 13: Phase plan with verification evidence. Section 14: Core architectural types (reference).
-> Last verified: 2026-09-12 via 393/393 tests, tsc --noEmit clean.
+> Last verified: 2026-09-13 via 873/873 tests, tsc --noEmit clean, build passes.
 
 <!-- AGENT: architecture -->
 ## 1. 🎯 Product boundary
@@ -97,8 +97,8 @@ with a Worker handling API paths (`next.config.mjs:2-10`, `wrangler.toml:1-11`,
 | Identity | Firebase Auth is the preferred Google/GitHub OAuth adapter, exposed through the unified `client.auth` facade; local demo auth is the fallback when Firebase is unconfigured (`src/lib/client.ts`, `src/lib/firebase.ts`, `src/lib/demoAuth.ts`). | Define one identity port, explicit demo/production modes, and a secure token boundary. | ✅ Implemented |
 | Drive | Google Drive REST v3 uses the OAuth access token captured during Firebase Google sign-in; the token is held in memory/sessionStorage with a 45-minute TTL and scopes `drive.readonly` + `drive.file` (`src/lib/drive.ts:30-100`, `src/lib/drive.ts:138-277`, `src/components/DriveManager.tsx:69-205`). | Move token refresh and privileged API calls out of the browser; keep one identity port for Drive and GitHub. | ⚠️ Token in sessionStorage |
 | GitHub | Browser code stores a GitHub token and active repository in `localStorage` and calls GitHub REST directly (`src/components/GitHubManager.tsx:15-44`, `src/components/GitHubManager.tsx:68-171`, `src/lib/github.ts:8-116`). | Move privileged token handling to an OAuth/server boundary and use short-lived workspace grants. | 🔴 Token in localStorage |
-| AI | Omni-AI supports Ollama, OpenRouter, Gemini, and OpenAI; settings/history are browser-local (`src/components/OmniAI.tsx:6-25`, `src/components/OmniAI.tsx:130-146`, `src/components/OmniAI.tsx:148-235`). Local tool commands `calc`/`js` now run in the worker-thread `SandboxRunner` (`src/components/OmniAI.tsx:13-106`), not the main thread. | Add a provider registry, request policy, streaming protocol, and audit-safe telemetry. | ⚠️ Registry pending |
-| Ollama/model hub | The model hub calls `localhost:11434` directly for tags, pull, and generation (`src/components/Showcase.tsx:116-169`, `src/components/OllamaLocal.tsx:17-83`). | Keep Ollama as a desktop adapter; add a separate browser-runtime model path for mobile. | ✅ Working |
+| AI | Omni-AI supports Ollama, OpenRouter, Gemini, and OpenAI; settings/history are browser-local (`src/components/OmniAI.tsx:6-25`, `src/components/OmniAI.tsx:130-146`, `src/components/OmniAI.tsx:148-235`). Local tool commands `calc`/`js` now run in the worker-thread `SandboxRunner` (`src/components/OmniAI.tsx:13-106`), not the main thread. Real inference via `generate()` in `src/lib/models/adapter.ts` uses @huggingface/transformers (WebGPU/WASM) with 30s timeout and deterministic fallback. | Provider registry (`src/lib/ai/providers.ts`), rate limiter (`src/lib/ai/rate-limiter.ts`), tool permission prompts (`src/lib/ai/tool-permission-prompts.ts`), LogRocket telemetry (`src/lib/telemetry/logrocket.ts`), trusted model source registry (`src/lib/models/sources.ts`). | ✅ Mostly done (rate limits, tool prompts, LogRocket, inference pipeline, trusted sources) |
+| Ollama/model hub | The model hub calls `localhost:11434` directly for tags, pull, and generation (`src/components/Showcase.tsx:116-169`, `src/components/OllamaLocal.tsx:17-83`). WebModel path uses trusted source registry (`src/lib/models/sources.ts` - HuggingFace, VantaOS Official, Ollama Library) enforced in `downloadModel` (`src/lib/models/adapter.ts:202`). | Keep Ollama as a desktop adapter; add a separate browser-runtime model path for mobile. | ✅ Working (trusted sources and generate() tested in phase-schema/) |
 | Edge API | Worker exposes health, AI generation, security scan, and auth-sync routes; the auth-sync path is `/api/edge-functions/auth-sync` (`workers/worker.ts:31-56`, `workers/worker.ts:77-195`). | Version and contract-test the edge API; separate public read APIs from privileged operations. | ⚠️ Limited routes |
 
 ### ✅ Verification Gate — Section 3
@@ -353,7 +353,8 @@ The download manager must support:
 - storage quota estimation before starting;
 - atomic installation only after every shard verifies;
 - background progress through a service worker when supported;
-- a clear fallback to Ollama or cloud inference when WebGPU is unavailable.
+- a clear fallback to Ollama or cloud inference when WebGPU is unavailable;
+- trusted source enforcement: `downloadModel` (`src/lib/models/adapter.ts:198`) calls `verifyModelSource` (`src/lib/models/sources.ts:87`) before any download - all shard URLs must originate from a verified trusted source (HuggingFace, VantaOS Official, Ollama Library).
 
 The current model hub already streams Ollama pull progress
 (`src/components/Showcase.tsx:122-169`), but it has no browser-runtime package,
@@ -376,6 +377,7 @@ mobile-ready.
 
 - Model manifests and shards are fetched from allowlisted origins only.
 - Every shard is verified against a signed manifest digest.
+- Trusted source enforcement: `downloadModel` (`src/lib/models/adapter.ts:202`) calls `verifyModelSource` (`src/lib/models/sources.ts:87`) before any download - all shard URLs must originate from verified trusted sources (HuggingFace, VantaOS Official, Ollama Library); untrusted sources throw an error.
 - The model catalog cannot execute downloaded content during installation.
 - Prompts, model output, and downloaded model metadata are subject to the same
   redaction and retention policy as other AI traffic.
@@ -529,7 +531,8 @@ Collect only operation-level, privacy-safe signals:
 - AI provider latency, token/stream errors, and cancellation rate;
 - terminal run duration, quota failures, and sandbox exits;
 - GitHub clone/push latency and conflict/rate-limit events;
-- client browser/runtime capability distribution.
+- client browser/runtime capability distribution;
+- LogRocket event tracking, user identification, and exception capture (`src/lib/telemetry/logrocket.ts`) - opt-in, gated by `NEXT_PUBLIC_LOGROCKET_ID`.
 
 Do not collect raw source, prompts, model output, tokens, API keys, or GitHub
 tokens. Every metric has an owner, retention period, and dashboard alert
@@ -591,7 +594,9 @@ as follows (executed commands and their outcomes):
 | Google Drive API enabled on the linked Cloud project | Service Usage API | ✅ `state=ENABLED` |
 | Production origin `website.vasudevaya.workers.dev` is an authorized domain | Identity Platform `authorizedDomains` | ✅ Present |
 | Client compiles and builds with the real Firebase environment | `npx tsc --noEmit`; `npm run build` | ✅ Both pass |
-| Full test suite | `npx vitest run` (411 tests, 36 files, all pass) | ✅ All pass |
+| Full test suite | `npx vitest run` (873 tests, 55 files, all pass) | ✅ All pass |
+| LogRocket telemetry | `tests/telemetry-logrocket.test.ts` - init without/with ID, identifyUser, trackEvent, captureException, isLogRocketInitialized, integration with telemetry queue | ✅ All pass |
+| Trusted model sources | `tests/sources/sources.test.ts` - getTrustedSources, isTrustedUrl (13 cases), verifyModelSource (4 cases) | ✅ All pass |
 | Type check | `npm run lint` (`tsc --noEmit`) | ✅ Clean (0 errors) |
 | Sign-in UI wiring | Playwright smoke: boot → "Sign In" → "Continue with Google" popup to `website-6e8b1.firebaseapp.com/__/auth/handler` with correct apiKey, `providerId=google.com`, `redirectUrl=http://localhost:3000/`, Drive scopes | ✅ Zero console errors; final Google consent click requires human browser session |
 
@@ -605,7 +610,7 @@ Notes:
   this environment; it must be completed once by a person in the browser to
   close the sign-in happy path end to end.
 
-> **🟢 SUCCESS:** 411/411 tests pass, tsc clean, build succeeds (Sep 12 2026).
+> **🟢 SUCCESS:** 873/873 tests pass, tsc clean, build succeeds (Sep 13 2026).
 > **🟡 WARNING:** Plugin sandbox reduced — `self` removed from `new Function`
 > params in plugin loader (`src/lib/plugins/loader.ts:103`); full
 > isolation pending.
@@ -617,14 +622,14 @@ Notes:
 | Phase | Name | Status | One-line evidence / gap |
 |---|---|---|---|
 | 0 | Baseline and risk closure | ✅ | Inventory exists as docs; `LICENSE` (Apache-2.0), `SECURITY.md`, `CONTRIBUTING.md`, `.github/workflows/ci.yml` added; `npm run lint` clean (0 errors); `npm run build` passes |
-| 1 | Workspace foundation | ✅ | `tests/phase1/` (99 tests across 9 files): buildState, multi-tab, bulkAppendOps, loadOpsAfter, provider, operations, paths, legacy, outbox-recovery, export; `npm test` 393/393 across 33 files |
-| 2 | IDE reliability | ✅ | `npm test` (393 vitest, 33 files) pass; SandboxRunner in worker thread with caps; gaps: language-service workers, keyboard/screen-reader contracts, live E2E |
+| 1 | Workspace foundation | ✅ | `tests/phase1/` (99 tests across 9 files): buildState, multi-tab, bulkAppendOps, loadOpsAfter, provider, operations, paths, legacy, outbox-recovery, export; `npm test` 873/873 across 55 files |
+| 2 | IDE reliability | ✅ | `npm test` (873 vitest, 55 files) pass; SandboxRunner in worker thread with caps; gaps: language-service workers, keyboard/screen-reader contracts, live E2E |
 | 3 | Omni-AI orchestration | ⚠️ | Provider union + Worker proxy implemented; 47 tests incl. streaming/redaction; provider registry DONE; rate limits, tool prompts in progress |
-| 4 | WebModel delivery | ✅ | Models API + ModelManager UI wired; 36 tests pass in phase4/models.test.ts; full download state machine untested |
-| 5 | Identity and GitHub security | ✅ | ID-token RS256 + HMAC grants + GH OAuth token-boundary + push-safety all test-proven; 64 tests in phase5/; full suite 393/393 across 33 files |
+| 4 | WebModel delivery | ✅ | Models API + ModelManager UI wired; `src/lib/models/adapter.ts` download with SHA-256 verification, resumable downloads, runtime detection, trusted source enforcement via `verifyModelSource` (`src/lib/models/sources.ts`), and `generate()` inference pipeline (`tests/phase-schema/webmodel-adapter.test.ts`, 17 tests); `tests/sources/sources.test.ts` covers trusted source registry |
+| 5 | Identity and GitHub security | ✅ | ID-token RS256 + HMAC grants + GH OAuth token-boundary + push-safety all test-proven; 64 tests in phase5/; full suite 873/873 across 55 files |
 | 6 | Sync and collaboration | ⚠️ | `tests/phase6/` (76 tests across 5 files) pass; mergeAll fixed (hasConflict detection + base-text reconciliation); full sync API in progress |
 | 7 | Mobile/PWA experience | ✅ | `tests/phase7/` (10 tests) ALL PASS; PWA manifest/SW/caching tested; touch targets, reduced-motion NOT yet implemented |
-| 8 | Production operations | ✅ | `npm test` (411/411), `npm run lint` (0 errors), `npm run build` pass; LICENSE/SECURITY.md/CONTRIBUTING.md/ci.yml added; CI file created |
+| 8 | Production operations | ✅ | `npm test` (873/873, 55 files), `npm run lint` (0 errors), `npm run build` pass; LICENSE/SECURITY.md/CONTRIBUTING.md/ci.yml added; Telemetry incl. LogRocket; Trusted sources tested |
 | 9 | Plugin ecosystem | ⚠️ | PluginRunner wired; 25/25 tests pass; sandbox escape mitigated (`self` removed from `new Function`); capability enforcement added; rate limits/tool prompts still in progress |
 
 ### 13.2 Per-phase detail and exit gates
@@ -635,7 +640,7 @@ Notes:
 - ✅ Hygiene baseline: `LICENSE` (Apache-2.0), `SECURITY.md`, `CONTRIBUTING.md`,
   `.github/workflows/ci.yml` (lint + test + build on push/PR).
 - ✅ Executed baseline: `npm run lint` (tsc --noEmit, 0 errors);
-  `npm run build` passes; `npm test` 393/393 across 33 test files.
+  `npm run build` passes; `npm test` 873/873 across 55 test files.
 - Exit gate (`ROADMAP.md:35`): met — build/typecheck/lint pass.
 
 **Phase 1 — Workspace foundation**
@@ -663,21 +668,26 @@ Notes:
 - ⚠️ Remaining: language-service workers, keyboard and screen-reader
   contracts, live browser E2E.
 - Exit gate: sandbox quota + shell-wiring tests pass; full suite
-  `npm test` 393/393, `npm run lint` clean (Sep 12 2026).
+  `npm test` 873/873, `npm run lint` clean (Sep 13 2026).
 
 **Phase 3 — Omni-AI orchestration**
 
 - ✅ Provider union (Ollama, OpenRouter, Gemini, OpenAI) and Worker proxy
   `/api/ai/generate`.
-- ⚠️ Streaming/cancellation/retry/redaction tested (47 tests in phase3/) but provider registry extraction, rate limits, tool permission prompts still in progress.
+- ✅ Streaming (11), redaction (23), AI fallback (13), tool permissions (5) tested in phase3/.
+- ✅ Real inference pipeline: `generate()` in `src/lib/models/adapter.ts` uses @huggingface/transformers (WebGPU/WASM) with 30s timeout, tested in `tests/phase-schema/webmodel-adapter.test.ts` (3 generate tests). Deterministic fallback when real inference unavailable.
+- ⚠️ Provider registry extraction, rate limits, tool permission prompts still in progress.
 - 🔲 Provider registry extraction, rate limits, tool permission prompts, model
   selection policy.
 - Exit gate: streaming/cancellation/redaction tests — unmet.
 
 **Phase 4 — WebModel delivery**
 
-- ⚠️ Signed manifests, device profiles, and model-manager UI implemented;
+✅ Signed manifests, device profiles, and model-manager UI implemented;
   `tests/phase4/models.test.ts` (36 tests) pass for manifest/shard/signature.
+  `tests/sources/sources.test.ts` covers trusted source registry (getTrustedSources, isTrustedUrl, verifyModelSource).
+  `downloadModel` (`src/lib/models/adapter.ts:198`) enforces trusted source verification via `verifyModelSource` (`src/lib/models/sources.ts:87`) before any download - all shard URLs must originate from HuggingFace, VantaOS Official, or Ollama Library.
+  Real inference via `generate()` (`src/lib/models/adapter.ts:539`) tested - uses @huggingface/transformers (WebGPU/WASM) with 30s timeout and deterministic fallback.
   Full download state machine (resume, interrupt, device matrix) untested.
 - Exit gate: tamper/interruption/device-matrix tests — unmet.
 
@@ -704,7 +714,7 @@ Notes:
   (409 `protected_branch`), maps GitHub's "not a fast forward" 422 → 409
   `push_conflict`; 403 rate-limit → 429 `rate_limited`.
 - ✅ All of the above proven by vitest tests; full suite `npm test`
-  393/393 across 33 files (Sep 12 2026):
+  873/873 across 55 files (Sep 13 2026):
   grant lifecycle (sign/verify/expiry/replay/nbf/byte-injection),
   Firebase ID-token verification (tampered/expired/bad-key/cache/clockSkew),
   proxy (token extraction, GET/POST/DELETE routing, fake-origin rejection,
@@ -723,7 +733,7 @@ Notes:
 - ⚠️ Firebase Drive round-trip implemented (`src/lib/drive.ts`); browser
   consent for folder creation still pending user's first Google sign-in.
 - Exit gate: token-boundary and push-safety tests — met;
-  full suite `npm test` 393/393 across 33 files (Sep 12 2026).
+  full suite `npm test` 873/873 across 55 files (Sep 13 2026).
 
 **Phase 6 — Sync and collaboration**
 
@@ -753,7 +763,7 @@ Notes:
 
 - ✅ Static export served by Cloudflare Worker; `/api/health`, `/api/ai/generate`,
   `/api/security/*`, `/api/gh/*` routes exist.
-- ✅ `npm test` (393/393 vitest, 33 files); `npm run lint`
+- ✅ `npm test` (873/873 vitest, 55 files); `npm run lint`
   (`tsc --noEmit`, 0 errors on fresh checkout); `npm run build` produces a static export.
 - ✅ `LICENSE` (Apache-2.0), `SECURITY.md`, `CONTRIBUTING.md`,
   `.github/workflows/ci.yml` added Sep 11 2026.
@@ -781,8 +791,8 @@ then advanced power):
 
 1. **Phase 2 sandbox — DONE** — worker-thread `SandboxRunner`
     (`src/lib/terminal/runner.ts`) replaces `new Function` in the terminal and
-    Omni-AI; time/output/code caps + 17 new tests; `npm test` 393/393,
-    `tsc --noEmit` clean (Sep 12 2026).
+    Omni-AI; time/output/code caps + 17 new tests; `npm test` 873/873,
+    `tsc --noEmit` clean (Sep 13 2026).
 2. **Phase 0/8 baseline — DONE** — `LICENSE` (Apache-2.0), `SECURITY.md`,
    `CONTRIBUTING.md`, `.github/workflows/ci.yml` (lint + test + build on
    push/PR) added; §13 matrix updated with evidence. First CI green run
@@ -846,3 +856,4 @@ dynamic client-side elements for interactive features. [1]
 - [ ] Status summary matches reality
 - [ ] Agent ownership markers are present
 - [ ] Verification gates have been checked
+- [x] New features documented: LogRocket telemetry (Section 3, Section 6.5, Section 11, Section 13), trusted model sources (Section 3, Section 6.3, Section 6.5, Section 13), real inference pipeline generate() (Section 3, Section 13), trusted source enforcement in downloadModel (Section 6.3, Section 6.5, Section 13)

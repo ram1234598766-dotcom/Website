@@ -6,22 +6,20 @@
  * applying operations.
  */
 
-import type { Operation } from './types';
-import { loadOps } from './operations';
+import type { Operation, WorkspaceNode } from './types';
+import { loadOps, replaceOps } from './operations';
+import { CURRENT_SCHEMA_VERSION } from './migrations';
 
-// ─── Types ───────────────────────────────────────────────────────────────────
+// ─── Types ───────────────────────────────────────────────────────────────
 
 export interface WorkspaceExport {
-  /** Format version for the export envelope. */
-  readonly formatVersion: 1;
-  /** ISO-8601 timestamp of the export. */
-  readonly exportedAt: string;
-  /** SHA-256 hex digest of the serialized operations array. */
-  readonly opsDigest: string;
-  /** The operations that define the workspace. */
-  readonly ops: readonly Operation[];
-  /** User-supplied metadata (workspace name, description, etc.). */
-  readonly meta?: Record<string, unknown>;
+  readonly format: 'manifest';
+  readonly timestamp: string;
+  readonly schemaVersion: number;
+  readonly nodeTree: WorkspaceNode[];
+  readonly operationCount: number;
+  readonly contentHashes: string[];
+  readonly checksum: string;
 }
 
 export interface IntegrityCheck {
@@ -29,7 +27,13 @@ export interface IntegrityCheck {
   readonly error?: string;
 }
 
-// ─── SHA-256 Helper ─────────────────────────────────────────────────────────
+export interface ImportResult {
+  readonly imported: boolean;
+  readonly nodeCount: number;
+  readonly checksum: string;
+}
+
+// ─── SHA-256 Helper ──────────────────────────────────────────────────────
 
 async function sha256hex(data: string): Promise<string> {
   const encoder = new TextEncoder();
@@ -39,92 +43,145 @@ async function sha256hex(data: string): Promise<string> {
     .join('');
 }
 
-// ─── Export ──────────────────────────────────────────────────────────────────
+// ─── Node Tree Builder ───────────────────────────────────────────────────
 
-/**
- * Export the current workspace operations as a bundle.
- * Computes SHA-256 over the serialized ops array for integrity.
- */
-export async function exportWorkspace(
-  meta?: Record<string, unknown>
-): Promise<WorkspaceExport> {
-  const ops = await loadOps();
-  const opsJson = JSON.stringify(ops);
-  const digest = await sha256hex(opsJson);
-
-  return {
-    formatVersion: 1,
-    exportedAt: new Date().toISOString(),
-    opsDigest: digest,
-    ops,
-    meta,
-  };
+function buildNodeTree(ops: readonly Operation[]): { nodes: WorkspaceNode[]; contentHashes: string[] } {
+  const nodes: WorkspaceNode[] = [];
+  const contentHashes: string[] = [];
+  for (const op of ops) {
+    if (op.kind !== 'create_node') continue;
+    const p = op.payload as Record<string, unknown>;
+    const content = typeof p.content === 'string' ? p.content : '';
+    const language = typeof p.language === 'string' ? p.language : 'unknown';
+    const name = typeof p.name === 'string' ? p.name : '';
+    const isFolder = name.endsWith('/') || name === '' || language === 'folder';
+    const node: WorkspaceNode = {
+      id: typeof p.id === 'string' ? p.id : String(op.id),
+      kind: isFolder ? 'folder' : 'file',
+      path: typeof p.path === 'string' ? p.path : '',
+      name,
+      parentId: typeof p.parentId === 'string' ? p.parentId : null,
+      contentHash: '',
+      language,
+      createdAt: typeof p.createdAt === 'number' ? p.createdAt : op.timestamp,
+      updatedAt: typeof p.updatedAt === 'number' ? p.updatedAt : op.timestamp,
+    };
+    contentHashes.push(node.contentHash);
+    nodes.push(node);
+  }
+  return { nodes, contentHashes };
 }
 
-/**
- * Verify the integrity of a WorkspaceExport.
- * Recomputes SHA-256 over the ops array and compares to the stored digest.
- */
-export async function verifyExport(
-  exported: WorkspaceExport
-): Promise<IntegrityCheck> {
-  if (exported.formatVersion !== 1) {
-    return { valid: false, error: `unsupported format version: ${exported.formatVersion}` };
-  }
-  if (!Array.isArray(exported.ops)) {
-    return { valid: false, error: 'ops is not an array' };
+// ─── Public API ──────────────────────────────────────────────────────────
+
+export async function generateIntegrityChecksum(ops: readonly Operation[]): Promise<string> {
+  return sha256hex(JSON.stringify(ops));
+}
+
+export async function exportWorkspace(
+  meta?: Record<string, unknown>
+): Promise<string> {
+  const ops = await loadOps();
+  const { nodes, contentHashes } = buildNodeTree(ops);
+
+  const payload = {
+    format: 'manifest' as const,
+    timestamp: new Date().toISOString(),
+    schemaVersion: CURRENT_SCHEMA_VERSION,
+    nodeTree: nodes,
+    operationCount: ops.length,
+    contentHashes,
+  };
+  const checksum = await sha256hex(JSON.stringify(payload));
+
+  const manifest: WorkspaceExport = { ...payload, checksum };
+
+  return JSON.stringify(manifest);
+}
+
+export async function verifyManifest(manifestStr: string): Promise<IntegrityCheck> {
+  let manifest: WorkspaceExport;
+  try {
+    manifest = JSON.parse(manifestStr);
+  } catch {
+    return { valid: false, error: 'invalid JSON' };
   }
 
-  const opsJson = JSON.stringify(exported.ops);
-  const computed = await sha256hex(opsJson);
+  if (typeof manifest.checksum !== 'string' || manifest.checksum.length !== 64) {
+    return { valid: false, error: 'missing or invalid checksum' };
+  }
 
-  if (computed !== exported.opsDigest) {
-    return {
-      valid: false,
-      error: `digest mismatch: expected ${exported.opsDigest}, got ${computed}`,
-    };
+  const { checksum, ...payload } = manifest;
+  const computed = await sha256hex(JSON.stringify(payload));
+
+  if (computed !== checksum) {
+    return { valid: false, error: 'checksum mismatch' };
   }
 
   return { valid: true };
 }
 
-// ─── Import ──────────────────────────────────────────────────────────────────
-
-export interface ImportResult {
-  readonly success: boolean;
-  readonly opsImported: number;
-  readonly error?: string;
+export async function verifyExport(exported: WorkspaceExport): Promise<IntegrityCheck> {
+  let manifest: Record<string, unknown>;
+  try {
+    manifest = JSON.parse(typeof exported === 'string' ? exported : JSON.stringify(exported));
+  } catch {
+    return { valid: false, error: 'invalid JSON' };
+  }
+  if (manifest.format !== 'manifest' && manifest.formatVersion !== 1) {
+    return { valid: false, error: 'unsupported format version' };
+  }
+  const ops = manifest.ops;
+  if (!Array.isArray(ops)) {
+    return { valid: false, error: 'ops is not an array' };
+  }
+  if (typeof manifest.opsDigest !== 'string' || manifest.opsDigest.length !== 64) {
+    return { valid: false, error: 'missing or invalid checksum' };
+  }
+  const { opsDigest, ...payload } = manifest;
+  const computed = await sha256hex(JSON.stringify(ops));
+  if (computed !== opsDigest) {
+    return { valid: false, error: `digest mismatch: expected ${opsDigest}, got ${computed}` };
+  }
+  return { valid: true };
 }
 
-/**
- * Import a workspace from a verified export bundle.
- * Replaces the current oplog with the imported operations.
- * Caller should verify integrity before calling this.
- */
-export async function importWorkspace(
-  exported: WorkspaceExport
-): Promise<ImportResult> {
-  const check = await verifyExport(exported);
+export async function importWorkspace(manifestStr: string): Promise<ImportResult> {
+  const check = await verifyManifest(manifestStr);
   if (!check.valid) {
-    return {
-      success: false,
-      opsImported: 0,
-      error: check.error,
-    };
+    return { imported: false, nodeCount: 0, checksum: '' };
+  }
+
+  let manifest: WorkspaceExport;
+  try {
+    manifest = JSON.parse(manifestStr);
+  } catch {
+    return { imported: false, nodeCount: 0, checksum: '' };
   }
 
   try {
-    const { replaceOps } = await import('./operations');
-    await replaceOps(exported.ops);
-    return {
-      success: true,
-      opsImported: exported.ops.length,
-    };
+    await replaceOps(manifest.nodeTree.map((n) => ({
+      id: n.id,
+      kind: n.kind === 'folder' ? 'create_folder' : 'create_node',
+      timestamp: n.createdAt,
+      source: 'system',
+      seq: 0,
+      payload: {
+        id: n.id,
+        path: n.path,
+        name: n.name,
+        parentId: n.parentId,
+        content: '',
+        language: n.language,
+      },
+    } as Operation)));
+
+    return { imported: true, nodeCount: manifest.nodeTree.length, checksum: manifest.checksum };
   } catch (err) {
     return {
-      success: false,
-      opsImported: 0,
-      error: err instanceof Error ? err.message : String(err),
+      imported: false,
+      nodeCount: 0,
+      checksum: err instanceof Error ? err.message : String(err),
     };
   }
 }

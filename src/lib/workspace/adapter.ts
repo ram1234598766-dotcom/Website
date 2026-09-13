@@ -5,6 +5,11 @@
  * implements pull/push/health. The workspace never knows which backend it
  * talks to — it only sees Operations.
  */
+interface GitHubTreeItem {
+  path: string;
+  type: string;
+}
+
 
 import type {
   Adapter,
@@ -126,7 +131,7 @@ export class GitHubAdapter implements Adapter {
       );
 
       const blobs = treeData.tree.filter(
-        (t: { type: string }) => t.type === 'blob'
+        (t: GitHubTreeItem) => t.type === 'blob'
       );
       const ops: Operation[] = [];
       let ts = Date.now();

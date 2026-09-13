@@ -197,8 +197,8 @@ export async function streamDrain(viInstance?: typeof globalThis.vi): Promise<vo
   }
 }
 
-function createImmediateDoneHandle(): AIStreamHandle {
-  let status: StreamStatus = 'streaming';
+export function createImmediateDoneHandle(): AIStreamHandle {
+  let status: StreamStatus = 'done';
   const collectedChunks: StreamChunk[] = [];
   const statusListeners = new Set<(s: StreamStatus) => void>();
   let settled = false;
@@ -229,8 +229,12 @@ function createImmediateDoneHandle(): AIStreamHandle {
 /**
  * Consume all chunks from a stream and return the accumulated text.
  */
-export async function consumeStream(stream: AIStreamHandle): Promise<string> {
+export async function consumeStream(stream: AIStreamHandle, timeoutMs = 5000): Promise<string> {
+  const deadline = Date.now() + timeoutMs;
   while (stream.status === 'streaming') {
+    if (Date.now() > deadline) {
+      throw new Error('consumeStream timed out');
+    }
     await new Promise((r) => setTimeout(r, 5));
   }
   return stream.text;

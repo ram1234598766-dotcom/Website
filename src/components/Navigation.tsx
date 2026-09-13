@@ -1,6 +1,6 @@
 import { ViewState } from '../types';
 import { Box, Menu, X, Code2, BrainCircuit, TerminalSquare, ShieldAlert, UserPlus, LogIn, Cpu, Puzzle } from 'lucide-react';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import Logo from './Logo';
 
 interface NavigationProps {
@@ -27,18 +27,28 @@ export default function Navigation({ currentView, setCurrentView, userEmail, isS
     };
   }, [mobileMenuOpen]);
 
-  const navItems: { view: ViewState; label: string | React.ReactNode; icon: React.ReactNode }[] = [
-    { view: 'ide', label: 'Cloud OS IDE', icon: <Code2 className="w-4 h-4" /> },
-    { view: 'omni-ai', label: 'Omni-AI', icon: <BrainCircuit className="w-4 h-4" /> },
-    { view: 'ollama', label: 'Ollama', icon: <TerminalSquare className="w-4 h-4" /> },
-    { view: 'showcase', label: 'Models', icon: <Box className="w-4 h-4" /> },
-    { view: 'models', label: 'WebModels', icon: <Cpu className="w-4 h-4" /> },
-    { view: 'plugins', label: 'Plugins', icon: <Puzzle className="w-4 h-4" /> },
-  ];
+  const handleNavClick = useCallback((view: ViewState) => {
+    setCurrentView(view);
+  }, [setCurrentView]);
 
-  if (isAdmin) {
-    navItems.push({ view: 'admin', label: 'Admin', icon: <ShieldAlert className="w-4 h-4" /> });
-  }
+  const handleMobileToggle = useCallback(() => {
+    setMobileMenuOpen(prev => !prev);
+  }, []);
+
+  const navItems = useMemo(() => {
+    const items: { view: ViewState; label: string | React.ReactNode; icon: React.ReactNode }[] = [
+      { view: 'ide', label: 'Cloud OS IDE', icon: <Code2 className="w-4 h-4" /> },
+      { view: 'omni-ai', label: 'Omni-AI', icon: <BrainCircuit className="w-4 h-4" /> },
+      { view: 'ollama', label: 'Ollama', icon: <TerminalSquare className="w-4 h-4" /> },
+      { view: 'showcase', label: 'Models', icon: <Box className="w-4 h-4" /> },
+      { view: 'models', label: 'WebModels', icon: <Cpu className="w-4 h-4" /> },
+      { view: 'plugins', label: 'Plugins', icon: <Puzzle className="w-4 h-4" /> },
+    ];
+    if (isAdmin) {
+      items.push({ view: 'admin', label: 'Admin', icon: <ShieldAlert className="w-4 h-4" /> });
+    }
+    return items;
+  }, [isAdmin]);
 
   return (
     <nav aria-label="Primary" className="h-16 border-b border-white/10 bg-black/40 backdrop-blur-xl px-4 sm:px-8 flex items-center justify-between z-50 sticky top-0 shrink-0">
@@ -59,7 +69,7 @@ export default function Navigation({ currentView, setCurrentView, userEmail, isS
           {navItems.map((item) => (
             <button
               key={item.view}
-              onClick={() => setCurrentView(item.view)}
+              onClick={() => handleNavClick(item.view)}
               aria-current={currentView === item.view ? 'page' : undefined}
               className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors shrink-0 ${
                 currentView === item.view
@@ -104,7 +114,7 @@ export default function Navigation({ currentView, setCurrentView, userEmail, isS
         {/* Mobile Menu Toggle */}
         <button
           className="lg:hidden p-2 text-slate-400 hover:bg-white/10 rounded-md"
-          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+          onClick={handleMobileToggle}
           aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'}
           aria-expanded={mobileMenuOpen}
           aria-controls="mobile-nav-menu"
@@ -120,7 +130,7 @@ export default function Navigation({ currentView, setCurrentView, userEmail, isS
             <button
               key={item.view}
               onClick={() => {
-                setCurrentView(item.view);
+                handleNavClick(item.view);
                 setMobileMenuOpen(false);
               }}
               className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${

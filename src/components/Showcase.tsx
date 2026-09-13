@@ -1,5 +1,5 @@
+import React, { memo, useState } from 'react';
 import { Download, ExternalLink, Cpu, HardDrive, Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
-import React, { useState } from 'react';
 
 interface ModelFile {
   id: string;
@@ -113,7 +113,7 @@ function formatBytes(bytes: number, decimals = 2) {
   return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
 }
 
-const ModelCard: React.FC<{ model: ModelFile }> = ({ model }) => {
+const ModelCard = memo(({ model }: { model: ModelFile }) => {
   const [pullStatus, setPullStatus] = useState<'idle' | 'pulling' | 'success' | 'error'>('idle');
   const [errorMsg, setErrorMsg] = useState('');
   const [progress, setProgress] = useState('');
@@ -251,7 +251,7 @@ const ModelCard: React.FC<{ model: ModelFile }> = ({ model }) => {
       </div>
     </div>
   );
-};
+});
 
 export default function Showcase() {
   return (

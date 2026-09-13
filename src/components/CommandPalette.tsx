@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, Compass, Puzzle, File, Folder, Plus, Save, LogOut, Settings as SettingsIcon, Terminal } from 'lucide-react';
 import { ViewState } from '../types';
@@ -42,136 +42,62 @@ export default function CommandPalette({ isOpen, onClose, setCurrentView }: Comm
     }
   }, [isOpen]);
 
-  const views: { id: ViewState; name: string; icon: any }[] = [
-    { id: 'home', name: 'Home', icon: Compass },
-    { id: 'ide', name: 'CloudOS IDE', icon: Terminal },
-    { id: 'showcase', name: 'Models Showcase', icon: Compass },
-    { id: 'omni-ai', name: 'Omni AI', icon: Compass },
-    { id: 'ollama', name: 'Ollama Local', icon: Compass },
-  ];
+  const views = useMemo(() => [
+    { id: 'home' as ViewState, name: 'Home', icon: Compass },
+    { id: 'ide' as ViewState, name: 'CloudOS IDE', icon: Terminal },
+    { id: 'showcase' as ViewState, name: 'Models Showcase', icon: Compass },
+    { id: 'omni-ai' as ViewState, name: 'Omni AI', icon: Compass },
+    { id: 'ollama' as ViewState, name: 'Ollama Local', icon: Compass },
+  ], []);
 
-  const actions: PaletteItem[] = [
-    {
-      id: 'action-new-file',
-      type: 'action',
-      name: 'New File',
-      description: 'Create a new file in CloudOS',
-      icon: Plus,
-      onSelect: () => {
-        setCurrentView('ide');
-        if (ideState?.newFile) ideState.newFile();
-        onClose();
-      }
-    },
-    {
-      id: 'action-save',
-      type: 'action',
-      name: 'Save',
-      description: 'Save active file',
-      icon: Save,
-      onSelect: () => {
-        if (ideState?.saveFile) ideState.saveFile();
-        onClose();
-      }
-    },
-    {
-      id: 'action-sign-out',
-      type: 'action',
-      name: 'Sign Out',
-      description: 'Sign out of VantaOS',
-      icon: LogOut,
-      onSelect: () => {
-        client.auth.signOut();
-        onClose();
-      }
+  const actions = useMemo(() => [
+    { id: 'action-new-file', type: 'action' as const, name: 'New File', description: 'Create a new file in CloudOS', icon: Plus, onSelect: () => { setCurrentView('ide'); if (ideState?.newFile) ideState.newFile(); onClose(); } },
+    { id: 'action-save', type: 'action' as const, name: 'Save', description: 'Save active file', icon: Save, onSelect: () => { if (ideState?.saveFile) ideState.saveFile(); onClose(); } },
+    { id: 'action-sign-out', type: 'action' as const, name: 'Sign Out', description: 'Sign out of VantaOS', icon: LogOut, onSelect: () => { client.auth.signOut(); onClose(); } },
+  ], [ideState, setCurrentView, onClose]);
+
+  const items = useMemo<PaletteItem[]>(() => {
+    const list: PaletteItem[] = [];
+    views.forEach(v => { list.push({ id: `view-${v.id}`, type: 'view', name: `Open ${v.name}`, icon: v.icon, onSelect: () => { setCurrentView(v.id); onClose(); } }); });
+    list.push(...actions);
+    if (ideState) {
+      const files = ideState.files || [];
+      const openTabs = ideState.openTabs || [];
+      files.filter((f: any) => openTabs.includes(f.id)).forEach((f: any) => {
+        list.push({ id: `openfile-${f.id}`, type: 'open-file', name: f.name, description: 'Open file (Currently Active)', icon: File, onSelect: () => { ideState.setActiveFileId(f.id); onClose(); } });
+      });
+      files.filter((f: any) => !f.isFolder).forEach((f: any) => {
+        list.push({ id: `file-${f.id}`, type: 'file', name: f.name, description: 'File tree', icon: File, onSelect: () => { ideState.setActiveFileId(f.id); onClose(); } });
+      });
     }
-  ];
+    return list;
+  }, [views, actions, ideState, setCurrentView, onClose]);
 
-  let items: PaletteItem[] = [];
-
-  // 1. Add Views
-  views.forEach(v => {
-    items.push({
-      id: `view-${v.id}`,
-      type: 'view',
-      name: `Open ${v.name}`,
-      icon: v.icon,
-      onSelect: () => {
-        setCurrentView(v.id);
-        onClose();
-      }
-    });
-  });
-
-  // 2. Add Actions
-  items.push(...actions);
-
-  // 3. Add IDE Files if available
-  if (ideState) {
-    const files = ideState.files || [];
-    const openTabs = ideState.openTabs || [];
-
-    // Open files
-    files.filter((f: any) => openTabs.includes(f.id)).forEach((f: any) => {
-      items.push({
-        id: `openfile-${f.id}`,
-        type: 'open-file',
-        name: f.name,
-        description: 'Open file (Currently Active)',
-        icon: File,
-        onSelect: () => {
-          ideState.setActiveFileId(f.id);
-          onClose();
-        }
-      });
-    });
-
-    // File tree
-    files.filter((f: any) => !f.isFolder).forEach((f: any) => {
-      items.push({
-        id: `file-${f.id}`,
-        type: 'file',
-        name: f.name,
-        description: 'File tree',
-        icon: File,
-        onSelect: () => {
-          ideState.setActiveFileId(f.id);
-          onClose();
-        }
-      });
-    });
-  }
-
-  const fuzzyMatch = (str: string, pattern: string) => {
+  const fuzzyMatch = useCallback((str: string, pattern: string) => {
     let i = 0, j = 0;
     const s = str.toLowerCase();
     const p = pattern.toLowerCase();
-    while (i < s.length && j < p.length) {
-      if (s[i] === p[j]) j++;
-      i++;
-    }
+    while (i < s.length && j < p.length) { if (s[i] === p[j]) j++; i++; }
     return j === p.length;
-  };
+  }, []);
 
-  // De-duplicate file items (if a file is open, it appears in open files and file tree, prefer open-file)
-  let filteredItems: PaletteItem[] = [];
-  if (query) {
-    filteredItems = items.filter(item =>
-      fuzzyMatch(item.name, query) ||
-      (item.description && fuzzyMatch(item.description, query))
-    );
-  } else {
-    filteredItems = items;
-  }
-  const uniqueItems = new Map<string, PaletteItem>();
-  filteredItems.forEach(item => {
-    if (item.type === 'file') {
-      const openFileId = item.id.replace('file-', 'openfile-');
-      if (uniqueItems.has(openFileId)) return;
+  const filteredItems = useMemo<PaletteItem[]>(() => {
+    let result: PaletteItem[];
+    if (query) {
+      result = items.filter(item => fuzzyMatch(item.name, query) || (item.description && fuzzyMatch(item.description, query)));
+    } else {
+      result = items;
     }
-    uniqueItems.set(item.id, item);
-  });
-  filteredItems = Array.from(uniqueItems.values());
+    const unique = new Map<string, PaletteItem>();
+    result.forEach(item => {
+      if (item.type === 'file') {
+        const openFileId = item.id.replace('file-', 'openfile-');
+        if (unique.has(openFileId)) return;
+      }
+      unique.set(item.id, item);
+    });
+    return Array.from(unique.values());
+  }, [items, query, fuzzyMatch]);
 
   // Refs so the keydown listener subscribes only once per open.
   const filteredItemsRef = useRef(filteredItems);

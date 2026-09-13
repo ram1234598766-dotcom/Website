@@ -81,10 +81,13 @@ registerMigration({
 
 // ─── Public API ──────────────────────────────────────────────────────────────
 
-/** Get the stored schema version. Returns 0 if never set. */
+/** Get the stored schema version. Returns 0 if never set or if invalid (non-integer). */
 export async function getSchemaVersion(): Promise<number> {
   const v = await readMeta('schemaVersion');
-  return typeof v === 'number' ? v : 0;
+  if (typeof v === 'number' && Number.isFinite(v) && Number.isInteger(v) && v >= 0) {
+    return v;
+  }
+  return 0;
 }
 
 /** Set the schema version explicitly. */
@@ -149,8 +152,9 @@ export async function initSchema(): Promise<{
   const fresh = stored === 0;
 
   if (fresh) {
+    const ran = await runMigrations();
     await setSchemaVersion(CURRENT_SCHEMA_VERSION);
-    return { fresh: true, migrated: false };
+    return { fresh: true, migrated: ran.migrated };
   }
 
   const result = await runMigrations();

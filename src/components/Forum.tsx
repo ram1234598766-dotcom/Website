@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { client } from '../lib/client';
 import * as forum from '../lib/firestore';
-import { sanitizeInput, detectSqlInjection } from '../lib/sanitize';
+import { detectSqlInjection } from '../lib/sanitize';
 import { Thread, Reply } from '../types';
 import { MessageSquare, ArrowUp, Plus, LogOut, Loader2, ArrowLeft } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
@@ -92,14 +92,11 @@ const categories = ["All Topics", "General", "AI Research", "Announcements", "He
     e.preventDefault();
     if (!session?.user) return;
     
-    if (detectSqlInjection(newThreadTitle) || detectSqlInjection(newThreadContent)) {
-      alert('Security violation: Potential SQL injection detected.');
-      return;
-    }
+
 
     const result = await forum.createThread({
-      title: sanitizeInput(newThreadTitle),
-      content: sanitizeInput(newThreadContent),
+      title: newThreadTitle,
+      content: newThreadContent,
       category: newThreadCategory,
     });
 
@@ -117,12 +114,7 @@ const categories = ["All Topics", "General", "AI Research", "Announcements", "He
     e.preventDefault();
     if (!session?.user || !activeThread || !replyContent.trim()) return;
 
-    if (detectSqlInjection(replyContent)) {
-      alert('Security violation: Potential SQL injection detected.');
-      return;
-    }
-
-    const result = await forum.createReply(activeThread.id, sanitizeInput(replyContent));
+    const result = await forum.createReply(activeThread.id, replyContent);
 
     if (result.error) {
       alert(result.error);

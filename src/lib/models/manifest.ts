@@ -81,7 +81,7 @@ export function validateManifest(raw: unknown): ModelManifest {
     if (typeof s.url !== 'string' || !s.url.startsWith('https://')) {
       throw new Error(`shards[${i}].url must be an HTTPS URL`);
     }
-    if (typeof s.byteLength !== 'number' || s.byteLength <= 0) {
+    if (typeof s.byteLength !== 'number' || !Number.isFinite(s.byteLength) || !Number.isInteger(s.byteLength) || s.byteLength <= 0) {
       throw new Error(`shards[${i}].byteLength must be a positive integer`);
     }
     if (typeof s.sha256 !== 'string' || !SHA256_RE.test(s.sha256)) {

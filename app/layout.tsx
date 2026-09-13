@@ -60,11 +60,13 @@ export const viewport: Viewport = {
   initialScale: 1,
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  await import('../src/lib/telemetry/sentry').then((m) => m.initSentry());
+  await import('../src/lib/telemetry').then((m) => m.initLogRocket('production'));
   return (
     <html lang="en" className={inter.variable}>
       <head>

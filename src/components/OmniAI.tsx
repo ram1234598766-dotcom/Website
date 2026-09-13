@@ -20,7 +20,7 @@ const toolPermissionManager = new ToolPermissionManager(async (toolId, toolName,
 
 async function runInSandbox(code: string): Promise<string> {
   const res = await omniRunner.run(code).result;
-  if (res.terminated) return `(stopped — ${res.terminated})`;
+  if (res.terminated) return `(stopped ÔÇö ${res.terminated})`;
   if (!res.ok) return res.error ?? 'Execution failed.';
   const consoleLines = res.output.length ? `${res.output.join('\n')}\n` : '';
   return `${consoleLines}${res.value}`;
@@ -33,7 +33,7 @@ function loadSettings(): StoredSettings {
     const d = localStorage.getItem(SETTINGS_KEY);
     if (d) {
       const parsed = JSON.parse(d);
-      // The old 'local' offline provider was removed — migrate to Ollama.
+      // The old 'local' offline provider was removed ÔÇö migrate to Ollama.
       if (parsed.provider === 'local') parsed.provider = 'ollama';
       return parsed;
     }
@@ -47,7 +47,7 @@ async function getWeather(city: string): Promise<string> {
     const res = await fetch(`https://wttr.in/${encodeURIComponent(city)}?format=j1`);
     const data = await res.json();
     const c = data.current_condition?.[0];
-    if (c) return `🌤️ **Weather in ${city}**: ${c.temp_C}°C (${c.temp_F}°F), ${c.weatherDesc?.[0]?.value || 'clear'}\n💧 Humidity: ${c.humidity}% · 🌬️ Wind: ${c.windspeedKmph} km/h`;
+    if (c) return `­ƒîñ´©Å **Weather in ${city}**: ${c.temp_C}┬░C (${c.temp_F}┬░F), ${c.weatherDesc?.[0]?.value || 'clear'}\n­ƒÆº Humidity: ${c.humidity}% ┬À ­ƒî¼´©Å Wind: ${c.windspeedKmph} km/h`;
     return '';
   } catch { return ''; }
 }
@@ -77,23 +77,23 @@ async function ollamaGenerate(url: string, model: string, prompt: string): Promi
 // Omni-AI is online-only. `localQuery` handles explicit tool commands that
 // run against live services (weather, fetch), and routes everything else
 // through a connected AI provider (Ollama or a cloud API). There is no
-// offline knowledge-base fallback — if no provider is connected, we say so.
-async function localQuery(msg: string, settings: StoredSettings): Promise<string> {
+// offline knowledge-base fallback ÔÇö if no provider is connected, we say so.
+export async function localQuery(msg: string, settings: StoredSettings): Promise<string> {
   const q = msg.trim();
   const ql = q.toLowerCase();
 
   // Explicit tool commands (still work without an LLM, but they hit live APIs)
   if (ql === 'help' || q === '?') {
-    return `## 🤖 Omni-AI Commands
+    return `## ­ƒñû Omni-AI Commands
 
-• **Ask anything** — questions, knowledge, explanations
-• **🌤️ Weather** — \`weather in Paris\`
-• **📊 Math** — \`calc 2^10\`
-• **💻 Code** — \`js [1,2,3].map(x=>x*2)\`
-• **🔗 Fetch** — \`fetch https://...\`
-• **⏰ Time** — \`what time is it\`
+ÔÇó **Ask anything** ÔÇö questions, knowledge, explanations
+ÔÇó **­ƒîñ´©Å Weather** ÔÇö \`weather in Paris\`
+ÔÇó **­ƒôè Math** ÔÇö \`calc 2^10\`
+ÔÇó **­ƒÆ╗ Code** ÔÇö \`js [1,2,3].map(x=>x*2)\`
+ÔÇó **­ƒöù Fetch** ÔÇö \`fetch https://...\`
+ÔÇó **ÔÅ░ Time** ÔÇö \`what time is it\`
 
-For AI answers, connect a provider in ⚙️ Settings — local Ollama, or a cloud API (OpenRouter, Gemini, OpenAI).`;
+For AI answers, connect a provider in ÔÜÖ´©Å Settings ÔÇö local Ollama, or a cloud API (OpenRouter, Gemini, OpenAI).`;
   }
   if (ql.startsWith('weather') || ql.startsWith('temperature')) {
     const canExec = await toolPermissionManager.canExecute('weather');
@@ -124,11 +124,11 @@ For AI answers, connect a provider in ⚙️ Settings — local Ollama, or a clo
       const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
       const text = await res.text();
       const body = text.replace(/<script[\s\S]*?<\/script>/gi, '').replace(/<style[\s\S]*?<\/style>/gi, '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 1500);
-      return `📄 **Content from ${url}**\n\n${body}`;
+      return `­ƒôä **Content from ${url}**\n\n${body}`;
     } catch { return `Failed to fetch that URL.`; }
   }
   if (ql.includes('time') && (ql.includes('what') || ql.includes('current') || ql.includes('now'))) {
-    return `🕐 **${new Date().toLocaleString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZoneName: 'short' })}**`;
+    return `­ƒòÉ **${new Date().toLocaleString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZoneName: 'short' })}**`;
   }
 
   // AI answers require a connected provider (Ollama or cloud). No offline fallback.
@@ -146,11 +146,11 @@ For AI answers, connect a provider in ⚙️ Settings — local Ollama, or a clo
     } catch { /* Ollama unreachable */ }
   }
 
-  return `⚠️ **No AI provider is connected.**
+  return `ÔÜá´©Å **No AI provider is connected.**
 
-Connect one in ⚙️ Settings to get AI answers:
-• **Local Ollama** — install it, run \`set OLLAMA_ORIGINS=* && ollama serve\` (Windows) or \`OLLAMA_ORIGINS=* ollama serve\` (Mac/Linux), then press refresh in settings.
-• **Cloud provider** — pick OpenRouter, Gemini, or OpenAI and paste your API key.
+Connect one in ÔÜÖ´©Å Settings to get AI answers:
+ÔÇó **Local Ollama** ÔÇö install it, run \`set OLLAMA_ORIGINS=* && ollama serve\` (Windows) or \`OLLAMA_ORIGINS=* ollama serve\` (Mac/Linux), then press refresh in settings.
+ÔÇó **Cloud provider** ÔÇö pick OpenRouter, Gemini, or OpenAI and paste your API key.
 
 You can still use the tools above (weather, calc, js, fetch) anytime.`;
 }
@@ -208,7 +208,7 @@ export default function OmniAI() {
     { id: 'ollama' as AIProvider, name: 'Local Ollama', icon: Server,
       models: ollamaModels.length > 0 ? ollamaModels.map(m => ({ id: m.name, name: m.name })) : [{ id: 'llama3', name: 'llama3' }],
       defaultModel: ollamaModels[0]?.name || 'llama3',
-      desc: isOllamaReady ? `✅ ${ollamaModels.length} models available` : 'Run: set OLLAMA_ORIGINS=* && ollama serve' },
+      desc: isOllamaReady ? `Ô£à ${ollamaModels.length} models available` : 'Run: set OLLAMA_ORIGINS=* && ollama serve' },
     { id: 'openrouter' as AIProvider, name: 'OpenRouter', icon: Globe,
       models: [{ id: 'openai/gpt-4o', name: 'GPT-4o' }, { id: 'google/gemini-2.5-flash', name: 'Gemini 2.5 Flash' }],
       defaultModel: 'openai/gpt-4o', desc: '200+ models. Get key at openrouter.ai/keys' },
@@ -235,7 +235,7 @@ export default function OmniAI() {
       if (settings.provider === 'ollama') {
         text = await localQuery(input.trim(), settings);
       } else {
-        if (!settings.apiKey) throw new Error('Add your API key in Settings (⚙️)');
+        if (!settings.apiKey) throw new Error('Add your API key in Settings (ÔÜÖ´©Å)');
         text = await cloudQuery(settings.provider, settings.model, settings.apiKey, [{ role: 'user', content: input.trim() }]);
       }
       const finalMessages = [...newMessages, { role: 'assistant', content: text }];
@@ -287,7 +287,7 @@ export default function OmniAI() {
             <div className="flex items-center gap-2 mt-1">
               {isOllamaReady ? (
                 <><span className="w-2 h-2 rounded-full bg-emerald-500 shadow-lg"></span>
-                <span className="text-xs font-mono text-emerald-400 uppercase tracking-widest">Ollama · {ollamaModels[0]?.name}</span></>
+                <span className="text-xs font-mono text-emerald-400 uppercase tracking-widest">Ollama ┬À {ollamaModels[0]?.name}</span></>
               ) : isCloudReady ? (
                 <><span className="w-2 h-2 rounded-full bg-blue-500"></span>
                 <span className="text-xs font-mono text-blue-400 uppercase tracking-widest">{provider.name}</span></>
@@ -324,7 +324,7 @@ export default function OmniAI() {
                 <Server className={`w-4 h-4 ${isOllamaReady ? 'text-emerald-400' : 'text-slate-500'}`} />
                 <span className="text-sm font-medium text-slate-300">Local Ollama</span>
                 {ollamaStatus === 'checking' && <Loader2 className="w-3 h-3 animate-spin text-slate-400" />}
-                {isOllamaReady && <span className="text-xs bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full">● {ollamaModels.length} models</span>}
+                {isOllamaReady && <span className="text-xs bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full">ÔùÅ {ollamaModels.length} models</span>}
                 {!isOllamaReady && ollamaStatus !== 'checking' && <span className="text-xs text-slate-500">offline</span>}
               </div>
               <button onClick={checkOllama} aria-label="Refresh Ollama connection" className="p-1.5 bg-slate-800 hover:bg-slate-700 rounded text-slate-400 transition-colors cursor-pointer focus-visible:ring-2 focus-visible:ring-indigo-400">
@@ -420,14 +420,14 @@ export default function OmniAI() {
                 {isOllamaReady ? <Server className="w-8 h-8 text-emerald-400" /> : isCloudReady ? <BrainCircuit className="w-8 h-8 text-blue-400" /> : <Zap className="w-8 h-8 text-indigo-400" />}
               </div>
               <p className="text-lg font-medium text-slate-400 mb-1">
-                {isOllamaReady ? '🧠 Local AI Ready' : isCloudReady ? `${provider.name} connected` : 'Connect an AI provider'}
+                {isOllamaReady ? '­ƒºá Local AI Ready' : isCloudReady ? `${provider.name} connected` : 'Connect an AI provider'}
               </p>
               <p className="text-sm text-slate-500 max-w-md text-center mb-6">
                 {isOllamaReady
                   ? `Connected to Ollama (${ollamaModels.length} models). Ask anything!`
                   : isCloudReady
                     ? 'Your AI provider is connected. Ask anything!'
-                    : 'Omni-AI is online-only — connect a provider in ⚙️ Settings (Ollama, OpenRouter, Gemini, or OpenAI) to get AI answers.'}
+                    : 'Omni-AI is online-only ÔÇö connect a provider in ÔÜÖ´©Å Settings (Ollama, OpenRouter, Gemini, or OpenAI) to get AI answers.'}
               </p>
               <div className="grid grid-cols-2 gap-2 max-w-sm w-full">
                 {[
@@ -479,9 +479,9 @@ export default function OmniAI() {
           </form>
           <div className="text-[10px] text-slate-500 mt-3 px-2 flex items-center gap-3">
             {isOllamaReady ? (
-              <span>🧠 Local Ollama · <button onClick={() => setShowSettings(true)} className="text-indigo-400 hover:underline cursor-pointer">Change model</button></span>
+              <span>­ƒºá Local Ollama ┬À <button onClick={() => setShowSettings(true)} className="text-indigo-400 hover:underline cursor-pointer">Change model</button></span>
             ) : (
-              <span>⚡ Online only · <button onClick={() => setShowSettings(true)} className="text-indigo-400 hover:underline cursor-pointer">Connect a provider</button> · Type <span className="text-indigo-400">help</span> for commands</span>
+              <span>ÔÜí Online only ┬À <button onClick={() => setShowSettings(true)} className="text-indigo-400 hover:underline cursor-pointer">Connect a provider</button> ┬À Type <span className="text-indigo-400">help</span> for commands</span>
             )}
           </div>
         </div>

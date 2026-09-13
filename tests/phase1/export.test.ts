@@ -18,7 +18,7 @@ async function sha256hex(data: string): Promise<string> {
     .join('');
 }
 
-function makeExport(ops: any[], digest: string): WorkspaceExport {
+function makeExport(ops: any[], digest: string): any {
   return {
     formatVersion: 1,
     exportedAt: '2026-09-11T00:00:00Z',
@@ -72,7 +72,7 @@ describe('verifyExport', () => {
 
   it('fails when ops is not an array', async () => {
     const bundle = {
-      formatVersion: 1,
+    formatVersion: 1 as any,
       exportedAt: '2026-09-11T00:00:00Z',
       opsDigest: 'aaa',
       ops: 'not-an-array',

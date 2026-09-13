@@ -65,7 +65,7 @@ export function isValidManifest(raw: unknown): raw is PluginManifest {
   if (typeof m.id !== 'string' || m.id.length === 0) return false;
   if (typeof m.name !== 'string' || m.name.length === 0) return false;
   if (typeof m.version !== 'string' || m.version.length === 0) return false;
-  if (typeof m.description !== 'string') return false;
+  if (m.description !== undefined && typeof m.description !== 'string') return false;
   if (typeof m.author !== 'string' || m.author.length === 0) return false;
   if (!Array.isArray(m.capabilities)) return false;
   for (const c of m.capabilities) {

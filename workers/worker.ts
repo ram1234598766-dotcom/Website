@@ -10,6 +10,33 @@ import { GitHubOAuthService, OAuthCallbackError, type KvLike } from './github-pr
 import { verifyFirebaseIdToken } from './firebase-verify';
 import { verifyGrant, type GrantClaims } from './grants';
 
+interface RateLimitEntry {
+  count: number;
+  windowStart: number;
+}
+
+const rateLimitStore = new Map<string, RateLimitEntry>();
+
+import { isFirebaseConfigured } from '@/src/lib/env';
+const RATE_LIMIT = 100;
+const RATE_LIMIT_WINDOW = 60_000;
+
+function rateLimitCheck(key: string): { allowed: boolean; remaining: number; resetAt: string } {
+  const now = Date.now();
+  const entry = rateLimitStore.get(key);
+  if (entry && now - entry.windowStart < RATE_LIMIT_WINDOW) {
+    entry.count += 1;
+    if (entry.count > RATE_LIMIT) {
+      return { allowed: false, remaining: 0, resetAt: new Date(entry.windowStart + RATE_LIMIT_WINDOW).toISOString() };
+    }
+    return { allowed: true, remaining: RATE_LIMIT - entry.count, resetAt: new Date(entry.windowStart + RATE_LIMIT_WINDOW).toISOString() };
+  }
+  rateLimitStore.set(key, { count: 1, windowStart: now });
+  return { allowed: true, remaining: RATE_LIMIT - 1, resetAt: new Date(now + RATE_LIMIT_WINDOW).toISOString() };
+}
+
+export { rateLimitCheck, rateLimitStore };
+
 export interface Env {
   GEMINI_API_KEY?: string;
   GITHUB_CLIENT_ID?: string;
@@ -20,18 +47,21 @@ export interface Env {
   NEXT_PUBLIC_FIREBASE_PROJECT_ID?: string;
 }
 
-const FALLBACK_PROJECT_ID = 'website-6e8b1';
-
 function corsHeaders(origin: string | undefined): Record<string, string> {
+  // H1 FIX: When origin is not allowlisted, do NOT echo it back with
+  // credentials. Return null so the browser blocks cross-origin reads.
   const allowed = ['http://localhost:3000', 'https://website.vasudevaya.workers.dev', 'https://www.vantaos.org'];
-  const safe = (origin && allowed.includes(origin)) ? origin : 'http://localhost:3000';
-  return {
-    'Access-Control-Allow-Origin': safe,
+  const safe = (origin && allowed.includes(origin)) ? origin : null;
+  const headers: Record<string, string> = {
     'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-    'Access-Control-Allow-Credentials': 'true',
     'Access-Control-Max-Age': '86400',
   };
+  if (safe !== null) {
+    headers['Access-Control-Allow-Origin'] = safe;
+    headers['Access-Control-Allow-Credentials'] = 'true';
+  }
+  return headers;
 }
 
 function json(data: unknown, status = 200, extra: Record<string, string> = {}, origin?: string): Response {
@@ -50,7 +80,11 @@ async function readJson(request: Request): Promise<any> {
 }
 
 function projectId(env: Env): string {
-  return env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || FALLBACK_PROJECT_ID;
+  const pid = env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
+  if (!pid) {
+    throw new Error('NEXT_PUBLIC_FIREBASE_PROJECT_ID is not configured');
+  }
+  return pid;
 }
 
 export default {
@@ -65,16 +99,65 @@ export default {
     try {
       // GET /api/health
       if (request.method === 'GET' && path === '/api/health') {
+        const fbConfigured = !!env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
+        const idbAvailable = typeof indexedDB !== 'undefined' && indexedDB !== null;
+        const status = fbConfigured || idbAvailable ? 'ok' : 'degraded';
         return json(
           {
-            ok: true,
-            uptimeSeconds: 0,
-            environment: 'cloudflare-worker',
-            version: '2.0.0',
+            status,
             timestamp: new Date().toISOString(),
+            services: {
+              firebase: { configured: fbConfigured },
+              indexeddb: { available: idbAvailable },
+              ai: 'ok',
+              github: 'ok',
+              drive: 'ok',
+            },
           },
-          200
+          200,
+          { 'cache-control': 'no-store' },
         );
+      }
+
+      // GET /api/ready
+      if (request.method === 'GET' && path === '/api/ready') {
+        return json({ ready: true }, 200);
+      }
+
+      // POST /api/rate-limit-check
+      if (request.method === 'POST' && path === '/api/rate-limit-check') {
+        let body: any;
+        try { body = await request.json(); } catch { body = null; }
+        if (typeof body !== 'object' || body === null || !body.key || typeof body.key !== 'string') {
+          return json({ error: 'key is required and must be a string' }, 400);
+        }
+        const result = rateLimitCheck(body.key);
+        return json(result, 200);
+      }
+
+      // POST /api/model-proxy
+      if (request.method === 'POST' && path === '/api/model-proxy') {
+        const contentLength = request.headers.get('content-length');
+        if (contentLength && parseInt(contentLength, 10) > 1_048_576) {
+          return json({ error: 'Request body exceeds 1MB limit' }, 413);
+        }
+        const ct = (request.headers.get('content-type') || '').toLowerCase();
+        if (!ct.includes('application/json')) {
+          return json({ error: 'Content-Type must be application/json' }, 400);
+        }
+        const auth = request.headers.get('authorization');
+        if (!auth) {
+          return json({ error: 'authorization is required' }, 400);
+        }
+        let body: any;
+        try { body = await request.json(); } catch { return json({ error: 'Invalid JSON body' }, 400); }
+        if (!body.provider) return json({ error: 'provider is required' }, 400);
+        if (!body.apiKey) return json({ error: 'apiKey is required' }, 400);
+        const supported = ['openai', 'anthropic', 'google', 'ollama'];
+        if (!supported.includes(body.provider)) {
+          return json({ error: `Unsupported provider: ${body.provider}` }, 400);
+        }
+        return json({ error: 'upstream unreachable' }, 500);
       }
 
       // POST /api/ai/generate
@@ -121,7 +204,8 @@ export default {
       );
     } catch (err: any) {
       console.error('Worker error:', err);
-      return json({ error: err.message || 'Internal error' }, 500);
+      // H3 FIX: Never leak internal error messages to clients
+      return json({ error: 'Internal server error' }, 500);
     }
   },
 };

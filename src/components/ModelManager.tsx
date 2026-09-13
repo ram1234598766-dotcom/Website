@@ -6,7 +6,7 @@
  * feedback.
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, memo } from 'react';
 import {
   Download,
   Trash2,
@@ -168,7 +168,7 @@ export default function ModelManager() {
     setStatuses((prev) => ({ ...prev, [modelId]: initialStatus }));
   }, []);
 
-  const profileInfo = deviceProfile ? profileLabel(deviceProfile) : null;
+  const profileInfo = useMemo(() => deviceProfile ? profileLabel(deviceProfile) : null, [deviceProfile]);
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8">
@@ -205,10 +205,10 @@ export default function ModelManager() {
       <div className="space-y-4">
         {manifests.map((manifest) => {
           const status = statuses[manifest.id] ?? initialStatus;
-          const totalSize = manifest.shards.reduce((s, sh) => s + sh.byteLength, 0);
-          const compatible = deviceCaps
+          const totalSize = useMemo(() => manifest.shards.reduce((s, sh) => s + sh.byteLength, 0), [manifest.shards]);
+          const compatible = useMemo(() => deviceCaps
             ? meetsRequirements(deviceCaps, manifest.runtimeRequirements)
-            : null;
+            : null, [deviceCaps, manifest.runtimeRequirements]);
 
           return (
             <motion.div

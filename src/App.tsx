@@ -2,7 +2,7 @@
  * @license
  * SPDX-License-Identifier: Apache-2.0
  */
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { ViewState } from './types';
 import Navigation from './components/Navigation';
@@ -27,7 +27,13 @@ export default function App() {
   const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin');
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [appReady, setAppReady] = useState(false);
-  const isAdmin = !!session && (session.user?.app_metadata?.role === 'admin' || session.user?.user_metadata?.role === 'admin' || session.role === 'admin');
+  const onSignIn = useCallback(() => { setAuthMode('signin'); setShowAuthModal(true); }, []);
+  const onSignUp = useCallback(() => { setAuthMode('signup'); setShowAuthModal(true); }, []);
+  const handleCloseCommandPalette = useCallback(() => setIsCommandPaletteOpen(false), []);
+  const handleCloseAuthModal = useCallback(() => setShowAuthModal(false), []);
+  const handleRefreshSession = useCallback(() => client.auth.refreshSession?.(), []);
+
+  const isAdmin = useMemo(() => !!session && (session.user?.app_metadata?.role === 'admin' || session.user?.user_metadata?.role === 'admin' || session.role === 'admin'), [session]);
 
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
@@ -100,7 +106,7 @@ export default function App() {
         {sessionWarning && (
           <div role="alert" className="bg-amber-500/20 border-b border-amber-500/50 px-4 py-2 text-center text-sm font-medium text-amber-200 z-50 relative">
             Your session is about to expire.{' '}
-            <button onClick={() => client.auth.refreshSession?.()} className="underline font-bold hover:text-amber-100">Click here to refresh</button>
+            <button onClick={handleRefreshSession} className="underline font-bold hover:text-amber-100">Click here to refresh</button>
           </div>
         )}
 
@@ -110,8 +116,8 @@ export default function App() {
           userEmail={session?.email || session?.user?.email}
           isSynced={!!session}
           isAdmin={isAdmin}
-          onSignIn={() => { setAuthMode('signin'); setShowAuthModal(true); }}
-          onSignUp={() => { setAuthMode('signup'); setShowAuthModal(true); }}
+          onSignIn={onSignIn}
+          onSignUp={onSignUp}
         />
 
         <main className="flex-1 flex flex-col max-w-7xl mx-auto w-full p-4 sm:p-8 relative z-10">
@@ -126,8 +132,8 @@ export default function App() {
             >
               {currentView === 'home' && (
                 <Home setCurrentView={setCurrentView}
-                  onSignIn={() => { setAuthMode('signin'); setShowAuthModal(true); }}
-                  onSignUp={() => { setAuthMode('signup'); setShowAuthModal(true); }}
+                  onSignIn={onSignIn}
+                  onSignUp={onSignUp}
                 />
               )}
               {currentView === 'showcase' && <Showcase />}
@@ -143,11 +149,11 @@ export default function App() {
 
         <CommandPalette
           isOpen={isCommandPaletteOpen}
-          onClose={() => setIsCommandPaletteOpen(false)}
+          onClose={handleCloseCommandPalette}
           setCurrentView={setCurrentView}
         />
 
-        <AuthModal isOpen={showAuthModal} onClose={() => setShowAuthModal(false)} initialMode={authMode} />
+        <AuthModal isOpen={showAuthModal} onClose={handleCloseAuthModal} initialMode={authMode} />
       </motion.div>
     </AnimatePresence>
     </WorkspaceProvider>

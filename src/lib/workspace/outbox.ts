@@ -5,6 +5,22 @@
  * On the next successful connection, the outbox drains in order.
  * Operations are persisted to IndexedDB so they survive page reloads.
  */
+function isOutboxEntry(value: unknown): value is OutboxEntry {
+  if (typeof value !== 'object' || value === null) return false;
+  const obj = value as Record<string, unknown>;
+  return typeof obj.id === 'string'
+    && typeof obj.operationId === 'string'
+    && typeof obj.adapterId === 'string'
+    && typeof obj.attempts === 'number'
+    && typeof obj.lastAttemptAt === 'number'
+    && typeof obj.createdAt === 'number';
+}
+
+function assertOutboxEntry(value: unknown): OutboxEntry | undefined {
+  if (isOutboxEntry(value)) return value;
+  return undefined;
+}
+
 
 import type { Operation } from './types';
 import { openWorkspaceDB } from './db';
@@ -75,7 +91,7 @@ export async function drain(adapterId: string): Promise<readonly OutboxEntry[]> 
     const store = tx.objectStore('outbox');
     const req = store.getAll();
     req.onsuccess = () => {
-      const all = (req.result ?? []) as OutboxEntry[];
+      const all = (req.result ?? []).filter(isOutboxEntry);
       const filtered = all
         .filter((e) => e.adapterId === adapterId)
         .sort((a, b) => a.createdAt - b.createdAt);
@@ -100,8 +116,8 @@ export async function ack(operationId: string): Promise<void> {
         tx.oncomplete = () => resolve();
         return;
       }
-      const entry = cursor.value as OutboxEntry;
-      if (entry.operationId === operationId) {
+      const entry = assertOutboxEntry(cursor.value);
+      if (entry && entry.operationId === operationId) {
         cursor.delete();
       }
       cursor.continue();
@@ -126,8 +142,8 @@ export async function nack(operationId: string): Promise<void> {
         tx.oncomplete = () => resolve();
         return;
       }
-      const entry = cursor.value as OutboxEntry;
-      if (entry.operationId === operationId) {
+      const entry = assertOutboxEntry(cursor.value);
+      if (entry && entry.operationId === operationId) {
         const updated: OutboxEntry = {
           ...entry,
           attempts: entry.attempts + 1,
@@ -152,7 +168,7 @@ export async function stats(adapterId?: string): Promise<OutboxStats> {
     const store = tx.objectStore('outbox');
     const req = store.getAll();
     req.onsuccess = () => {
-      let all = (req.result ?? []) as OutboxEntry[];
+      let all = (req.result ?? []).filter(isOutboxEntry);
       if (adapterId) {
         all = all.filter((e) => e.adapterId === adapterId);
       }
@@ -178,7 +194,7 @@ export async function clearOutbox(adapterId?: string): Promise<void> {
     if (adapterId) {
       const req = store.getAll();
       req.onsuccess = () => {
-        const all = (req.result ?? []) as OutboxEntry[];
+        const all = (req.result ?? []).filter(isOutboxEntry);
         for (const entry of all) {
           if (entry.adapterId === adapterId) {
             store.delete(entry.id);
