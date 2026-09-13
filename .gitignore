@@ -10,6 +10,10 @@ dist/
 coverage/
 node_modules/
 
+# test artifacts
+playwright-report/
+test-results/
+
 # TS incremental build artifact
 *.tsbuildinfo
 

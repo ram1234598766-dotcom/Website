@@ -34,8 +34,8 @@ Worker (`README.md:3-8`, `package.json:14-43`, `workers/worker.ts:31-56`).
 > | AI & models | ✅ Implemented (Ollama + cloud) | ✅ Provider registry + WebModel adapter |
 > | Auth & integrations | 🔄 Partial (Firebase optional, tokens in browser) | ✅ Server-side OAuth |
 > | Edge (Cloudflare) | ✅ Implemented (Worker API proxy) | ✅ Versioned gateway |
-> | Testing | ✅ Implemented (Vitest 873/873 tests across 55 files, Playwright E2E 8 tests) | 🎯 Vitest + Playwright E2E |
-> | CI/CD | ✅ Implemented (typecheck, lint, unit, contract, E2E, audit, build on push/PR via .github/workflows/ci.yml) | 🎯 GitHub Actions gates |
+> | Testing | ✅ Implemented (Vitest 1032/1032 tests across 64 files, Playwright E2E 8 tests) | 🎯 Vitest + Playwright E2E |
+> | CI/CD | ✅ Implemented (typecheck, unit, build, E2E on push/PR via .github/workflows/ci.yml) | 🎯 GitHub Actions gates |
 
 <!-- AGENT: Platform -->
 ## 1. 🏗️ Stack decision summary
@@ -52,11 +52,11 @@ Worker (`README.md:3-8`, `package.json:14-43`, `workers/worker.ts:31-56`).
 | Auth | Optional Firebase client (Google/GitHub OAuth) with a localStorage demo fallback, exposed through the unified `client` facade (`src/lib/client.ts`, `src/lib/firebase.ts`, `src/lib/demoAuth.ts`) | Keep Firebase as the production identity provider; add server-side OAuth and short-lived grants | 🔄 Harden | Provides real Google/GitHub sign-in with a single adapter surface |
 | Drive | Google Drive REST v3 (readonly + app-owned files) using the OAuth access token captured during Firebase Google sign-in (`src/lib/drive.ts:4-279`, `src/components/DriveManager.tsx`) | Move long-lived tokens out of the browser; server-side token refresh | 🔄 Harden | Browser-only token expiry/refresh is the current limit |
 | GitHub | Direct REST calls with a browser-stored token (`src/lib/github.ts:8-40`, `src/components/GitHubManager.tsx:15-44`) | Server-side OAuth, scoped grants, fresh-parent push protection | 🔄 Harden | Removes long-lived credentials from the browser |
-| Edge | Cloudflare Worker API proxy (`wrangler.toml:1-11`, `workers/worker.ts:13-75`) | Versioned API gateway, model proxy, OAuth exchange, rate limits, health | ✅ Keep | Provides a stable trust boundary and operational surface |
-| Tests | `npm test` runs Vitest (`tests/` directory, 55 files, 873/873 tests) + LogRocket telemetry tests + Playwright E2E (`tests/e2e/`, 8 tests) | Vitest/Playwright plus contract, worker, security, and mobile E2E suites | ✅ Implemented | Vitest 873/873, LogRocket, Playwright E2E all passing |
-| CI/CD | GitHub Actions workflow in .github/workflows/ci.yml | Build/typecheck/lint/test/E2E/audit/deploy on push/PR | ✅ Implemented | CI pipeline at .github/workflows/ci.yml on every push/PR |
+| Edge | Cloudflare Worker API proxy (`wrangler.toml:1-13`, `workers/worker.ts:13-75`) | Versioned API gateway, model proxy, OAuth exchange, rate limits, health | ✅ Keep | Provides a stable trust boundary and operational surface |
+| Tests | `npm test` runs Vitest (`tests/` directory, 64 files, 1032/1032 tests) + LogRocket telemetry tests + Playwright E2E (`tests/e2e/`, 8 tests) | Vitest/Playwright plus contract, worker, security, and mobile E2E suites | ✅ Implemented | Vitest 1032/1032, LogRocket, Playwright E2E all passing |
+| CI/CD | GitHub Actions workflow in .github/workflows/ci.yml (lint/typecheck, vitest, build, Playwright E2E) | Build/typecheck/lint/test/E2E/audit/deploy on push/PR | ✅ Implemented | CI pipeline at .github/workflows/ci.yml on every push/PR |
 
-> **GREEN:** Test surface is now implemented - Vitest 873/873 across 55 files + LogRocket + @huggingface/transformers + Playwright E2E.
+> **GREEN:** Test surface is now implemented - Vitest 1032/1032 across 64 files + LogRocket + @huggingface/transformers + Playwright E2E.
 
 > The full test suite is detailed in Section 6 below.> **🔵 INFO:** The `npm run lint` command currently runs `tsc --noEmit` (`package.json:6-13`); this is a typecheck, not a linter.
 
@@ -165,10 +165,11 @@ needs a formal small-screen interaction contract.
   (`wrangler.toml:1-11`, `workers/worker.ts:1-7`).
 - The package scripts provide development, build, lint-as-typecheck, static
   start, deploy, and preview commands (`package.json:6-13`).
-- `npm run lint` currently runs `tsc --noEmit`; there is no lint/test/E2E
-  script in the current package file (`package.json:6-13`).
+- `npm run lint` runs `tsc --noEmit` (a typecheck), `npm test` runs the Vitest
+  suite, and Playwright E2E runs via its own config (`package.json:6-13`,
+  `tests/e2e/playwright.config.ts`).
 
-> **🔴 CRITICAL:** Test script implemented (Vitest 873/873, 55 files); lint=E2E in CI pipeline via `package.json:6-13`; the deployment section has no CI verification.
+> **🔵 INFO:** Test script implemented (Vitest 1032/1032, 64 files + Playwright E2E 8 tests, 6 files); CI pipeline at `.github/workflows/ci.yml` runs lint/typecheck, vitest, build, and Playwright E2E on every push/PR.
 
 ### ✅ Verification Gate — Section 2
 - [ ] All current statements match repo files
@@ -419,11 +420,11 @@ See `docs/WEB_MODEL_SPEC.md` for the detailed contract.
 | Mobile/PWA | Vitest (tests/phase7/, 2 files) | PWA manifest, caching, offline, responsive |
 | Production health | Vitest (tests/phase8/, 1 file) | Per-service health endpoints |
 | Plugin ecosystem | Vitest (tests/phase9/, 3 files) | Loader, manifest, registry |
-| Schema validation | Vitest (tests/phase-schema/, 10 files, 347 tests) | Primitives, composites, operation contracts |
+| Schema validation | Vitest (tests/phase-schema/, 10 files, 326 tests) | Primitives, composites, operation contracts |
 | SLO compliance | Vitest (tests/phase-schema/slo.test.ts, runbooks.test.ts) | 6 SLO definitions, 4 runbooks |
 | LogRocket telemetry | Vitest (tests/telemetry-logrocket.test.ts, logrocket-audit.test.ts) | Init, identify, track, captureException |
 | Contract tests | Vitest (tests/contract/, 3 files) | Workspace, terminal, model contracts |
-| E2E tests | Playwright (tests/e2e/flows/, 6 tests) | Auth, home, files, ide, omni-ai, terminal |
+| E2E tests | Playwright (tests/e2e/flows/, 8 tests across 6 files) | Auth, home, files, ide, omni-ai, terminal |
 
 ### ✅ Verification Gate — Section 6
 - [ ] All current statements match repo files

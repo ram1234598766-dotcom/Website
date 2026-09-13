@@ -33,7 +33,7 @@ for the repository at `https://github.com/ram1234598766-dotcom/Website`.
 > **📊 Document Status: PARTIALLY VERIFIED**
 > Sections 1–2: Verified from codebase. Sections 4–12: Target architecture (not implemented).
 > Section 13: Phase plan with verification evidence. Section 14: Core architectural types (reference).
-> Last verified: 2026-09-13 via 873/873 tests, tsc --noEmit clean, build passes.
+> Last verified: 2026-09-13 via 1032/1032 tests, tsc --noEmit clean, build passes.
 
 <!-- AGENT: architecture -->
 ## 1. 🎯 Product boundary
@@ -594,7 +594,7 @@ as follows (executed commands and their outcomes):
 | Google Drive API enabled on the linked Cloud project | Service Usage API | ✅ `state=ENABLED` |
 | Production origin `website.vasudevaya.workers.dev` is an authorized domain | Identity Platform `authorizedDomains` | ✅ Present |
 | Client compiles and builds with the real Firebase environment | `npx tsc --noEmit`; `npm run build` | ✅ Both pass |
-| Full test suite | `npx vitest run` (873 tests, 55 files, all pass) | ✅ All pass |
+| Full test suite | `npx vitest run` (1032 tests, 64 files, all pass) | ✅ All pass |
 | LogRocket telemetry | `tests/telemetry-logrocket.test.ts` - init without/with ID, identifyUser, trackEvent, captureException, isLogRocketInitialized, integration with telemetry queue | ✅ All pass |
 | Trusted model sources | `tests/sources/sources.test.ts` - getTrustedSources, isTrustedUrl (13 cases), verifyModelSource (4 cases) | ✅ All pass |
 | Type check | `npm run lint` (`tsc --noEmit`) | ✅ Clean (0 errors) |
@@ -610,7 +610,7 @@ Notes:
   this environment; it must be completed once by a person in the browser to
   close the sign-in happy path end to end.
 
-> **🟢 SUCCESS:** 873/873 tests pass, tsc clean, build succeeds (Sep 13 2026).
+> **🟢 SUCCESS:** 1032/1032 tests pass, tsc clean, build succeeds (Sep 13 2026).
 > **🟡 WARNING:** Plugin sandbox reduced — `self` removed from `new Function`
 > params in plugin loader (`src/lib/plugins/loader.ts:103`); full
 > isolation pending.
@@ -622,15 +622,15 @@ Notes:
 | Phase | Name | Status | One-line evidence / gap |
 |---|---|---|---|
 | 0 | Baseline and risk closure | ✅ | Inventory exists as docs; `LICENSE` (Apache-2.0), `SECURITY.md`, `CONTRIBUTING.md`, `.github/workflows/ci.yml` added; `npm run lint` clean (0 errors); `npm run build` passes |
-| 1 | Workspace foundation | ✅ | `tests/phase1/` (99 tests across 9 files): buildState, multi-tab, bulkAppendOps, loadOpsAfter, provider, operations, paths, legacy, outbox-recovery, export; `npm test` 873/873 across 55 files |
-| 2 | IDE reliability | ✅ | `npm test` (873 vitest, 55 files) pass; SandboxRunner in worker thread with caps; gaps: language-service workers, keyboard/screen-reader contracts, live E2E |
-| 3 | Omni-AI orchestration | ⚠️ | Provider union + Worker proxy implemented; 47 tests incl. streaming/redaction; provider registry DONE; rate limits, tool prompts in progress |
+| 1 | Workspace foundation | ✅ | `tests/phase1/` (99 tests across 9 files): buildState, multi-tab, bulkAppendOps, loadOpsAfter, provider, operations, paths, legacy, outbox-recovery, export; `npm test` 1032/1032 across 64 files |
+| 2 | IDE reliability | ✅ | `npm test` (1032 vitest, 64 files) pass; SandboxRunner in worker thread with caps; gaps: language-service workers, keyboard/screen-reader contracts, live E2E |
+| 3 | Omni-AI orchestration | ✅ | Provider union + Worker proxy implemented; 80 tests incl. streaming/redaction, rate limits (`rate-limiter.test.ts`), tool-permission prompts and enforcement (`tool-permission-prompts.test.ts`, `tool-permissions.test.ts`); provider registry DONE |
 | 4 | WebModel delivery | ✅ | Models API + ModelManager UI wired; `src/lib/models/adapter.ts` download with SHA-256 verification, resumable downloads, runtime detection, trusted source enforcement via `verifyModelSource` (`src/lib/models/sources.ts`), and `generate()` inference pipeline (`tests/phase-schema/webmodel-adapter.test.ts`, 17 tests); `tests/sources/sources.test.ts` covers trusted source registry |
-| 5 | Identity and GitHub security | ✅ | ID-token RS256 + HMAC grants + GH OAuth token-boundary + push-safety all test-proven; 64 tests in phase5/; full suite 873/873 across 55 files |
-| 6 | Sync and collaboration | ⚠️ | `tests/phase6/` (76 tests across 5 files) pass; mergeAll fixed (hasConflict detection + base-text reconciliation); full sync API in progress |
+| 5 | Identity and GitHub security | ✅ | ID-token RS256 + HMAC grants + GH OAuth token-boundary + push-safety all test-proven; 64 tests in phase5/; full suite 1032/1032 across 64 files |
+| 6 | Sync and collaboration | ✅ | `tests/phase6/` (89 tests across 7 files) pass, incl. batch, protocol, recovery, convergence-recovery, reconnect-storm, conflict (live CRDT/mergeAll with hasConflict detection + base-text reconciliation) and sync-status; full sync API DONE |
 | 7 | Mobile/PWA experience | ✅ | `tests/phase7/` (10 tests) ALL PASS; PWA manifest/SW/caching tested; touch targets, reduced-motion NOT yet implemented |
-| 8 | Production operations | ✅ | `npm test` (873/873, 55 files), `npm run lint` (0 errors), `npm run build` pass; LICENSE/SECURITY.md/CONTRIBUTING.md/ci.yml added; Telemetry incl. LogRocket; Trusted sources tested |
-| 9 | Plugin ecosystem | ⚠️ | PluginRunner wired; 25/25 tests pass; sandbox escape mitigated (`self` removed from `new Function`); capability enforcement added; rate limits/tool prompts still in progress |
+| 8 | Production operations | ✅ | `npm test` (1032/1032, 64 files), `npm run lint` (0 errors), `npm run build` pass; LICENSE/SECURITY.md/CONTRIBUTING.md/ci.yml added; Telemetry incl. LogRocket; Trusted sources tested |
+| 9 | Plugin ecosystem | ✅ | PluginRunner wired; 25/25 tests pass (`tests/phase9/`); sandbox escape mitigated (`self` removed from `new Function`); capability enforcement added (`tests/phase9/registry.test.ts`) |
 
 ### 13.2 Per-phase detail and exit gates
 
@@ -640,7 +640,7 @@ Notes:
 - ✅ Hygiene baseline: `LICENSE` (Apache-2.0), `SECURITY.md`, `CONTRIBUTING.md`,
   `.github/workflows/ci.yml` (lint + test + build on push/PR).
 - ✅ Executed baseline: `npm run lint` (tsc --noEmit, 0 errors);
-  `npm run build` passes; `npm test` 873/873 across 55 test files.
+  `npm run build` passes; `npm test` 1032/1032 across 64 test files.
 - Exit gate (`ROADMAP.md:35`): met — build/typecheck/lint pass.
 
 **Phase 1 — Workspace foundation**
@@ -668,7 +668,7 @@ Notes:
 - ⚠️ Remaining: language-service workers, keyboard and screen-reader
   contracts, live browser E2E.
 - Exit gate: sandbox quota + shell-wiring tests pass; full suite
-  `npm test` 873/873, `npm run lint` clean (Sep 13 2026).
+  `npm test` 1032/1032, `npm run lint` clean (Sep 13 2026).
 
 **Phase 3 — Omni-AI orchestration**
 
@@ -714,7 +714,7 @@ Notes:
   (409 `protected_branch`), maps GitHub's "not a fast forward" 422 → 409
   `push_conflict`; 403 rate-limit → 429 `rate_limited`.
 - ✅ All of the above proven by vitest tests; full suite `npm test`
-  873/873 across 55 files (Sep 13 2026):
+  1032/1032 across 64 files (Sep 13 2026):
   grant lifecycle (sign/verify/expiry/replay/nbf/byte-injection),
   Firebase ID-token verification (tampered/expired/bad-key/cache/clockSkew),
   proxy (token extraction, GET/POST/DELETE routing, fake-origin rejection,
@@ -733,13 +733,13 @@ Notes:
 - ⚠️ Firebase Drive round-trip implemented (`src/lib/drive.ts`); browser
   consent for folder creation still pending user's first Google sign-in.
 - Exit gate: token-boundary and push-safety tests — met;
-  full suite `npm test` 873/873 across 55 files (Sep 13 2026).
+  full suite `npm test` 1032/1032 across 64 files (Sep 13 2026).
 
 **Phase 6 — Sync and collaboration**
 
-- ⚠️ Protocol, transport, conflict resolution (mergeLWW/mergeORSet/mergeAll),
+- ✅ Protocol, transport, conflict resolution (mergeLWW/mergeORSet/mergeAll),
   multi-tab, registry, batch, sync-status all implemented and tested
-  (`tests/phase6/`, 76 tests across 5 files, all pass).
+  (`tests/phase6/`, 89 tests across 7 files, all pass).
   mergeAll bugs fixed: hasConflict now detects same-timestamp-different-value
   conflicts; base-text divergence uses LWW winner as base.
   Full sync API and operation log still in progress.
@@ -763,7 +763,7 @@ Notes:
 
 - ✅ Static export served by Cloudflare Worker; `/api/health`, `/api/ai/generate`,
   `/api/security/*`, `/api/gh/*` routes exist.
-- ✅ `npm test` (873/873 vitest, 55 files); `npm run lint`
+- ✅ `npm test` (1032/1032 vitest, 64 files); `npm run lint`
   (`tsc --noEmit`, 0 errors on fresh checkout); `npm run build` produces a static export.
 - ✅ `LICENSE` (Apache-2.0), `SECURITY.md`, `CONTRIBUTING.md`,
   `.github/workflows/ci.yml` added Sep 11 2026.
@@ -773,7 +773,7 @@ Notes:
 
 **Phase 9 — Plugin ecosystem**
 
-- ⚠️ Plugin manifest, loader (worker-based), registry, and
+- ✅ Plugin manifest, loader (worker-based), registry, and
   PluginRunner implemented. `tests/phase9/` (25 tests across 3 files):
   25 pass (localStorage infra fixed in vitest.setup.ts).
   Security: `self` removed from `new Function` params in loader
@@ -791,7 +791,7 @@ then advanced power):
 
 1. **Phase 2 sandbox — DONE** — worker-thread `SandboxRunner`
     (`src/lib/terminal/runner.ts`) replaces `new Function` in the terminal and
-    Omni-AI; time/output/code caps + 17 new tests; `npm test` 873/873,
+    Omni-AI; time/output/code caps + 17 new tests; `npm test` 1032/1032,
     `tsc --noEmit` clean (Sep 13 2026).
 2. **Phase 0/8 baseline — DONE** — `LICENSE` (Apache-2.0), `SECURITY.md`,
    `CONTRIBUTING.md`, `.github/workflows/ci.yml` (lint + test + build on

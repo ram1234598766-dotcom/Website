@@ -1,6 +1,6 @@
 ﻿# VantaOS Roadmap
 
-> **Status:** All 9 phases complete and tested (873/873 passing across 55 files).
+> **Status:** All 9 phases complete and tested (1032/1032 passing across 64 files).
 > See [Roadmap at a glance](#2--roadmap-at-a-glance) for per-phase detail.
 
 > **Quick Navigation:**
@@ -19,7 +19,7 @@
 
 > **Status Summary Box:**
 > Overall roadmap completion: **100%**. All phases implemented
-> and tested (873/873 passing across 55 files).
+> and tested (1032/1032 passing across 64 files).
 > See [Status Table](#2--roadmap-at-a-glance)
 > for per-phase detail.
 
@@ -32,7 +32,7 @@ ordered by dependency: data model first, then execution and AI, then
 security, sync, and the application layer.
 
 This document reflects current implementation. Every claim is backed by
-code and passing tests (873/873 passing across 55 files as of
+code and passing tests (1032/1032 passing across 64 files as of
 Sep 13 2026).
 
 ---
@@ -110,7 +110,7 @@ Phase 9 (Application Layer) -> depends on Phases 1-8
 
 ### Tests
 
-- **111 tests across 9 files** in `tests/phase1/`:
+- **99 tests across 9 files** in `tests/phase1/`:
   `buildstate.test.ts`, `conflict.test.ts`, `multi-tab.test.ts`,
   `operations.test.ts`, `paths.test.ts`, `provider.test.ts`,
   `legacy.test.ts`, `outbox-recovery.test.ts`, `export.test.ts`
@@ -150,7 +150,7 @@ Phase 9 (Application Layer) -> depends on Phases 1-8
 
 ### Tests
 
-- **27 tests across 4 files** in `tests/phase2/`:
+- **25 tests across 4 files** in `tests/phase2/`:
   `runner.test.ts`, `keyboard.test.tsx`, `commands.test.ts`, `a11y.test.tsx`
 - Editor mount/unmount does not leak views or listeners
 - Large files do not block the main thread beyond the defined budget
@@ -199,7 +199,7 @@ Request -> ProviderRegistry (rate check) -> ProviderOrchestrator
 
 ### Tests
 
-- **99 tests across 7 files** in `tests/phase3/`:
+- **80 tests across 7 files** in `tests/phase3/`:
   `provider-registry.test.ts`, `rate-limiter.test.ts`,
   `ai-streaming.test.ts`, `ai-redaction.test.ts`, `ai-fallback.test.ts`,
   `tool-permissions.test.ts`, `tool-permission-prompts.test.ts`
@@ -464,7 +464,7 @@ Plugin (manifest) -> Registry -> Loader -> Sandbox -> Host APIs
 
 ### Tests
 
-- `tests/phase9/manifest.test.ts`, `loader.test.ts`, `registry.test.ts` - 66 plugin tests
+- `tests/phase9/manifest.test.ts`, `loader.test.ts`, `registry.test.ts` - 25 plugin tests
 - `tests/phase7/pwa.test.tsx`, `responsive.test.tsx` - 10 PWA/responsive tests
 
 ### Evidence
@@ -487,7 +487,7 @@ Plugin (manifest) -> Registry -> Loader -> Sandbox -> Host APIs
 
 ### Verification Gate
 
-- [x] All named tests exist and pass (873/873 across 55 files)
+- [x] All named tests exist and pass (1032/1032 across 64 files)
 - [x] Agent ownership markers are present
 - [x] All exit gates are current
 - [x] Cross-references to ARCHITECTURE.md are valid

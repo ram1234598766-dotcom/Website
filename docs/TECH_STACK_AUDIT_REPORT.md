@@ -122,13 +122,13 @@
 
 ### Error 3.1 — Section 6, line 423: Production build row marked 🎯
 - **Doc claims**: `| Production build | CI pipeline (...) | 🎯 Every push/PR (pipeline to be created) |`
-- **Actual**: CI pipeline exists at `.github/workflows/ci.yml` with typecheck, lint, test, contract, E2E, audit, and build jobs running on every push/PR (lines 3-193). Publish job runs on push to main (lines 170-193).
-- **Fix**: Change 🎯 to ✅ and update description to "CI pipeline runs on every push/PR; publish on push to main".
+- **Actual**: CI pipeline exists at `.github/workflows/ci.yml` with lint (typecheck), test (Vitest), build, and e2e (Playwright) jobs running on every push/PR. A dependency audit job is not present; `npm audit` is run manually. Publish/deploy runs through Cloudflare's own Workers Builds / Pages integration.
+- **Fix**: Change 🎯 to ✅ and update description to "CI pipeline runs on every push/PR".
 
 ### Error 3.2 — Section 5, line 384: Dependency scanner marked 🎯 with "implemented"
 - **Doc claims**: `a dependency security scanner in CI 🎯 implemented (npm audit --audit-level=moderate, pending CI pipeline creation)`
-- **Actual**: The `npm audit --audit-level=moderate` is already in CI at `.github/workflows/ci.yml:156`. Also the status is contradictory (🎯 = "in progress" but described as "implemented").
-- **Fix**: Change to ✅ implemented, remove "pending CI pipeline creation" qualifier.
+- **Actual**: No `npm audit` step exists in `.github/workflows/ci.yml` (current file: lint/test/build/e2e jobs only). `npm audit --audit-level=moderate` is run manually and currently reports 4 high-severity advisories (see `npm audit` output, Sep 13 2026). The CI coverage claim was false and is now corrected: if the scanner is wanted in CI it must be added as a job.
+- **Fix**: Correct the claim (no audit step in CI today); optionally add an audit job.
 
 ---
 
@@ -136,12 +136,21 @@
 
 ### Issue 4.1 — Test count verification (RESOLVED Sep 13 2026)
 - **Doc claims**: 873 Vitest tests across 55 files.
-- **Verification**: `npx vitest run` confirmed **873 tests passing across 55 files**. All docs updated accordingly.
+- **Verification**: `npx vitest run` reconfirmed on Sep 13 2026 after the
+  e2e exclusion in `vitest.config.ts`: **1032 tests passing across 64 files**
+  (`vitest run --exclude 'tests/e2e/**'`). All docs updated accordingly
+  (1032/1032 across 64 files).
 
 ### Issue 4.2 — 8 Playwright E2E tests claim
 - **Doc claims**: 8 Playwright E2E tests in `tests/e2e/`.
-- **Actual**: 6 E2E test files exist (auth, files, home, ide, omni-ai, terminal). The doc consistently says "8 tests" (not 8 files), suggesting it means individual `it()` blocks. Verification requires running `npx playwright test`.
-- **Action required**: Run E2E tests to confirm 8 test cases, or clarify the count.
+- **Actual**: 6 E2E test files exist (auth, files, home, ide, omni-ai,
+  terminal) containing **8 `test()` cases** (auth 2, files 1, home 1, ide 1,
+  omni-ai 1, terminal 2). `@playwright/test` is declared as a devDependency
+  and a `npx playwright test --config=tests/e2e/playwright.config.ts` CI job
+  now runs them; `tests/e2e/` is excluded from Vitest so unit and E2E suites
+  stay separate. Note: the E2E webServer serves `out/`, so a build must run
+  before the E2E suite (handled in `ci.yml`).
+- **Action resolved**: count clarified to 8 tests across 6 files; CI job added.
 
 ---
 
@@ -231,9 +240,9 @@ The following changes should be applied to `TECH_STACK.md`:
 8. **Line 101**: Fix `package.json:61` → `package.json:62`
 9. **Line 102**: Fix `package.json:49` → `package.json:50`
 10. **Line 117**: Fix `TerminalPanel.tsx:28-36` → `TerminalPanel.tsx:14-36` (or remove duplicate reference)
-11. **Line 411**: Fix `tests/phase2/` "5 files" → "4 files"
-12. **Line 419**: Fix `tests/phase-schema/` "9 files" → "10 files"
-13. **Line 423**: Fix Production build row from 🎯 to ✅
-14. **Line 424**: Update success message to match corrected table
-15. **Line 384**: Fix scanner status from 🎯 to ✅
-16. **Various**: Run E2E to confirm test count
+11. **Line 411**: Fix `tests/phase2/` "5 files" → "4 files" — ✅ applied (row now reads `4 test + 2 helpers`)
+12. **Line 419**: Fix `tests/phase-schema/` "9 files" → "10 files" — ✅ applied (now 10 files, 326 tests)
+13. **Line 423**: Fix Production build row from 🎯 to ✅ — ✅ row removed (Section 6 table now lists test classes only)
+14. **Line 424**: Update success message to match corrected table — ✅ applied
+15. **Line 384**: Correct scanner status (no `npm audit` in current CI) — ✅ corrected above
+16. **Various**: Run E2E to confirm test count — resolved Sep 13 2026: E2E suite is 8 `test()` cases across 6 files in `tests/e2e/flows/`; `@playwright/test` now declared as a devDependency and a CI e2e job added. Vitest excludes `tests/e2e/**` (1032/1032 across 64 files).
