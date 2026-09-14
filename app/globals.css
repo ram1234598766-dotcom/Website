@@ -40,7 +40,7 @@ html, body {
   text-rendering: optimizeLegibility;
 }
 
-#__next, body > div {
+#__next, body > div:not([aria-live]) {
   min-height: 100vh;
 }
 
