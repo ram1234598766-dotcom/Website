@@ -12,7 +12,7 @@
     "deploy": "npm run build && npx wrangler deploy",
     "cf-preview": "npm run build && npx wrangler dev",
     "firebase:setup": "bash scripts/firebase-setup.sh",
-    "firebase:deploy": "firebase deploy --only firestore:rules,firestore:indexes"
+    "firebase:deploy": "firebase deploy --only database:rules,firestore:rules,firestore:indexes"
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.3",
@@ -60,7 +60,9 @@
     "react-virtuoso": "^4.12.4"
   },
   "overrides": {
-    "postcss": "^8.5.28"
+    "adm-zip": "0.6.1",
+    "sharp": "0.35.4",
+    "postcss": "8.5.28"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^7.0.1",
@@ -79,10 +81,5 @@
     "vite": "^8.3.0",
     "vitest": "^5.0.0",
     "wrangler": "^4.114.0"
-  },
-  "overrides": {
-    "adm-zip": "0.6.1",
-    "sharp": "0.35.4",
-    "postcss": "8.5.28"
   }
 }
