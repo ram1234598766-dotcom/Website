@@ -67,7 +67,7 @@ auth proxying, and static asset serving.
                      │                              │
 ┌────────────────────▼──────────────────────────────┴──────────────────┐
 │                     Cloudflare Worker                                │
-│  wrangler.toml; `npx next build && npx opennextjs-cloudflare build && npx wrangler deploy` │
+│  wrangler.toml `[build]`; deploy: `npm run deploy` (`npx wrangler deploy`) │
 │  Rate limit: 100 req / 60 s                                         │
 │                                                                     │
 │  /api/health          — health check                                │

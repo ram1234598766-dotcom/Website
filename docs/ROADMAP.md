@@ -11,7 +11,7 @@ This document records what is implemented and tested, ordered by the 9 developme
 **Data-tier and deploy notes:**
 
 - The data tier is Firebase **Realtime Database (RTDB)**, not Firestore. The `npm run firebase:deploy` script in `package.json` still targets `firestore.rules` / `firestore.indexes` and is **STALE**; the correct rules deploy is `firebase deploy --only database`. Flagged, not yet corrected.
-- Deployment is one OpenNext Cloudflare Worker unit (`.open-next/worker.js` + `.open-next/assets`) via `npm run deploy` (`opennextjs-cloudflare build && opennextjs-cloudflare deploy`); rollback via `npx wrangler rollback [version-id]`. E2E's `webServer` builds and runs the app (`npm run build && npx next start -p 4173`), so build-first is required.
+- Deployment is one OpenNext Cloudflare Worker unit (`.open-next/worker.js` + `.open-next/assets`) via `npm run deploy` (`npx wrangler deploy`, builds via `[build]` in wrangler.toml); rollback via `npx wrangler rollback [version-id]`. E2E's `webServer` builds and runs the app (`npm run build && npx next start -p 4173`), so build-first is required.
 
 ## Phase history
 

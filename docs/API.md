@@ -46,7 +46,7 @@ VantaOS is a Next.js 15 **hybrid-rendered** app — static shell pages plus dyna
 
 ## 1. Backend API
 
-**Module:** OpenNext worker bundle (`app/api/*` route handlers; logic in `src/lib/server/*`). Deployed via `opennextjs-cloudflare build && opennextjs-cloudflare deploy`.
+**Module:** OpenNext worker bundle (`app/api/*` route handlers; logic in `src/lib/server/*`). Deployed via `npm run deploy` (`npx wrangler deploy`, builds via `[build]` in wrangler.toml).
 
 **Purpose:** the worker is the only backend in the deployment. It (a) serves the Next.js hybrid build at the edge (static pages + on-demand route handlers), (b) exposes a health probe, (c) proxies cloud AI generation, and (d) hosts the GitHub OAuth proxy.
 

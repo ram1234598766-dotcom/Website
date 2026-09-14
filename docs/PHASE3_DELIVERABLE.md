@@ -33,7 +33,7 @@
 | 2 | `GET /api/nonexistent` | JSON `{"error":"Not found"}` | Next.js HTML 404 page | Non-API 404s are HTML now |
 | 3 | Unexported HTTP methods on `/api/health` (e.g. PUT) | JSON 405 | HTTP 405 Method Not Allowed | Correct REST semantics, but body shape changed |
 | 4 | `cache-control` on health | `no-cache` | `private, no-cache, no-store` | Stricter; no CDN/edge caching |
-| 5 | Deploy command | `npx wrangler deploy` | `npm run deploy` (`opennextjs-cloudflare build && opennextjs-cloudflare deploy`) | Different build pipeline |
+| 5 | Deploy command | `npx wrangler deploy` | `npm run deploy` (`npx wrangler deploy`, builds via `[build]` in wrangler.toml) | Same tool, different build config |
 | 6 | Rollback command | `npx wrangler rollback` | `npx wrangler rollback [version-id]` | Same, but version IDs from `wrangler deployments list` |
 | 7 | GitHub OAuth token store | `GH_TOKENS` KV namespace | No KV — fails closed | OAuth proxy is inert by design |
 | 8 | Build output | `out/` (static export) | `.open-next/worker.js` + `.open-next/assets/` | Different artifact structure |
@@ -77,7 +77,7 @@ npm run lint
 ### Deploy
 ```bash
 npm run deploy
-# opennextjs-cloudflare build && opennextjs-cloudflare deploy
+# npx wrangler deploy (builds via [build] in wrangler.toml: npx opennextjs-cloudflare build)
 # Expect: deployment ID printed, site live at https://website.vasudevaya.workers.dev
 ```
 

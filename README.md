@@ -82,7 +82,7 @@ Open the printed localhost URL. Every `NEXT_PUBLIC_FIREBASE_*` variable is optio
 | `npm run deploy` | OpenNext Worker bundle (`.open-next/`) + deploy |
 | `npm run lint` | Type-check without emitting (`tsc --noEmit`) |
 | `npm test` | Run the Vitest suite — 1047/1047 tests across 65 files |
-| `npm run deploy` | `opennextjs-cloudflare build && opennextjs-cloudflare deploy` — one Worker unit (worker + assets) |
+| `npm run deploy` | `npx wrangler deploy` (builds via `[build]` in wrangler.toml) — one Worker unit (worker + assets) |
 | `npm run cf-preview` | Build, then preview the OpenNext worker locally via `wrangler dev` |
 
 **Stale script:** `firebase:deploy` (package.json line 15) is outdated — it still targets `firestore:rules/indexes`. RTDB is the live data tier; deploy its rules with `firebase deploy --only database` instead.
@@ -100,7 +100,7 @@ Open the printed localhost URL. Every `NEXT_PUBLIC_FIREBASE_*` variable is optio
 ## Deployment
 
 ```bash
-npm run deploy           # opennextjs-cloudflare build && deploy → single Worker + assets
+npm run deploy           # npx wrangler deploy (build via [build] in wrangler.toml) → single Worker + assets
 ```
 
 - **Live URL:** https://website.vasudevaya.workers.dev (current deployment `1a381352-e1f4-4de6-b2b0-4e4b6ecb4726`).
