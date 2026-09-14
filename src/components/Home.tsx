@@ -25,6 +25,7 @@ import {
   Lock,
   Play,
   Braces,
+  BrainCircuit,
 } from 'lucide-react';
 import Logo from './Logo';
 
@@ -619,6 +620,34 @@ export default function Home({ setCurrentView, onSignIn, onSignUp }: HomeProps) 
                 <p><strong className="text-white">Browse models</strong> — open <strong className="text-white">WebModels</strong> in the navigation to discover model packages that run locally in your browser.</p>
                 <p><strong className="text-white">Download &amp; verify</strong> — downloads are content-hash verified against trusted sources (Hugging Face, VantaOS Official) before they install.</p>
                 <p><strong className="text-white">Use them in Omni-AI</strong> — select <strong className="text-white">WebModel</strong> in Omni-AI Settings to chat with an in-browser model. No API key, no data leaves your device.</p>
+              </div>
+            </div>
+
+            {/* Sign-in options */}
+            <div className="vanta-card overflow-hidden flex flex-col">
+              <div className="px-7 pt-6 pb-4 border-b border-white/[0.08] flex items-center gap-3">
+                <Lock className="w-5 h-5 text-emerald-400" />
+                <h3 className="text-lg font-bold text-white">Sign in to VantaOS</h3>
+              </div>
+              <div className="p-7 space-y-3.5 text-sm text-[#9499ad] leading-relaxed flex-1">
+                <p><strong className="text-white">Continue with Google</strong> — click the Google button on the sign-in page to authenticate with your Google account via OAuth. Quick, secure, no password to remember.</p>
+                <p><strong className="text-white">Continue with GitHub</strong> — click the GitHub button to sign in with your GitHub account. Gets you straight into the IDE with your repos synced.</p>
+                <p><strong className="text-white">Email &amp; password</strong> — create an account with your email and a password. Works everywhere, even offline.</p>
+                <p><strong className="text-white">Guest mode</strong> — try VantaOS instantly with zero setup. Sign in anytime to unlock cloud sync, GitHub, and AI features.</p>
+              </div>
+            </div>
+
+            {/* Gemini AI section */}
+            <div className="vanta-card overflow-hidden flex flex-col">
+              <div className="px-7 pt-6 pb-4 border-b border-white/[0.08] flex items-center gap-3">
+                <BrainCircuit className="w-5 h-5 text-blue-400" />
+                <h3 className="text-lg font-bold text-white">Gemini AI integration</h3>
+              </div>
+              <div className="p-7 space-y-3.5 text-sm text-[#9499ad] leading-relaxed flex-1">
+                <p><strong className="text-white">Google Gemini</strong> — VantaOS integrates directly with Google's Gemini AI models through the Generative Language API. Add your Gemini API key in Omni-AI Settings (<strong className="text-white">⚙️ → Gemini</strong>) to unlock cloud AI without leaving your workspace.</p>
+                <p><strong className="text-white">How it works</strong> — when you select Gemini as your provider in Omni-AI, prompts are sent to <code className="text-[#818cf8] font-mono text-xs bg-black/30 px-1.5 py-0.5 rounded">generativelanguage.googleapis.com</code> with your API key. Responses stream back into the chat panel instantly.</p>
+                <p><strong className="text-white">Models available</strong> — <code className="text-[#818cf8] font-mono text-xs bg-black/30 px-1.5 py-0.5 rounded">gemini-2.5-flash</code> for fast everyday tasks, plus access to the latest Gemini family models as they release.</p>
+                <p><strong className="text-white">Privacy</strong> — your API key stays in your browser's local storage. VantaOS never stores or transmits it to our servers. Get a free key at <code className="text-[#818cf8] font-mono text-xs bg-black/30 px-1.5 py-0.5 rounded">aistudio.google.com</code>.</p>
               </div>
             </div>
           </div>
