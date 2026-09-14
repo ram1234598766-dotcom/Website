@@ -1,734 +1,291 @@
-﻿# VantaOS Public API Documentation
+﻿# VantaOS API Documentation
 
-> **Verification date:** 2026-09-13
-> **Source verification:** All signatures were read directly from source files and confirmed to match actual export declarations.
+> **Verification date:** 2026-09-13 (source-verified against the audited codebase)
+> **Current as of:** 2026-09-14
+> **Status model:** ✅ verified (read from code + exercised by the test suites) · ⚠️ present-but-not-enabled · 🎯 target
+> **Ground truth:** This document is derived from executed tests and read source, not from README claims. References are module-level unless a `file:line` pair is explicitly cited below; no line numbers are invented.
+
+---
+
+## Current Architecture Snapshot
+
+VantaOS is a Next.js 15 **static export** served by a **Cloudflare Worker**, with **Firebase Realtime Database (RTDB)** as its data tier.
+
+- Live URL: `https://website.vasudevaya.workers.dev`
+- Backend: a single Cloudflare Worker (`workers/worker.ts`) serves the static build and the REST API in Section 1.
+- **Data tier = Firebase Realtime Database (RTDB), not Firestore.** The client module carrying a legacy name (`src/lib/firestore.ts`) exposes the RTDB data layer via `isFirestoreAvailable()` — a legacy alias. Nothing in the product writes application data to Firestore.
+- Security boundary: the client-only app has no application server authorizing reads/writes. The server-side authorization contract is the RTDB ruleset at `database.rules.json` (see Section 2).
+
+**Test / verification status (Sep 13, 2026):** Vitest **1032/1032** passing across **64 files**; Playwright **8 cases across 6 files**. CI runs lint, test, build, and e2e. Gap: there is **no npm audit job** in CI.
+
+**API surfaces at a glance:**
+
+| Surface | Module / Endpoint | Status |
+|---|---|---|
+| Backend Worker API | `workers/worker.ts` · `/api/health` · `/api/ai/generate` · `/api/gh/*` | ✅ / ✅ / ⚠️ |
+| Firebase Auth + RTDB | firebase ^12.19.0 · `src/lib/firestore.ts` · `src/lib/demoAuth.ts` | ✅ |
+| Workspace Files API | `src/lib/workspace/index.ts` · `src/lib/storage.ts` · `src/lib/workspace/export.ts` | ✅ |
+| Editor / Model / AI adapter layer | `src/lib/models/adapter.ts` · `src/lib/client.ts` · `src/lib/telemetry/index.ts` | ✅ |
+| Google Drive Integration | `src/lib/drive.ts` · `DriveManager.tsx` | ✅ |
+| GitHub Integration | `src/lib/github.ts` · `GitHubManager.tsx` · `/api/gh/*` | ⚠️ proxy not enabled in prod |
+| Terminal Sandbox API | `src/lib/terminal/runner.ts` · `TerminalPanel.tsx` | ✅ |
 
 ---
 
 ## Table of Contents
 
-1. [Workspace API](#1-workspace-api)
-2. [Terminal API](#2-terminal-api)
-3. [Sync API](#3-sync-api)
-4. [Model API](#4-model-api)
-5. [Telemetry API](#5-telemetry-api)
-6. [AI Provider API](#6-ai-provider-api)
-7. [Cross-Reference Matrix](#7-cross-reference-matrix)
-
-## 1. Workspace API
-
-**Source:** src/lib/workspace/index.ts (re-exports from ./types, ./operations, ./indexes, ./conflict, ./adapter, ./capabilities, ./paths, ./workspace)
-
-### 1.1 Types (re-exported from ./types)
-
-| Type | Defined in | Description |
-|------|-----------|-------------|
-| WorkspaceNode | src/lib/workspace/types.ts:13 | A file or folder node in the workspace tree |
-| NodeKind | src/lib/workspace/types.ts:11 | file or folder |
-| Operation | src/lib/workspace/types.ts:109 | Discriminated union of all operation types |
-| OperationKind | src/lib/workspace/types.ts:27 | create_node, create_folder, update_content, rename_node, move_node, delete_node |
-| CreateNodeOp | src/lib/workspace/types.ts:46 | Operation that creates a file node |
-| CreateFolderOp | src/lib/workspace/types.ts:58 | Operation that creates a folder node |
-| UpdateContentOp | src/lib/workspace/types.ts:67 | Operation that updates file content |
-| RenameNodeOp | src/lib/workspace/types.ts:76 | Operation that renames a node |
-| MoveNodeOp | src/lib/workspace/types.ts:87 | Operation that moves a node |
-| DeleteNodeOp | src/lib/workspace/types.ts:98 | Operation that deletes a node |
-| WorkspaceState | src/lib/workspace/types.ts:119 | Derived workspace state (nodes, indexes, dirty set) |
-| WorkspaceConfig | src/lib/workspace/types.ts:192 | Workspace configuration (conflict policy, limits, adapters) |
-| ConflictRecord | src/lib/workspace/types.ts:134 | A detected conflict between local and remote operations |
-| ConflictPolicy | src/lib/workspace/types.ts:143 | last-writer-wins, ask-user, auto-merge |
-| AdapterKind | src/lib/workspace/types.ts:147 | disk, github, gitlab, cloudos |
-| AdapterCapabilities | src/lib/workspace/types.ts:149 | Read/write/delete/move/sync capability flags |
-| Adapter | src/lib/workspace/types.ts:157 | Interface for external storage backends |
-| CapabilitySlot | src/lib/workspace/types.ts:173 | Named provider slots |
-| CapabilityProvider | src/lib/workspace/types.ts:182 | A provider registered for a capability slot |
-| DEFAULT_WORKSPACE_CONFIG | src/lib/workspace/types.ts:202 | Default workspace configuration constant |
-
-### 1.2 Operation Log Functions (from ./operations)
-
-#### appendOp
-
- appendOp(
-  kind: OperationKind,
-  source: Operation[" source],
- payload: Operation[\payload],
- idempotencyKey?: string
-): Promise<Operation>
-
-
-**Source:** src/lib/workspace/operations.ts:87
-
-Appends an operation to the append-only oplog and persists it to IndexedDB. Returns the sealed operation (with assigned id, timestamp, and seq). If an idempotencyKey is provided and a matching operation already exists, the existing operation is returned instead.
-
-**Returns:** Promise<Operation> - The sealed operation with assigned metadata.
-
-#### bulkAppendOps
-
- bulkAppendOps(ops: readonly Operation[]): Promise<void> 
-
-**Source:** src/lib/workspace/operations.ts:136
-
-Bulk-appends operations, used during migration from localStorage. Assigns sequence numbers to operations that lack them.
-
-#### loadOps
-
- loadOps(): Promise<readonly Operation[]> 
-
-**Source:** src/lib/workspace/operations.ts:169
-
-Loads all operations from the oplog, sorted by sequence number.
-
-**Returns:** Promise<readonly Operation[]> - All operations sorted by seq.
-
-#### loadOpsAfter
-
- loadOpsAfter(seq: number): Promise<readonly Operation[]> 
-
-**Source:** src/lib/workspace/operations.ts:185
-
-Loads operations with a sequence number greater than the given value. Used for incremental sync.
-
-#### clearOps
-
- clearOps(): Promise<void> 
-
-**Source:** src/lib/workspace/operations.ts:199
-
-Deletes all operations from the oplog (used during compaction). Resets the sequence counter to 0.
-
-#### replaceOps
-
- replaceOps(ops: readonly Operation[]): Promise<void> 
-
-**Source:** src/lib/workspace/operations.ts:211
-
-Replaces the entire oplog. Used after compaction: clears then bulk-appends.
-
-#### initSeqCounter
-
- initSeqCounter(startFrom: number): void 
-
-**Source:** src/lib/workspace/operations.ts:67
-
-Initializes the in-memory sequence counter. No-op if startFrom is less than the current counter value.
-
-#### findOpByIdempotencyKey
-
- findOpByIdempotencyKey(key: string): Promise<Operation | undefined> 
-
-**Source:** src/lib/workspace/operations.ts:121
-
-Finds an existing operation by its idempotency key.
-
-#### Op Factory Functions
-
-\\	ypescript
-These functions create *unsealed* operation objects (with seq: 0). The seq field is overwritten when passed to appendOp.
-
-| Function | Signature | Source |
-|----------|-----------|--------|
-| makeCreateNodeOp | (params: { path, name, parentId, content, language }, source?, idempotencyKey?) => CreateNodeOp | operations.ts:221 |
-| makeCreateFolderOp | (params: { path, name, parentId }, source?, idempotencyKey?) => CreateFolderOp | operations.ts:247 |
-| makeUpdateContentOp | (params: { nodeId, content, contentHash }, source?) => UpdateContentOp | operations.ts:271 |
-| makeRenameNodeOp | (params: { nodeId, oldName, newName, oldPath, newPath }, source?) => RenameNodeOp | operations.ts:290 |
-| makeMoveNodeOp | (params: { nodeId, oldParentId, newParentId, oldPath, newPath }, source?) => MoveNodeOp | operations.ts:311 |
-| makeDeleteNodeOp | (params: { nodeId, path, snapshot }, source?) => DeleteNodeOp | operations.ts:332 |
-
-### 1.3 Index Functions (from ./indexes)
-
-| Function | Signature | Returns | Source |
-|----------|-----------|---------|--------|
-| contentHash | (text: string) => string | Simple non-crypto hash (base-36) | indexes.ts:17 |
-| detectLanguage | (filename: string) => string | Language name from file extension | indexes.ts:48 |
-| buildState | (ops: readonly Operation[]) => WorkspaceState | Replays ops into full workspace state (pure function) | indexes.ts:64 |
-| getChildren | (state: WorkspaceState, parentId: string | null) => readonly WorkspaceNode[] | Children sorted (folders first, alphabetical) | indexes.ts:204 |
-| getNodeByPath | (state: WorkspaceState, path: string) => WorkspaceNode | undefined | Node at the given path | indexes.ts:221 |
-| getDescendants | (state: WorkspaceState, nodeId: string) => readonly WorkspaceNode[] | All descendants (recursive) | indexes.ts:230 |
-| getPathParts | (path: string) => readonly string[] | Path segments | indexes.ts:250 |
-| buildPath | (...parts: string[]) => string | Joins segments with / | indexes.ts:255 |
-
-### 1.4 Conflict Functions (from ./conflict)
-
-| Function | Signature | Source |
-|----------|-----------|--------|
-| detectConflicts | (localOps: readonly Operation[], remoteOps: readonly Operation[]) => ConflictRecord[] | conflict.ts:77 |
-| resolveConflicts | (conflicts: readonly ConflictRecord[], policy: ConflictPolicy) => readonly Operation[] | conflict.ts:121 |
-| markResolved | (conflict: ConflictRecord) => ConflictRecord | conflict.ts:156 |
-
-### 1.5 Adapter Functions and Classes (from ./adapter)
-
-| Export | Type | Source |
-|--------|------|--------|
-| InMemoryAdapter | class | adapter.ts:30 |
-| GitHubAdapter | class | adapter.ts:87 |
-| registerAdapter | (adapter: Adapter) => void | adapter.ts:178 |
-| getAdapter | (id: string) => Adapter | undefined | adapter.ts:182 |
-| getAllAdapters | () => readonly Adapter[] | adapter.ts:186 |
-| removeAdapter | (id: string) => boolean | adapter.ts:190 |
-| initDefaultAdapters | () => void | adapter.ts:195 |
-
-### 1.6 Capability Registry Functions (from ./capabilities)
-
-| Function | Signature | Source |
-|----------|-----------|--------|
-| registerCapability | (provider: CapabilityProvider) => void | capabilities.ts:15 |
-| getCapability | (slot: CapabilitySlot) => CapabilityProvider | undefined | capabilities.ts:30 |
-| getCapabilities | (slot: CapabilitySlot) => readonly CapabilityProvider[] | capabilities.ts:36 |
-| removeCapability | (id: string) => boolean | capabilities.ts:41 |
-| clearCapabilities | () => void | capabilities.ts:57 |
-| occupiedSlots | () => CapabilitySlot[] | capabilities.ts:62 |
-
-### 1.7 Path Utility Functions (from ./paths)
-
-| Function | Signature | Returns | Source |
-|----------|-----------|---------|--------|
-| validatePath | (path: string) => PathValidation | { valid: boolean; error?: string } | paths.ts:31 |
-| validateName | (name: string) => PathValidation | { valid: boolean; error?: string } | paths.ts:65 |
-| buildCanonicalPath | (parentPath: string | null, childName: string) => string | null | paths.ts:79 |
-| parentPathOf | (path: string) => string | null | paths.ts:94 |
-| pathDepth | (path: string) => number | paths.ts:103 |
-| isDescendantOf | (path: string, ancestor: string) => boolean | paths.ts:108 |
-| normalizePath | (path: string) => string | null | paths.ts:117 |
-| sanitizeName | (name: string) => string | paths.ts:139 |
-
-### 1.8 React Provider (from ./workspace)
-
-| Export | Type | Source |
-|--------|------|--------|
-| WorkspaceProvider | React component | workspace.tsx:112 |
-| useWorkspace | () => WorkspaceContextValue | workspace.tsx:97 |
-
-
-## 2. Terminal API
-
-**Source:** src/lib/terminal/runner.ts
-
-\\	ypescript
-The Terminal API provides sandboxed JavaScript execution using Web Workers (or worker_threads on Node), with wall-clock timeouts, output caps, and automatic cleanup. Each run gets a fresh worker for isolation.
-
-### 2.1 Interfaces and Types
-
-| Type | Signature / Shape | Source |
-|------|-------------------|--------|
-| SandboxWorkerLike | { onMessage(cb): void; onError(cb): void; post(msg): void; terminate(): void } | runner.ts:26 |
-| SandboxWorkerFactory | (source: string) => SandboxWorkerLike | runner.ts:33 |
-| SandboxRunnerConfig | { maxRunMs: number; maxOutputChars: number; maxCodeChars: number } | runner.ts:35 |
-| SandboxRunResult | { ok: boolean; value: string; output: readonly string[]; error?: string; terminated?: string; durationMs: number } | runner.ts:43 |
-| SandboxRunHandle | { readonly runId: number; readonly result: Promise<SandboxRunResult>; cancel(): void } | runner.ts:57 |
-| JsRunner | { run(code: string): SandboxRunHandle } | runner.ts:65 |
-
-### 2.2 Functions
-
-#### buildSandboxWorkerSource
-
- buildSandboxWorkerSource(): string 
-
-**Source:** src/lib/terminal/runner.ts:81
-
-Returns the JavaScript source code for the sandboxed worker body. The worker intercepts console methods (log/error/warn/info) to emit messages back to the host, executes code via new Function, and restores console on completion.
-
-**Returns:** string - Ready-to-inject worker source.
-
-#### buildNodeWorkerBridge
-
- buildNodeWorkerBridge(): string 
-
-**Source:** src/lib/terminal/runner.ts:120
-
-Returns the Node.js worker_threads bridge source that prepends parentPort aliasing to the worker body, enabling the same protocol over Node worker_threads.
-
-**Returns:** string - Bridge source code.
-
-### 2.3 Classes
-
-#### SandboxRunner
-
- new SandboxRunner(factory?: SandboxWorkerFactory, config?: Partial<SandboxRunnerConfig>): SandboxRunner 
-
-**Source:** src/lib/terminal/runner.ts:159
-
-\\	ypescript
-Implements JsRunner. Manages sandboxed code execution with isolation, timeouts, and output limits.
-
-**Constructor parameters:**
-- **factory:** SandboxWorkerFactory (default: browserSandboxWorkerFactory) - Factory that creates worker instances
-- **config:** Partial<SandboxRunnerConfig> - Override defaults (maxRunMs: 10000, maxOutputChars: QUOTA_LIMITS.maxOutputChars, maxCodeChars: 200000)
-
-**Methods:**
-| Method | Signature | Description |
-|--------|-----------|-------------|
-| run | (code: string) => SandboxRunHandle | Execute code in a sandboxed worker |
-
-**Example:**
-`	ypescript
-import { SandboxRunner } from " src/lib/terminal\;
-
-const runner = new SandboxRunner(undefined, { maxRunMs: 5000 });
-const handle = runner.run(\2 + 2\);
-const result = await handle.result;
-console.log(result.ok, result.value);
-`
-
-## 3. Sync API
-
-**Source:** src/lib/sync/protocol.ts
-
-\\	ypescript
-The Sync API defines pull/push/presence protocol messages and includes a mock transport for testing. Designed for a future backend; tests use MockSyncTransport.
-
-### 3.1 Types (from sync/types.ts)
-
-| Type | Description |
-|------|-------------|
-| SyncMessage | Base protocol message with type, deviceId, timestamp, payload |
-| SyncMessageType | pull_request | pull_response | push_request | push_ack | push_nack | presence_heartbeat | cursor_broadcast |
-| SyncTransport | { send(msg): Promise<void>; onMessage(fn): void; offMessage?(fn): void } |
-| PullRequest | { sinceSeq: number; deviceId: string } |
-| PullResponse | { ops: readonly SyncOp[]; tombstones: readonly Tombstone[]; hasMore: boolean } |
-| PushRequest | { batch: OperationBatch } |
-| PushAck | { accepted: boolean; conflicts: ConflictInfo[]; serverLamport: number } |
-| PushNack | { reason: string; retryAfterMs: number } |
-| PresenceHeartbeat | { deviceId; label; online; lastCursor? } |
-| ConflictInfo | { nodeId; localLamport; remoteLamport } |
-| PeerPresence | { deviceId; label; online; lastSeen; cursor } |
-| SyncState | synced | syncing | offline | conflict |
-| SyncStatus | { state; lastSyncAt; pendingOps; peers; conflicts; deviceId } |
-| OperationBatch | { header: BatchHeader; operations: readonly SyncOp[]; tombstones: readonly Tombstone[] } |
-| Tombstone | { nodeId; deletedAt; deletedBy } |
-| SyncOp | { id; kind; timestamp; deviceId; lamport; payload } |
-
-### 3.2 Message Builder Functions
-
-| Function | Signature | Source |
-|----------|-----------|--------|
-| buildPullRequest | (sinceSeq: number, deviceId: string) => SyncMessage | protocol.ts:30 |
-| buildPullResponse | (ops, tombstones, hasMore, deviceId) => SyncMessage | protocol.ts:34 |
-| buildPushRequest | (batch: OperationBatch, deviceId: string) => SyncMessage | protocol.ts:48 |
-| buildPushAck | (accepted, conflicts, serverLamport, deviceId) => SyncMessage | protocol.ts:52 |
-| buildPushNack | (reason: string, retryAfterMs: number, deviceId: string) => SyncMessage | protocol.ts:61 |
-| buildPresenceHeartbeat | (deviceId, label, online, cursor?) => SyncMessage | protocol.ts:65 |
-| buildCursorBroadcast | (deviceId, nodeId, position: number) => SyncMessage | protocol.ts:74 |
-
-### 3.3 Protocol State
-
-**ProtocolState interface:**
-- deviceId: string (readonly)
-- label: string (readonly)
-- lamport: number
-- vectorClock: Record<string, number>
-- lastSyncSeq: number
-- lastSyncAt: number | null
-- pendingOps: number
-- peers: Map<string, PeerPresence>
-- state: SyncState
-- conflicts: ConflictInfo[]
-
-#### createProtocolState
-
- createProtocolState(deviceId: string, label: string): ProtocolState 
-
-Creates a new protocol state initialized to defaults (lamport 0, empty vector clock, state: synced, no peers, no conflicts).
-
-### 3.4 Sync Engine
-
-**SyncEngine interface:**
-- state: ProtocolState (readonly)
-- pull(sinceSeq: number): Promise<PullResponse>
-- push(batch: OperationBatch): Promise<PushAck | PushNack>
-- heartbeat(): Promise<void>
-- broadcastCursor(nodeId: string, position: number): Promise<void>
-- onPeerPresence(handler: (peer: PeerPresence) => void): void
-
-#### createSyncEngine
-
- createSyncEngine(deviceId: string, label: string, transport: SyncTransport, options?: SyncEngineOptions): SyncEngine 
-
-Creates a sync engine bound to a transport. The engine handles message routing (push_ack, push_nack, presence_heartbeat, cursor_broadcast) and updates protocol state accordingly.
-
-**SyncEngine methods:**
-| Method | Description |
-|--------|-------------|
-| pull(sinceSeq) | Request operations after the given sequence number |
-| push(batch) | Push an operation batch; returns ack or nack |
-| heartbeat() | Send a presence heartbeat marking self as online |
-| broadcastCursor(nodeId, position) | Broadcast cursor position for collaborative editing |
-| onPeerPresence(handler) | Register a handler for peer presence updates |
-
-### 3.5 Mock Transport
-
-#### MockSyncTransport
-
- class MockSyncTransport implements SyncTransport 
-
-\\	ypescript
-A test transport that can be paired with another MockSyncTransport so messages sent by one are received by the other, simulating a network link.
-
-**Methods:**
-| Method | Description |
-|--------|-------------|
-| pairWith(other) | Pair with another MockSyncTransport |
-| send(message) | Send a message (delivers to paired transport and listeners) |
-| onMessage(handler) | Register message handler |
-| offMessage(handler) | Remove message handler |
-| getLog() | Get message history |
-| clear() | Clear history and handlers |
-
-### 3.6 Helper Functions
-
-| Function | Signature | Source |
-|----------|-----------|--------|
-| getSyncStatus | (state: ProtocolState) => SyncStatus | protocol.ts:322 |
-| countOnlinePeers | (state: ProtocolState) => number | protocol.ts:333 |
-
-
-## 4. Model API
-
-**Source:** src/lib/models/adapter.ts
-
-\\	ypescript
-The Model API manages WebModel lifecycle: download (resumable, verified), storage (IndexedDB), runtime detection, model resolution, cryptographic signature verification, and inference execution.
-
-### 4.1 Public Functions
-
-#### canonicalStringify
-
- canonicalStringify(value: unknown): string 
-
-**Source:** src/lib/models/adapter.ts:34
-
-\\	ypescript
-Deterministic canonical JSON serialization: sorted keys, no whitespace. Used for signature verification payloads.
-
-#### downloadModel
-
- downloadModel(manifest: ModelManifest, onProgress?: (pct: number) => Promise<void>): Promise<void> 
-
-**Source:** src/lib/models/adapter.ts:198
-
-Downloads all shards for a model manifest. Each shard is downloaded via HTTP range requests (resumable), verified against its SHA-256 digest, and persisted to IndexedDB. Calls onProgress with the overall percentage (0-100) after each shard completes.
-
-#### verifyShard
-
- verifyShard(url: string, expectedSha256: string): Promise<boolean> 
-
-**Source:** src/lib/models/adapter.ts:264
-
-Downloads a single shard and verifies its SHA-256 against the expected digest. Returns true when the digest matches, false otherwise.
-
-#### detectRuntime
-
- detectRuntime(): { webgpu: boolean; wasm: boolean; suitable: boolean } 
-
-**Source:** src/lib/models/adapter.ts:282
-
-Detects browser runtime capabilities for WebModel execution.
-
-#### getModelProfile
-
- getModelProfile(): " low-memory-mobile\ | \modern-mobile\ | \laptop\ | \desktop\ 
-
-**Source:** src/lib/models/adapter.ts:293
-
-Detects the device capability profile based on device memory, CPU cores, and user agent.
-
-#### resolveModel
-
- resolveModel(manifestId: string): Promise<ModelManifest | null> 
-
-**Source:** src/lib/models/adapter.ts:323
-
-Resolves a model manifest by ID. Checks the in-memory cache first, then IndexedDB storage. Returns null when no manifest is found.
-
-#### verifyManifestSignature
-
- verifyManifestSignature(manifest: ModelManifest): Promise<boolean> 
-
-**Source:** src/lib/models/adapter.ts:353
-
-\\	ypescript
-Verifies a model manifest cryptographic signature. Supports HMAC-SHA256 and Ed25519 schemes. Returns true if valid, false otherwise.
-
-#### load
-
- load(modelPath: string): Promise<RuntimeInstance> 
-
-**Source:** src/lib/models/adapter.ts:487
-
-Loads a verified model into memory. Verifies manifest signature and shard digests before creating a runtime instance. Throws if verification fails or the model is not found.
-
-#### generate
-
- generate(prompt: string, instance: RuntimeInstance): Promise<string> 
-
-**Source:** src/lib/models/adapter.ts:539
-
-Runs inference on a loaded model instance. Attempts real model inference via @huggingface/transformers (WebGPU/WASM). On any failure, falls back to a deterministic placeholder.
-
-#### unload
-
- unload(instance: RuntimeInstance): Promise<void> 
-
-**Source:** src/lib/models/adapter.ts:573
-
-Unloads a model instance, freeing resources.
-
-#### clearActiveInstances
-
- clearActiveInstances(): void 
-
-**Source:** src/lib/models/adapter.ts:578
-
-Clears all active runtime instances from the registry.
-
-#### getCloudFallbackMessage
-
- getCloudFallbackMessage(runtime: { webgpu: boolean; wasm: boolean }): string 
-
-**Source:** src/lib/models/adapter.ts:589
-
-Returns a user-facing message when no local runtime is available. Returns empty string when suitable runtime exists.
-
-#### getModelClass
-
- getModelClass(profile: DeviceProfile): string 
-
-**Source:** src/lib/models/adapter.ts:601
-
-\\	ypescript
-Maps a device profile to a model size class label.
-
-| Profile | Returns |
-|---------|---------|
-| low-memory-mobile | 1B |
-| modern-mobile | 3B |
-| laptop | 7B |
-| desktop | 70B |
-
-#### checkStorageQuota
-
- checkStorageQuota(availableMB: number, requiredMB: number): { ok: boolean; reason?: string } 
-
-**Source:** src/lib/models/adapter.ts:618
-
-Checks whether available storage meets a required threshold.
-
-#### deleteDB, openDB
-
-Exported from src/lib/models/adapter.ts for direct IndexedDB access.
-
-### 4.2 Exported Interfaces
-
-| Interface | Source | Description |
-|-----------|--------|-------------|
-| RuntimeInstance | adapter.ts:406 | { id: string; modelId: string; loadedAt: number } |
-| WebModelRuntime | adapter.ts:412 | { load, generate, unload } |
-
-### 4.3 Exported Type
-
-| Type | Source | Description |
-|------|--------|-------------|
-| SupportedModelId | adapter.ts:430 | gpt2 | tinyllama | onnx-community/gpt-2 | onnx-community/SmolLM2-135M-ONNX | onnx-community/tiny-llama |
-
-### 4.4 Cross-Reference with src/types.ts
-
-\\	ypescript
-The top-level src/types.ts defines AIModel (id, name, description, architecture, parameters, performance, category, downloads). This type is used in the UI layer to display model listings. The Model API ModelManifest type (from src/lib/models/manifest.ts) is the runtime counterpart used for download/verification. The AIModel.id typically maps to a ModelManifest.id.
-
-### 4.5 Example
-
-
-import { downloadModel, detectRuntime, load, generate, unload, verifyManifestSignature, resolveModel } from " src/lib/models\;
-
-const runtime = detectRuntime();
-if (!runtime.suitable) {
- console.log(getCloudFallbackMessage(runtime));
-}
-
-const manifest = await resolveModel(\tinyllama\);
-if (manifest) {
- await downloadModel(manifest, (pct) => console.log(\Download: \ + pct + \%\));
- const sigOk = await verifyManifestSignature(manifest);
- if (!sigOk) throw new Error(\Signature invalid\);
-
- const instance = await load(\tinyllama\);
- const response = await generate(\Explain recursion\, instance);
- console.log(response);
- await unload(instance);
-}
-
-
-## 5. Telemetry API
-
-**Source:** src/lib/telemetry/index.ts
-
-\\	ypescript
-The Telemetry API records events, timings, and errors. Events are queued in memory and flushed automatically when the queue reaches 50 events or every 5 seconds. Sensitive keys (token, secret, password, apikey, key, source, prompt, output) are automatically redacted.
-
-### 5.1 Types
-
-| Type | Source | Description |
-|------|--------|-------------|
-| TelemetryEventType | index.ts:59 | event | timing | error |
-| QueuedEvent | index.ts:61 | { type, name, payload, correlationId, timestamp } |
-
-### 5.2 Telemetry Object
-
-**telemetry** object with methods:
-
-#### telemetry.event
-
- event(name: string, data?: Record<string, unknown>): void 
-
-Record a custom telemetry event. Sensitive keys are auto-redacted.
-
-#### telemetry.timing
-
- timing(name: string, duration: number): void 
-
-Record a timing measurement.
-
-#### telemetry.error
-
- error(name: string, error: unknown, data?: Record<string, unknown>): void 
-
-Record an error event. The error parameter can be an Error object, string, or unknown value.
-
-### 5.3 Utility Functions
-
-| Function | Signature | Source |
-|----------|-----------|--------|
-| getTelemetryQueue | () => QueuedEvent[] | index.ts:189 |
-| clearTelemetryQueue | () => void | index.ts:196 |
-| setTelemetryFlushHandler | (handler: ((events: QueuedEvent[]) => void) | null) => void | index.ts:205 |
-| flushTelemetry | () => void | index.ts:214 |
-| resetTelemetry | () => void | index.ts:221 |
-| initLogRocket | (environment: string) => Promise<boolean> | index.ts:227 |
-
-## 6. AI Provider API
-
-**Source:** src/lib/ai/orchestrator.ts
-
-\\	ypescript
-The AI Provider API provides secret redaction, streaming AI with cancellation and timeout, and provider orchestration with fallback and health tracking.
-
-### 6.1 Secret Redaction
-
-| Function | Signature | Source |
-|----------|-----------|--------|
-| redact | (value: string) => string | orchestrator.ts:30 |
-| redactForLog | (value: string) => string | orchestrator.ts:38 |
-| redactContext | (context?: Record<string, any>) => Record<string, any> | undefined | orchestrator.ts:42 |
-
-### 6.2 RedactedError
-
- class RedactedError extends Error 
-
-**Source:** orchestrator.ts:61
-
-\\	ypescript
-Wraps errors so secrets never leak through error messages. Has isRedacted = true property.
-
-**Static method:** RedactedError.from(error: unknown): RedactedError
-
-### 6.3 AI Stream Types
-
-| Type | Description |
-|------|-------------|
-| StreamChunk | { index: number; text: string; delta: string } |
-| StreamStatus | streaming | done | cancelled | timeout | error |
-| StreamResult | { status: StreamStatus; text: string; chunks: readonly StreamChunk[] } |
-| AIStreamHandle | { status, text, chunks, cancel(), onStatusChange(cb) } |
-
-#### createAIStream
-
- createAIStream(opts: { provider: string; prompt: string; chunks: string[]; chunkIntervalMs?: number; timeoutMs?: number }): AIStreamHandle 
-
-**Source:** orchestrator.ts:112
-
-Creates a streaming AI handle. Chunk delivery uses setInterval so each call to advanceTimersByTimeAsync advances exactly one chunk. Reliable under fake timers.
-
-#### streamDrain
-
- streamDrain(viInstance?: typeof globalThis.vi): Promise<void> 
-
-\\	ypescript
-Flush microtasks after advancing fake timers.
-
-#### createImmediateDoneHandle
-
- createImmediateDoneHandle(): AIStreamHandle 
-
-Returns a handle that is immediately done with no chunks.
-
-#### consumeStream
-
- consumeStream(stream: AIStreamHandle, timeoutMs?: number): Promise<string> 
-
-\\	ypescript
-Consume all chunks from a stream and return the accumulated text.
-
-### 6.4 Provider Orchestrator
-
-#### ProviderOrchestrator
-
- class ProviderOrchestrator 
-
-**Source:** orchestrator.ts:267
-
-\\	ypescript
-Tries providers in priority order, falls back on failure, and exposes per-provider health state.
-
-| Method | Signature | Description |
-|--------|-----------|-------------|
-| register | (entry: Omit<ProviderEntry, \health\ | \errorCount\>) => void | Register a provider |
-| getProviders | () => readonly ProviderEntry[] | Get all providers sorted by priority |
-| getActiveProvider | () => ProviderEntry | null | Get the active provider |
-| query | (call: ProviderCallFn) => Promise<ProviderCallResult> | Try providers in order |
-| markHealthy | (providerId: string) => void | Mark a provider as healthy |
-
-**Types:**
-| Type | Description |
-|------|-------------|
-| ProviderHealth | healthy | degraded | unhealthy |
-| ProviderEntry | { id, name, priority, health, errorCount, lastError? } |
-| ProviderCallResult | { text: string; providerId: string } |
-| ProviderCallFn | (entry: ProviderEntry) => Promise<ProviderCallResult> |
-
-## 7. Cross-Reference Matrix
-
-\\	ypescript
-Mapping between documented APIs and types defined in src/types.ts:
-
-| src/types.ts Type | Consumed By | Usage |
-|-------------------|-------------|-------|
-| ViewState | Workspace React provider | Page state management |
-| AIModel | Model API | Model listing in UI |
-| Profile | General app types | User profiles |
-| Thread | General app types | Forum threads |
-| Reply | General app types | Forum replies |
-| Upvote | General app types | Upvotes |
-| Topic | General app types | Topics |
-| Tutorial | General app types | Tutorials |
-
-## Verification Summary
-
-\\	ypescript
-All documented APIs were verified against source code as of 2026-09-13:
-
-| API Module | File | Verified |
-|------------|------|----------|
-| Workspace API | src/lib/workspace/index.ts | All 35+ exports verified |
-| Terminal API | src/lib/terminal/runner.ts | All interfaces and classes verified |
-| Sync API | src/lib/sync/protocol.ts | All builders, engine, and transport verified |
-| Model API | src/lib/models/adapter.ts | All 14 functions and 2 interfaces verified |
-| Telemetry API | src/lib/telemetry/index.ts | All 6 functions and telemetry object verified |
-| AI Provider API | src/lib/ai/orchestrator.ts | All functions, classes, and types verified |
-
-### Cross-Reference with src/types.ts (verified)
-
-\\	ypescript
-File: src/types.ts contains 7 types: ViewState, Profile, Thread, Reply, Upvote, Topic, AIModel, Tutorial. All are referenced in the documentation above with their usage context.
+1. [Backend Worker API](#1-backend-worker-api)
+2. [Firebase Auth & Realtime Database](#2-firebase-auth--realtime-database)
+3. [Workspace Files API](#3-workspace-files-api)
+4. [Editor, Model & AI Adapter Layer](#4-editor-model--ai-adapter-layer)
+5. [Google Drive Integration](#5-google-drive-integration)
+6. [GitHub Integration](#6-github-integration)
+7. [Terminal Sandbox API](#7-terminal-sandbox-api)
 
 ---
 
-*End of API Documentation*
+## 1. Backend Worker API
+
+**Module:** `workers/worker.ts` (a single Cloudflare Worker that serves the static export and the REST API).
+
+**Purpose:** the Worker is the only backend in the deployment. It (a) serves the statically exported Next.js build at the edge, (b) exposes a health probe, (c) proxies cloud AI generation, and (d) hosts the GitHub OAuth proxy.
+
+### 1.1 GET/POST `/api/health` — status probe — ✅ verified
+
+- **Purpose:** liveness/status probe.
+- **Request:** `GET` or `POST`; no authentication, no body required.
+- **Response:** `200` + JSON status document (exact fields defined in `workers/worker.ts`). Sufficient for uptime monitoring and load-balancer health checks.
+- **Errors:** standard HTTP errors surfaced by the Worker runtime on misrouting.
+
+### 1.2 POST `/api/ai/generate` — cloud AI proxy — ✅ verified
+
+- **Purpose:** forwards a model request from the browser client to an external provider. Body carries `provider` / `model` / `prompt`. This is the cloud fallback path when the on-device WebModel adapter (§4) is unsuitable or absent, and it backs the `gemini` provider registry entry.
+- **Request (JSON):** `{ provider?, model, prompt, ... }` — field set as defined in `workers/worker.ts`.
+- **Response (JSON):** generated text; exact shape defined in `workers/worker.ts`.
+- **Auth:** gated on the `GEMINI_API_KEY` environment variable being set at deploy time. Without it, the endpoint is not served.
+- **Rate limit:** **100 requests per 60-second window per client** (`RATE_LIMIT = 100`, 60 s window; enforced via the `rateLimitCheck` / `rateLimitStore` exports of `workers/worker.ts`). Exceeding the window is rejected at the worker boundary.
+
+### 1.3 `/api/gh/*` — GitHub OAuth proxy — ⚠️ present-but-not-enabled
+
+- **Purpose:** server-side OAuth handoff for GitHub. Operations: OAuth redirect, authorization-code → access-token exchange, and repository import. The `GitHubManager` push flow (§6) uses GitHub blob/tree/commit/ref REST calls with a **200-blob UI cap**.
+- **Auth model:** guarded by `GH_GRANT_SECRET` plus `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET`, with issued tokens held in the `GH_TOKENS` KV namespace (`KvLike`). At the token-verification boundary, `verifyFirebaseIdToken` (Firebase ID tokens) and `verifyGrant` (grant checks) are used.
+- **Presence guard ⚠️:** these secrets are **unset in the production deployment**, so this route group is not active in production. Treat it as present-but-not-enabled until the environment is provisioned; do not document it as a live feature.
+
+### 1.4 Environment variables (`Env` interface)
+
+| Variable | Required | Purpose |
+|---|---|---|
+| `GEMINI_API_KEY` | conditionally | Gates `/api/ai/generate` |
+| `GITHUB_CLIENT_ID` | no (prod: unset) | OAuth client for the `/api/gh/*` proxy |
+| `GITHUB_CLIENT_SECRET` | no (prod: unset) | OAuth secret for the `/api/gh/*` proxy |
+| `GH_GRANT_SECRET` | no (prod: unset) | Guards the GitHub grant flow |
+| `GH_TOKENS` (`KvLike`) | no (prod: unset) | KV namespace holding OAuth tokens |
+| `APP_ORIGIN` | no | Expected request origin for the API |
+| `NEXT_PUBLIC_FIREBASE_*` | passthrough | Firebase configuration forwarded to the client build |
+
+**Errors / rate limits summary:** non-`/api/*` paths serve the static export; `/api/ai/generate` is rate-limited at 100 req/60 s/client; `/api/gh/*` is inert until env-provided.
+
+---
+
+## 2. Firebase Auth & Realtime Database
+
+**Modules:** firebase SDK (`^12.19.0`) · `src/lib/firestore.ts` (legacy-named RTDB facade) · `src/lib/demoAuth.ts` (demo mode).
+
+**Purpose:** all user identity and shared multi-user data (forum, profiles, votes) live in Firebase. This module group is the identity + data tier for VantaOS.
+
+### 2.1 Authentication
+
+- Sign-in providers: **Google** and **GitHub**, both scoped to the Firebase project **`website-6e8b1`**.
+- **Demo mode:** when the Firebase configuration environment variables are absent (local dev/CI), the app falls back to demo mode via `src/lib/demoAuth.ts` — no real backend writes occur. Useful for isolated development; never the production path.
+
+### 2.2 Data tier (RTDB)
+
+- The RTDB data layer is exposed through the **legacy-named module `src/lib/firestore.ts`**. Its `isFirestoreAvailable()` function is a legacy alias that reflects RTDB availability. **This is not Firestore.** All application data below persists in Firebase Realtime Database paths.
+
+Forum data model (RTDB paths):
+
+| Path | Contents |
+|---|---|
+| `profiles/{uid}` | User profile documents |
+| `threads/{id}` | Forum threads |
+| `replies/{id}` | Replies to threads |
+| `upvotes/{uid}_{tid}_{rid}` | One upvote record per user × thread × reply triple |
+
+Client behavior:
+- `increment()` for counter fields — atomic server-side increments, no read-modify-write races.
+- `onValue()` for realtime subscriptions (threads, replies, votes) — live updates, not polling.
+- The Firebase SDK uses the WebSocket/long-poll based realtime socket to RTDB; subscription lifecycle is tied to component mount/unmount.
+
+### 2.3 ⚠️ Security note — RTDB rules are the security boundary
+
+VantaOS is a **client-only application**: there is no application server authorizing reads/writes. The only server-side authorization is the RTDB ruleset at **`database.rules.json`**. Every path above — and anything a client writes into RTDB — is protected only by those rules. This ruleset is the security contract and must be validated as such: a rule bug is a live data-exposure bug. Client-side checks (e.g., hiding controls) are cosmetic and must never be treated as authorization.
+
+**Status:** ✅ verified — SDK integration and the forum model are covered by the unit and e2e suites; the RTDB tier is exercised by the CI e2e setup.
+
+---
+
+## 3. Workspace Files API
+
+**Modules:** `src/lib/workspace/index.ts` (public entry point) · `src/lib/workspace/operations.ts` (oplog) · `src/lib/workspace/export.ts` (export/import archive) · `src/lib/storage.ts` (persistence).
+
+**Purpose:** file/folder CRUD over an append-only operation log (oplog). The workspace is browser-side: operations are plain function calls, results are in-memory + IndexedDB-persisted state.
+
+### 3.1 Public exports (re-verified against `src/lib/workspace/index.ts`)
+
+The entry point re-exports, grouped by submodule. **Section names below were re-verified from the actual file (90 lines) on 2026-09-13.**
+
+- **Types** (from `./types`): `WorkspaceNode`, `NodeKind`, `Operation`, `OperationKind`, `CreateNodeOp`, `CreateFolderOp`, `UpdateContentOp`, `RenameNodeOp`, `MoveNodeOp`, `DeleteNodeOp`, `WorkspaceState`, `WorkspaceConfig`, `ConflictRecord`, `ConflictPolicy`, `AdapterKind`, `AdapterCapabilities`, `Adapter`, `CapabilitySlot`, `CapabilityProvider`, and the constant `DEFAULT_WORKSPACE_CONFIG`.
+- **Oplog** (from `./operations`): `appendOp`, `bulkAppendOps`, `loadOps`, `loadOpsAfter`, `clearOps`, `replaceOps`, `initSeqCounter`, plus factories `makeCreateNodeOp`, `makeCreateFolderOp`, `makeUpdateContentOp`, `makeRenameNodeOp`, `makeMoveNodeOp`, `makeDeleteNodeOp`.
+- **Indexes** (from `./indexes`): `contentHash`, `detectLanguage`, `buildState`, `getChildren`, `getNodeByPath`, `getDescendants`, `getPathParts`, `buildPath`.
+- **Conflict** (from `./conflict`): `detectConflicts`, `resolveConflicts`, `markResolved` — policy enum `ConflictPolicy ∈ last-writer-wins | ask-user | auto-merge`.
+- **Adapters** (from `./adapter`): `InMemoryAdapter`, `GitHubAdapter`, `registerAdapter`, `getAdapter`, `getAllAdapters`, `removeAdapter`, `initDefaultAdapters`.
+- **Capabilities** (from `./capabilities`): `registerCapability`, `getCapability`, `getCapabilities`, `removeCapability`, `clearCapabilities`, `occupiedSlots`.
+- **React** (from `./workspace`): `WorkspaceProvider`, `useWorkspace`.
+
+> **Correction vs. the previous revision of this doc:** the older revision claimed `index.ts` re-exports `./paths`. The current `index.ts` does **not** re-export `./paths`; path utilities live inside the workspace package. Do not import path helpers from the package root.
+
+### 3.2 Persistence
+
+- Oplog and workspace state persist locally to **IndexedDB** via `idb-keyval` (`src/lib/storage.ts`): database **`vantaos_cloudos_files_v2`**, object stores **`files`** and **`metadata`** (`openDB`).
+- The `localStorage` key **`vantaos_cloudos_files_v2`** is a legacy/demo path; `bulkAppendOps` is the documented entry point for migrating legacy localStorage data into the IndexedDB oplog.
+
+### 3.3 Semantics
+
+- **Oplog:** append-only, sequence-ordered (`seq`). `appendOp` seals an operation with id, timestamp, and seq; when an `idempotencyKey` matches an existing op, the existing op is returned instead. `loadOpsAfter(seq)` supports incremental sync hooks.
+- **State replay:** `buildState(ops)` replays the oplog into full workspace state as a pure function.
+- **Export/import:** `src/lib/workspace/export.ts` provides archive export/import (format defined in that module).
+
+### 3.4 Auth, errors, limits
+
+- **Auth:** none at this layer — it is a local, client-side API. Anything promoted into shared storage is subject to the RTDB rules (§2.3).
+- **Errors:** validation failures surface via path validation and `ConflictRecord`s; op-batch conflicts resolve per the active `ConflictPolicy`.
+- **Rate limits:** not applicable (local only).
+
+### 3.5 Status
+
+**Status:** ✅ verified — oplog replay, ordering, idempotency, and conflict resolution are covered by the Vitest suite.
+
+🎯 **Target — multi-device sync:** the oplog is local-only today. A backend sync service (oplog pull/push via the Worker and/or RTDB) is a target; no shipped surface syncs workspace operations between devices yet.
+
+---
+
+## 4. Editor, Model & AI Adapter Layer
+
+**Modules:** `src/lib/models/adapter.ts` · `src/lib/client.ts` · `src/lib/telemetry/index.ts`.
+
+**Purpose:** on-device model lifecycle + a cloud fallback path, behind a single application facade, with error/telemetry observability.
+
+### 4.1 WebModel adapter — `src/lib/models/adapter.ts`
+
+- **Model download:** sharded, resumable, digest-verified (each shard checked against its SHA-256 before use).
+- **Local storage:** IndexedDB (size-limited by browser storage quota).
+- **Runtime detection:** capability detection (WebGPU / WASM) and device profiling; unsuitable runtimes route to the cloud path.
+- **Model resolution & inference:** manifest resolution (cache → IndexedDB), manifest signature verification, and inference execution.
+- **Provider registry:** `ollama`, `openrouter`, `gemini`, `openai` — the registry maps runtime providers; `gemini` resolves to the Worker's `GEMINI_API_KEY`-gated endpoint (§1.2).
+
+### 4.2 Client facade — `src/lib/client.ts`
+
+- The single front door for editor/AI operations. UI components call the facade rather than registries directly. When the local runtime is unsuitable, the facade routes generate requests through `POST /api/ai/generate`.
+
+### 4.3 Telemetry — `src/lib/telemetry/index.ts`
+
+- Wraps **Sentry** (errors/traces) and **LogRocket** (session replay). Records events, timings, and errors; sensitive keys are redacted before any payload is sent.
+
+### 4.4 Auth, rate limits, status
+
+- **Auth:** none at the module layer. Cloud calls authenticate via the Worker env (`GEMINI_API_KEY` for `gemini`) or provider-native secrets configured at runtime (`ollama`/`openrouter`/`openai`).
+- **Rate limits:** the §1.2 proxy limit (100 req/60 s per client) applies to `gemini`-backed requests.
+- **Status:** ✅ verified — adapter, orchestrator, and redaction behavior are covered by unit tests.
+
+---
+
+## 5. Google Drive Integration
+
+**Modules:** `src/lib/drive.ts` · UI host `DriveManager.tsx`.
+
+**Purpose:** browse and import Google Drive files into the workspace (§3).
+
+### 5.1 OAuth scopes
+
+The header comment in `src/lib/drive.ts` (lines 8–9) scopes the integration to **`drive.readonly`** and **`drive.file`** — readable Drive files plus files the app itself has created. No broader Drive scopes are granted.
+
+### 5.2 Token handling
+
+- Access tokens are obtained in-browser via Google OAuth and **cached client-side with a TTL** (`src/lib/drive.ts`).
+- Tokens are **not** shipped into the RTDB data tier; they exist only in the client session.
+
+### 5.3 Request/response & errors
+
+- Drive REST calls use the cached access token as a Bearer credential; imported file contents flow into the workspace store (§3).
+- Token expiry is handled via TTL-driven re-authorization; failures surface in the `DriveManager` UI.
+- Live end-to-end calls depend on the Google OAuth client configuration being active for Firebase project `website-6e8b1`.
+
+**Status:** ✅ verified — client code and token-cache behavior covered by unit tests. Treat live OAuth round-trips as configuration-dependent.
+
+---
+
+## 6. GitHub Integration
+
+**Modules:** `src/lib/github.ts` · UI host `GitHubManager.tsx` · backend proxy `/api/gh/*` (§1.3).
+
+**Purpose:** connect a GitHub account, import repositories, and push workspace content as commits. The `GitHubManager` push flow performs the GitHub blob → tree → commit → ref REST sequence with a **200-blob UI cap**.
+
+### 6.1 Auth model — two token paths
+
+- **Grant path:** the `/api/gh/*` OAuth proxy exchanges a GitHub authorization code for an access token (guarded by `GH_GRANT_SECRET` + `GITHUB_CLIENT_ID`/`SECRET` at the worker; tokens held in the `GH_TOKENS` KV store). Client entry point: `connectGitHubWithFirebase`, and `importGitHubAccessToken` for importing an existing token — `src/lib/github.ts` ≈ lines 163–189. `grant` / `directToken` variables distinguish the modes.
+- **Direct-token path:** a user-supplied GitHub token, usable without the proxy.
+
+### 6.2 ⚠️ Production caveat
+
+The `/api/gh/*` proxy is **present-but-not-enabled**: its secrets are unset in production, so the grant path is not live. Direct-token mode can operate without the proxy when the user supplies a token, but the push flow is degraded in production until the worker environment is provisioned.
+
+**Status:** ⚠️ proxy not enabled in production; the client code is ✅ verified by unit tests.
+
+---
+
+## 7. Terminal Sandbox API
+
+**Modules:** `src/lib/terminal/runner.ts` · UI host `TerminalPanel.tsx` (xterm).
+
+**Purpose:** sandboxed execution of user-provided JavaScript with no ambient authority.
+
+### 7.1 Architecture
+
+- `SandboxRunner` executes user code **via `new Function` inside a Web Worker**.
+- **No file-system access** and **no network access** inside the sandbox — deliberate hermetic boundary.
+- Console interception captures `log`/`error`/`warn`/`info` into the result.
+- Lifecycle: a **fresh worker per run**; wall-clock timeout and output character caps apply; cleanup and termination are automatic.
+
+### 7.2 Request/result shape
+
+- `run(code)` returns a `SandboxRunHandle` whose result resolves to `{ ok, value, output, error?, terminated?, durationMs }`.
+
+### 7.3 Auth
+
+None — and that is the security design: untrusted code runs without credentials or I/O. Never grant the runner any ambient authority (filesystem, network, secrets).
+
+**Status:** ✅ verified — runner behavior covered by the Vitest suite.
+
+---
+
+## Verification Summary
+
+Re-verified on **2026-09-13**; current as of **2026-09-14**.
+
+| Surface | Module / endpoint | Verified basis | Status |
+|---|---|---|---|
+| Backend Worker API | `workers/worker.ts` | Source read; env gates confirmed | ✅ (health, ai/generate) · ⚠️ (`/api/gh/*` — secrets unset in prod) |
+| Firebase Auth + RTDB | firebase ^12.19.0 · `src/lib/firestore.ts` · `src/lib/demoAuth.ts` · `database.rules.json` | Source read + e2e suites | ✅ |
+| Workspace Files API | `src/lib/workspace/index.ts` (re-verified exports) · `operations.ts` · `export.ts` · `storage.ts` | Source read + Vitest | ✅ (multi-device sync is 🎯) |
+| Editor / Model / AI | `src/lib/models/adapter.ts` · `src/lib/client.ts` · `src/lib/telemetry/index.ts` | Source read + Vitest | ✅ |
+| Google Drive | `src/lib/drive.ts` (scopes, header lines 8–9) | Source read + unit tests | ✅ (live round-trip is config-dependent) |
+| GitHub | `src/lib/github.ts` (≈lines 163–189) · `/api/gh/*` | Source read + unit tests | ⚠️ proxy not enabled in prod |
+| Terminal Sandbox | `src/lib/terminal/runner.ts` | Source read + Vitest | ✅ |
+
+**Suite counts:** Vitest 1032/1032 across 64 files; Playwright 8 cases across 6 files; CI covers lint / test / build / e2e. **CI gap:** no npm audit job.
+
+**Referencing discipline:** `file:line` pairs appear in this document only where cited above (drive OAuth scopes, GitHub token helpers); all other references are module-level.
+
+---
+
+*End of API documentation*

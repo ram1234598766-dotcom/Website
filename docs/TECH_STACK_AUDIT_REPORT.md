@@ -4,6 +4,15 @@
 **Date**: 2026-09-13
 **Method**: Every file:line reference, package.json reference, status marker, and test count was verified against actual repo files.
 
+> ⚠️ **Scope note (2026-09-14):** This report documents the state of the repo
+> **as of 2026-09-13**, before the Realtime Database migration. Since then:
+> `package.json` was reorganized to its current 88-line form — the "correct
+> reference" line numbers listed under *CATEGORY 1* no longer match the current
+> file (recompute against the live file before reuse). The data tier moved to
+> **Firebase Realtime Database**; any Firestore-as-data-tier wording here is
+> historical. This report is preserved as a dated audit record; current
+> references live in the rewritten `docs/TECH_STACK.md`.
+
 ---
 
 ## Summary of Findings

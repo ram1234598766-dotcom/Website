@@ -2,543 +2,350 @@
 
 ## Document status
 
-This document separates the **current stack** from the **target stack**. Current
-statements are grounded in repository files; target choices are architectural
-recommendations and are not represented as implemented.
+Verified against the repository on **2026-09-13**; this revision was re-audited on
+**2026-09-14**. All `package.json:N` references below are line numbers in the
+current 88-line `package.json`; statements about code are grounded in the named
+module, with explicit `file:line` only where a line was re-verified during this
+audit.
 
-The current product is a browser-based IDE with a CodeMirror 6 editor, xterm, a local
-model hub, Omni-AI, GitHub synchronization, a Google Drive integration, optional
-Firebase auth, optional Cloud Firestore, and a Cloudflare
-Worker (`README.md:3-8`, `package.json:14-43`, `workers/worker.ts:31-56`).
+> **🟡 WARNING:** An earlier tech-stack document referenced line numbers from an
+> OLD `package.json` and wrongly presented Cloud Firestore as the data tier.
+> The audit write-up is preserved as history in
+> `docs/TECH_STACK_AUDIT_REPORT.md` — its line numbers do **not** match the
+> current file and must not be cited. The data tier is **Firebase Realtime
+> Database** (module `src/lib/firestore.ts` keeps a legacy name only).
 
 > **📋 Quick Navigation**
 >
-> - [1. 🏗️ Stack decision summary](#1-stack-decision-summary)
-> - [2. 📦 Current stack inventory](#2-current-stack-inventory)
-> - [3. 🎯 Target stack](#3-target-stack)
-> - [4. 💻 Browser and device matrix](#4-browser-and-device-matrix)
-> - [5. 📚 Package and dependency policy](#5-package-and-dependency-policy)
-> - [6. 🧪 Testing stack](#6-testing-stack)
-> - [7. 📊 Observability stack](#7-observability-stack)
-> - [8. 🔒 Security stack](#8-security-stack)
-> - [9. 🚀 Deployment and release stack](#9-deployment-and-release-stack)
-> - [10. 📝 Architecture decisions to record](#10-architecture-decisions-to-record)
+> - [1. 🏗️ Platform overview](#1-platform-overview)
+> - [2. 📦 Application layer](#2-application-layer)
+> - [3. 💻 Client & storage libraries](#3-client--storage-libraries)
+> - [4. 📊 Data layer — Firebase Realtime Database](#4-data-layer--firebase-realtime-database)
+> - [5. 🎯 AI stack](#5-ai-stack)
+> - [6. 🚀 Backend — Cloudflare Worker](#6-backend--cloudflare-worker)
+> - [7. 📚 CI/CD & deployment](#7-cicd--deployment)
+> - [8. 🧪 Testing](#8-testing)
+> - [9. 🔒 Security & privacy stack](#9-security--privacy-stack)
+> - [10. 📝 Reference index](#10-reference-index)
 
 > **📊 Status Summary**
 >
-> | Area | Current | Target |
-> |---|---|---|
-> | Application shell | ✅ Implemented (Next.js 15, React 19, TS) | ✅ Keep + service boundaries |
-> | Editor & terminal | ✅ Implemented (CodeMirror 6, xterm) | ✅ Keep + language-service workers |
-> | Local data | 🔄 Partial (IndexedDB helper present; localStorage still in use) | ✅ IndexedDB/OPFS operation log |
-> | AI & models | ✅ Implemented (Ollama + cloud) | ✅ Provider registry + WebModel adapter |
-> | Auth & integrations | 🔄 Partial (Firebase optional, tokens in browser) | ✅ Server-side OAuth |
-> | Edge (Cloudflare) | ✅ Implemented (Worker API proxy) | ✅ Versioned gateway |
-> | Testing | ✅ Implemented (Vitest 1032/1032 tests across 64 files, Playwright E2E 8 tests) | 🎯 Vitest + Playwright E2E |
-> | CI/CD | ✅ Implemented (typecheck, unit, build, E2E on push/PR via .github/workflows/ci.yml) | 🎯 GitHub Actions gates |
+> | Area | Status |
+> |---|---|
+> | Application shell (Next 15 / React 19 / TS) | ✅ Verified (`package.json:55,58-59,78`) |
+> | Editor & terminal (CodeMirror 6, xterm) | ✅ Verified (`package.json:18-38,43-44`) |
+> | Local file storage (IndexedDB) | ✅ Verified (idb-keyval, `package.json:50`) |
+> | AI — local + cloud | ✅ Verified (Ollama, transformers, Worker proxy) |
+> | Auth (Firebase Google/GitHub) | ✅ Verified to consent screen |
+> | Data tier (Firebase Realtime Database) | ✅ Verified (`src/lib/firestore.ts`) |
+> | Edge (Cloudflare Worker proxy) | ✅ Verified (workers/worker.ts, live site) |
+> | GitHub OAuth proxy | 🎯/⚠️ Implemented but NOT enabled in production |
+> | CI/CD | ✅ Verified (`.github/workflows/ci.yml`) |
+> | npm audit in CI | 🔄 Missing — manual only, 4 high advisories (Sep 2026) |
 
 <!-- AGENT: Platform -->
-## 1. 🏗️ Stack decision summary
+## 1. 🏗️ Platform overview
 
-| Layer | Current | Target | Status | Reason |
-|---|---|---|---|---|
-| Application | Next.js 15 static export, React 19, TypeScript (`next.config.mjs:2-10`, `package.json:28-34`) | Keep Next.js/React/TypeScript for the web shell; introduce service boundaries and route-level loading | ✅ Keep | Preserves the existing product while making state and integrations testable |
-| UI | Tailwind CSS v4, Motion, Lucide (`package.json:17-27`) | Keep the design system; add semantic component primitives and responsive/mobile contracts | ✅ Keep | Improves consistency without replacing the visual language |
-| Editor | CodeMirror 6 through `@codemirror/*` with custom React wrappers (`package.json:15-29`, `src/components/CloudCodeEditor.tsx`, `src/components/CloudDiffEditor.tsx`) | Keep CodeMirror as the editor core; add language-service-style workers for diagnostics and completions | ✅ Keep | Ships in the bundle (no CDN, no ~3mb runtime) while retaining 35+ language modes, diffing, and search |
-| Terminal | xterm.js plus in-page shell (`package.json:18-19`, `src/components/TerminalPanel.tsx:23-35`) | Keep xterm as the terminal surface; add a sandboxed command/execution broker | ✅ Keep | Separates terminal UI from unsafe execution |
-| Local data | IndexedDB helper exists (`src/lib/storage.ts:1-10`); CloudOS currently uses localStorage JSON (`src/components/CloudOS.tsx:290-322`) | IndexedDB/OPFS operation log and outbox | 🔄 Migrate | Provides durable, bounded, migratable offline storage |
-| AI | Ollama plus OpenRouter/Gemini/OpenAI through browser/Worker calls (`src/components/OmniAI.tsx:6-25`, `workers/worker.ts:77-155`) | Provider registry, streaming protocol, server-mediated cloud path, WebModel runtime adapter | ✅ Keep | Makes providers interchangeable and mobile-capable |
-| Models | Ollama model cards + @huggingface/transformers local inference (@huggingface/transformers v4 pipeline() in src/lib/models/adapter.ts:443), localhost pull (`src/components/Showcase.tsx:14-105`, `src/components/Showcase.tsx:122-169`) | Signed WebModel catalog, resumable downloads, device profiles, Ollama adapter | 🔄 Extend | Adds a real browser/mobile path without misrepresenting Ollama support |
-| Auth | Optional Firebase client (Google/GitHub OAuth) with a localStorage demo fallback, exposed through the unified `client` facade (`src/lib/client.ts`, `src/lib/firebase.ts`, `src/lib/demoAuth.ts`) | Keep Firebase as the production identity provider; add server-side OAuth and short-lived grants | 🔄 Harden | Provides real Google/GitHub sign-in with a single adapter surface |
-| Drive | Google Drive REST v3 (readonly + app-owned files) using the OAuth access token captured during Firebase Google sign-in (`src/lib/drive.ts:4-279`, `src/components/DriveManager.tsx`) | Move long-lived tokens out of the browser; server-side token refresh | 🔄 Harden | Browser-only token expiry/refresh is the current limit |
-| GitHub | Direct REST calls with a browser-stored token (`src/lib/github.ts:8-40`, `src/components/GitHubManager.tsx:15-44`) | Server-side OAuth, scoped grants, fresh-parent push protection | 🔄 Harden | Removes long-lived credentials from the browser |
-| Edge | Cloudflare Worker API proxy (`wrangler.toml:1-13`, `workers/worker.ts:13-75`) | Versioned API gateway, model proxy, OAuth exchange, rate limits, health | ✅ Keep | Provides a stable trust boundary and operational surface |
-| Tests | `npm test` runs Vitest (`tests/` directory, 64 files, 1032/1032 tests) + LogRocket telemetry tests + Playwright E2E (`tests/e2e/`, 8 tests) | Vitest/Playwright plus contract, worker, security, and mobile E2E suites | ✅ Implemented | Vitest 1032/1032, LogRocket, Playwright E2E all passing |
-| CI/CD | GitHub Actions workflow in .github/workflows/ci.yml (lint/typecheck, vitest, build, Playwright E2E) | Build/typecheck/lint/test/E2E/audit/deploy on push/PR | ✅ Implemented | CI pipeline at .github/workflows/ci.yml on every push/PR |
+VantaOS is a browser-based cloud OS/IDE that renders completely client-side.
+The Next.js app builds a static export into `out/`, which a **single
+Cloudflare Worker** serves along with an `/api/*` proxy. The data tier is
+**Firebase Realtime Database** in the same Firebase project used for sign-in.
+There is no traditional backend server for the product surface; all product
+logic runs in the browser and calls Firebase directly.
 
-> **GREEN:** Test surface is now implemented - Vitest 1032/1032 across 64 files + LogRocket + @huggingface/transformers + Playwright E2E.
+```
+┌───────────────────────────┐        ┌──────────────────────────────────────┐
+│  BROWSER                  │        │  CLOUDFLARE WORKER (single)          │
+│  Next.js static export    │ ─────▶ │  • serves out/ static assets         │
+│  CodeMirror 6 · xterm     │  https │  • /api/health · /api/ai/generate    │
+│  IndexedDB file store     │  :443  │  • /api/gh/* GitHub OAuth proxy      │
+│  Workspace opslog         │  ▲     │  • rate limit 100 req/60 s           │
+└───────────┬───────────────┘  │     └──────────────────────────────────────┘
+            │                  │                 │
+            │  Firebase SDK    │                 │ /api/ai/generate (cloud AI)
+            ▼                  │                 ▼
+┌───────────────────────────┐  │        ┌──────────────────────────────────┐
+│  FIREBASE PROJECT         │  │        │  LOCAL-ONLY (no server)          │
+│  website-6e8b1            │  └──────▶ │  • Ollama  (localhost:11434)     │
+│  Realtime Database        │           │  • @huggingface/transformers     │
+│  Google / GitHub sign-in  │           │    (WebGPU/WASM in-page)         │
+│  database.rules.json      │           └──────────────────────────────────┘
+└───────────────────────────┘
+```
 
-> The full test suite is detailed in Section 6 below.> **🔵 INFO:** The `npm run lint` command currently runs `tsc --noEmit` (`package.json:6-13`); this is a typecheck, not a linter.
-
-### ✅ Verification Gate — Section 1
-- [ ] All current statements match repo files
-- [ ] All target statements are clearly marked as recommendations
-- [ ] No dead references to removed features
+- **Deployment:** static `out/` served by one Cloudflare Worker
+  (`wrangler.toml`). **LIVE:** `https://website.vasudevaya.workers.dev`
+  (deployed version `f7532256`). Rollback is `npx wrangler rollback`.
+- **Confirmed boundaries:** no Cloudflare Pages, no KV bound in production
+  paths, no `vantaos.dev` domain.
+- **Auth:** Firebase Google/GitHub sign-in to project `website-6e8b1`
+  (verified as far as the consent screen). When no `NEXT_PUBLIC_FIREBASE_*`
+  vars are set the app runs in labeled **demo mode** (`src/lib/env.ts`).
+- **Data:** Firebase Realtime Database nodes `profiles/`, `threads/`,
+  `replies/`, `upvotes/` with realtime `onValue()` subscriptions.
 
 <!-- AGENT: Platform -->
-## 2. 📦 Current stack inventory
-
-> **🟢 SUCCESS:** An IndexedDB database with `files` and `metadata` stores already exists at `src/lib/storage.ts:6-10`.
-
-> **🔴 CRITICAL:** The IDE bypasses the IndexedDB helper and persists workspace state as a full JSON snapshot in `localStorage` (`src/components/CloudOS.tsx:290-322`).
-
-> **🔴 CRITICAL:** The current terminal executes supplied JavaScript with `new Function` (`src/components/TerminalPanel.tsx:157-169`) and uses a separate in-memory filesystem from the IDE workspace (`src/components/TerminalPanel.tsx:23-35`).
-
-> **🟡 WARNING:** Firebase auth is optional; when `NEXT_PUBLIC_FIREBASE_*` variables are unset the app falls back to localStorage demo auth (`src/lib/client.ts`, `src/lib/firebase.ts:37-73`), which is not production-grade.
+## 2. 📦 Application layer
 
 ### 2.1 Framework and language
 
-- **Next.js 15** with `output: 'export'`, static generation, trailing slashes,
-  and unoptimized images (`next.config.mjs:2-10`).
-- **React 19** for the client application (`package.json:31-32`).
-- **TypeScript 5.8** for type-checked application code (`package.json:41`).
-- **App Router** with a client-rendered page and a shared metadata/layout
-  (`app/page.tsx:1-8`, `app/layout.tsx:11-55`).
+- **Next.js 15** (`package.json:55`) with a static export (`output: 'export'`
+  in `next.config.mjs`).
+- **React 19** + server-rendered shell (`package.json:58-59`).
+- **TypeScript ~5.8.2** (`package.json:78`). `npm run lint` runs
+  `tsc --noEmit` (`package.json:9`) — a typecheck, not a linter.
 
-The application shell is currently a client component that owns view state,
-auth state, command palette state, and modal state (`src/App.tsx:19-27`,
-`src/App.tsx:103-145`).
+### 2.2 UI & interaction
 
-### 2.2 UI and interaction
+- **Tailwind CSS v4** utilities: `@tailwindcss/postcss`
+  (`package.json:40`), `tailwindcss` (`package.json:77`).
+- **Motion** for transitions (`package.json:54`).
+- **Lucide React** icons (`package.json:53`).
+- **React Virtuoso** virtualized lists (`package.json:60`).
+- **date-fns** formatting (`package.json:45`).
+- **Sentry React** error telemetry in the bundle (`package.json:42`).
 
-- **Tailwind CSS v4** for utility styling (`package.json:17`, `package.json:40`).
-- **Motion** for transitions and animated surfaces (`package.json:27`,
-  `src/App.tsx:88-121`).
-- **Lucide React** for icons (`package.json:26`).
-- **React Virtuoso** for virtualized file lists (`package.json:34`,
-  `src/components/CloudOS.tsx:754-765`).
-- **DOMPurify** is installed for sanitization (`package.json:22`).
+### 2.3 Editor & terminal
 
-The current UI already includes a mobile navigation drawer and responsive
-layout behavior (`src/components/Navigation.tsx:102-159`), but the IDE itself
-needs a formal small-screen interaction contract.
+- **CodeMirror 6** as the editor core: `@codemirror/autocomplete`,
+  `@codemirror/commands`, `@codemirror/language`, `@codemirror/search`,
+  `@codemirror/state`, `@codemirror/view`, plus 15 language modes
+  (`@codemirror/lang-cpp` … `lang-python` … `lang-yaml`) and
+  `@codemirror/merge` for the diff view (`package.json:18-38`).
+- **@lezer/highlight** for syntax highlighting grammars
+  (`package.json:39`).
+- Diff editor surfaces `@codemirror/merge` via the `CloudDiffEditor`
+  component; find-and-replace uses `@codemirror/search`.
+- **xterm.js** terminal: `@xterm/xterm` plus `@xterm/addon-fit`
+  (`package.json:44,43`), driven by a sandboxed `SandboxRunner`
+  (Web Worker executing with `new Function`).
+- **Prettier** as a lazy formatter (`package.json:57`).
 
-### 2.3 Editor and terminal
+### 2.4 Test & tooling devDependencies
 
-- **CodeMirror 6** is the editor core, wired through first-party React wrappers
-  (`package.json:15-29`, `src/components/CloudCodeEditor.tsx:1-16`,
-  `src/components/CloudDiffEditor.tsx:1-18`, `src/lib/editor/setup.ts:1-22`).
-- The IDE supports tabs, split views, diffing, search, formatting, file
-  operations, and ZIP export (`src/components/CloudOS.tsx:143-187`,
-  `src/components/CloudOS.tsx:208-262`, `src/components/CloudOS.tsx:355-498`).
-- **xterm.js** renders the terminal (`package.json:18-19`,
-  `src/components/TerminalPanel.tsx:216-231`).
-- The current terminal shell is an in-page JavaScript class with an in-memory
-  filesystem and `new Function` execution (`src/components/TerminalPanel.tsx:23-35`,
-  `src/components/TerminalPanel.tsx:56-198`).
-
-### 2.4 Storage and identity
-
-- `src/lib/storage.ts` defines an IndexedDB database with `files` and
-  `metadata` stores (`src/lib/storage.ts:6-10`, `src/lib/storage.ts:23-49`).
-- CloudOS currently loads and saves a whole workspace snapshot in
-  `localStorage` (`src/components/CloudOS.tsx:290-322`).
-- Cloud Firestore is the Forum/Admin data tier and shares the Firebase project
-  config — no extra environment variables (`src/lib/firestore.ts`).
-- Firebase is the optional production identity layer (Google/GitHub OAuth) surfaced
-  through the unified `client.auth` facade; when the `NEXT_PUBLIC_FIREBASE_*`
-  variables are unset it falls back to local demo auth
-  (`src/lib/client.ts`, `src/lib/firebase.ts:37-73`).
-- A Google Drive access token (Drive scopes) is captured at Google sign-in
-  (`drive.readonly` browse/open + `drive.file` for the app-owned VantaOS folder) and
-  cached in `sessionStorage` with a 45-minute TTL (`src/lib/drive.ts:42-96`). On
-  sign-out, the Drive token is cleared.
-- Demo users and sessions are stored in localStorage (`src/lib/demoAuth.ts:29-30`,
-  `src/lib/demoAuth.ts:66-81`).
-
-### 2.5 AI and models
-
-- Omni-AI has a provider union of `ollama`, `openrouter`, `gemini`, and
-  `openai` (`src/components/OmniAI.tsx:6-25`).
-- Ollama calls target a configurable localhost URL (`src/components/OmniAI.tsx:37-56`,
-  `src/components/OllamaLocal.tsx:17-83`).
-- Cloud AI calls go to `/api/ai/generate` (`src/components/OmniAI.tsx:130-146`),
-  which the Worker proxies to provider APIs (`workers/worker.ts:77-155`).
-- The model hub contains a fixed catalog of Ollama models and streams
-  `localhost:11434/api/pull` progress (`src/components/Showcase.tsx:14-105`,
-  `src/components/Showcase.tsx:122-169`).
-- @huggingface/transformers v4 provides local browser inference via WebGPU/WASM
-  (src/lib/models/adapter.ts:443-469): pipeline(text-generation, modelId, device) with env.allowLocalModels=False, timeout-protected via Promise.race, outputs generated_text. Powers the WebModel path and small local models alongside Ollama and cloud providers.
-
-### 2.6 GitHub integration
-
-- GitHub REST requests read a token from localStorage and call GitHub directly
-  (`src/lib/github.ts:8-40`).
-- Repository cloning is capped at the first 200 blobs with a warning
-  (`src/components/GitHubManager.tsx:80-88`).
-- Push creates blobs/tree/commit and updates the branch ref
-  (`src/lib/github.ts:74-116`, `src/components/GitHubManager.tsx:124-171`).
-
-### 2.7 Deployment
-
-- Cloudflare Workers serves the static `out/` directory and intercepts `/api/*`
-  (`wrangler.toml:1-11`, `workers/worker.ts:1-7`).
-- The package scripts provide development, build, lint-as-typecheck, static
-  start, deploy, and preview commands (`package.json:6-13`).
-- `npm run lint` runs `tsc --noEmit` (a typecheck), `npm test` runs the Vitest
-  suite, and Playwright E2E runs via its own config (`package.json:6-13`,
-  `tests/e2e/playwright.config.ts`).
-
-> **🔵 INFO:** Test script implemented (Vitest 1032/1032, 64 files + Playwright E2E 8 tests, 6 files); CI pipeline at `.github/workflows/ci.yml` runs lint/typecheck, vitest, build, and Playwright E2E on every push/PR.
-
-### ✅ Verification Gate — Section 2
-- [ ] All current statements match repo files
-- [ ] All target statements are clearly marked as recommendations
-- [ ] No dead references to removed features
+- Testing library: `@testing-library/jest-dom`, `@testing-library/react`,
+  `@testing-library/user-event` (`package.json:66-68`), `jsdom`
+  (`package.json:76`), `vite` (79), `vitest` (80).
+- Accessibility assertions: `axe-core` (`package.json:74`).
+- IndexedDB test doubles / workers: `fake-indexeddb` (75),
+  `@vitejs/plugin-react` (73).
+- E2E: `@playwright/test` (69).
+- Types / infra: `@types/node`, `@types/react`, `@types/react-dom`
+  (`package.json:70-72`), `wrangler` (81).
 
 <!-- AGENT: Editor/Terminal -->
-## 3. 🎯 Target stack
+## 3. 💻 Client & storage libraries
 
-### 3.1 Client application
-
-**Keep:**
-
-- Next.js App Router for the web shell and static asset delivery.
-- React 19 and TypeScript.
-- Tailwind CSS as the styling layer.
-- Motion only for stateful transitions, with reduced-motion support.
-- CodeMirror 6 as the editor surface.
-- xterm.js as the terminal surface.
-
-**Add:**
-
-- a workspace domain package with pure operations and reducers;
-- service ports for storage, identity, AI, GitHub, execution, model delivery,
-  and telemetry;
-- Web Workers for language services and heavy parsing;
-- a service worker for shell caching and supported download resumption;
-- route-level feature flags and capability detection;
-- contract-tested API clients.
-
-### 3.2 State and persistence
-
-**Target primitives:**
-
-- IndexedDB/OPFS as the canonical local store.
-- Operation log with immutable operation IDs.
-- Outbox for offline synchronization.
-- Content hashes and byte sizes.
-- Schema migrations.
-- Atomic transactions for file/folder mutations.
-- Tombstones for multi-device deletes.
-- Export/import manifests with integrity checks.
-
-**Why:** the current helper already chooses IndexedDB (`src/lib/storage.ts:6-10`),
-but the IDE bypasses it for a localStorage snapshot (`src/components/CloudOS.tsx:290-322`).
-The target makes the existing storage direction consistent and testable.
-
-### 3.3 Editor and language tooling
-
-- CodeMirror 6 stays the user-facing editor; language modes are lazy per mode
-  where practical.
-- Prettier remains a lazy-loaded formatter for supported languages
-  (`src/components/CloudOS.tsx:219-243`).
-- Add language-server-like workers for diagnostics, completions, symbols, and
-  formatting.
-- Add bounded file parsing and virtualized previews for large files.
-- Treat ESLint and future tools as versioned, opt-in plugins rather than
-  hard-coded component behavior.
-- Keep editor state local-first and synchronize operations, not whole files,
-  when multiple devices are active.
-
-### 3.4 Terminal and execution
-
-- Keep xterm for terminal rendering and accessibility.
-- Add a command broker with allowlisted browser commands.
-- Add a sandboxed JavaScript/TypeScript runner in a Worker or remote isolated
-  runner.
-- Add remote/native adapters for languages that cannot run safely in a browser.
-- Enforce CPU, memory, wall-clock, output, and network quotas.
-- Return run IDs, structured logs, exit codes, and cancellation events.
-
-> **🔴 CRITICAL:** Terminal still uses `new Function` execution (`src/components/TerminalPanel.tsx:157-169`) — must be replaced with sandboxed runner before production.
-
-This is required because the current terminal executes supplied JavaScript with
-`new Function` (`src/components/TerminalPanel.tsx:157-169`) and uses a separate
-in-memory filesystem from the IDE workspace (`src/components/TerminalPanel.tsx:23-35`).
-
-### 3.5 AI stack
-
-**Provider layer:**
-
-- Ollama desktop adapter.
-- Cloudflare-mediated OpenRouter, Gemini, and OpenAI adapters.
-- Future provider adapters implement one stable interface.
-- Streaming, cancellation, retries, timeouts, and error normalization live in
-  the orchestrator, not the chat component.
-
-**Model layer:**
-
-- Ollama model catalog remains a desktop path.
-- WebModel catalog adds browser-runnable packages for supported phones and
-  laptops.
-- Model selection considers runtime, memory, storage, context, task, license,
-  latency, and privacy.
-
-**Security:**
-
-- Cloud API keys are held server-side or in a platform key store.
-- Browser-local demo keys are not treated as production secrets.
-- Prompts, outputs, and tool calls are redacted from telemetry.
-- Tool permissions are explicit and user-visible.
-
-### 3.6 WebModel stack
-
-The WebModel path should be implemented as a separate runtime adapter:
-
-- signed model manifests;
-- immutable model versions;
-- range-requestable shards;
-- SHA-256 verification;
-- resumable download manager;
-- IndexedDB/OPFS model storage;
-- WebGPU/WASM runtime detection;
-- mobile and laptop model profiles;
-- cloud/Ollama fallback.
-
-See `docs/WEB_MODEL_SPEC.md` for the detailed contract.
-
-### 3.7 Identity and integration stack
-
-- Firebase Auth for production identity when configured (Google/GitHub OAuth).
-- Google Drive via the Firebase-captured token: `drive.readonly` browse/open plus
-  `drive.file` for the app-owned VantaOS folder.
-- Explicit demo mode for local-only use when Firebase is not set.
-- Server-side GitHub OAuth.
-- Short-lived, scoped GitHub grants.
-- Server-side role and repository authorization.
-- Refresh-token and revocation handling outside browser storage.
-- Sync API for workspace operations.
-
-### 3.8 Edge and backend stack
-
-**Cloudflare Workers:**
-
-- static asset serving;
-- API gateway and request validation;
-- provider proxy;
-- model manifest/shard proxy;
-- OAuth exchange;
-- rate limiting;
-- health and readiness endpoints;
-- structured redacted logs.
-
-**Firebase Cloud Firestore:**
-
-- Forum threads and replies;
-- upvotes (deterministic doc IDs for dedupe);
-- user profiles;
-- Admin metrics via realtime queries;
-- security rules mirroring the auth model.
-
-**Object storage/CDN:**
-
-- immutable model shards;
-- signed manifests;
-- cache-friendly range requests;
-- publisher digest records.
-
-**Optional runners:**
-
-- isolated containers or VMs for native language execution;
-- ephemeral credentials;
-- resource quotas;
-- artifact retention policies.
-
-### ✅ Verification Gate — Section 3
-- [ ] All current statements match repo files
-- [ ] All target statements are clearly marked as recommendations
-- [ ] No dead references to removed features
-
-<!-- AGENT: Editor/Terminal -->
-## 4. 💻 Browser and device matrix
-
-| Capability | Low mobile | Modern mobile | Laptop | Desktop |
-|---|---|---|---|---|
-| IDE editing | Required | Required | Required | Required |
-| Offline workspace | Required | Required | Required | Required |
-| WebGPU WebModel | Optional fallback | Target | Target | Target |
-| WASM WebModel | Target fallback | Target fallback | Fallback | Fallback |
-| Ollama | Not assumed | Not assumed | Supported adapter | Supported adapter |
-| Cloud AI | Fallback | Fallback | Available | Available |
-| Sandboxed JS | Required | Required | Required | Required |
-| Native language runners | Remote/absent | Remote/absent | Optional | Optional |
-| GitHub OAuth | Supported | Supported | Supported | Supported |
-| Google Drive (read + app-owned write) | Supported | Supported | Supported | Supported |
-| PWA install | Target | Target | Optional | Optional |
-
-> **🔵 INFO:** Capability detection gates every feature — a missing runtime produces a clear alternative, never a dead control.
-
-### ✅ Verification Gate — Section 4
-- [ ] All current statements match repo files
-- [ ] All target statements are clearly marked as recommendations
-- [ ] No dead references to removed features
+- **idb-keyval** (`package.json:50`) wraps the IndexedDB database
+  **`vantaos_cloudos_files_v2`** with `files/` and `metadata/` stores used by
+  the CloudOS file system (`src/lib/db.ts`).
+- **DOMPurify** (`package.json:47`) sanitizes rendered HTML before insertion
+  (`src/lib/sanitize.ts`).
+- **JSZip** (`package.json:51`) + **file-saver** (`package.json:48`) perform
+  explicit user-initiated ZIP export of the workspace (`src/lib/workspace/export.ts`).
+- **node-forge** (`package.json:56`) provides browser crypto helpers.
+- **diff** (`package.json:46`) powers text diffing in the editor/export paths.
+- **Google Drive sync** (`src/lib/drive.ts`): direct browser calls to Drive
+  REST v3 using the bearer token captured during Firebase Google sign-in.
+  Scopes `drive.readonly` + `drive.file` are declared at
+  `src/lib/drive.ts:8-9`; the access token is cached with a TTL and cleared on
+  sign-out. App writes only into files/folders it created.
+- **GitHub integration** (`src/lib/github.ts`): browser-stored token with
+  direct REST calls; push writes blob → tree → commit and updates the branch
+  ref; the UI caps clones at 200 blobs with a warning.
+- **Workspace operations log** (`src/lib/workspace/operations.ts`) is the
+  deterministic op layer behind the file store, with export support
+  (`src/lib/workspace/export.ts`).
 
 <!-- AGENT: Data -->
-## 5. 📚 Package and dependency policy
+## 4. 📊 Data layer — Firebase Realtime Database
 
-### Keep and justify
+The data tier is the **Firebase Realtime Database**. The legacy module name
+`src/lib/firestore.ts` still carries the RTDB wrapper; `isFirestoreAvailable()`
+at `src/lib/firestore.ts:43` is a legacy alias for `isFirebaseConfigured()`. Do
+not present Firestore as the data tier.
 
-- The `@codemirror/*` editor packages for the in-bundle editor core.
-- `@xterm/xterm` and `@xterm/addon-fit` for terminal rendering.
-- `firebase` (auth, app, firestore) for the optional Firebase sign-in/provider
-  layer and the Cloud Firestore data tier.
-- `jszip` and `file-saver` for explicit user-initiated workspace export.
-- `prettier` for lazy formatting.
-- `motion`, Tailwind, Lucide, and Virtuoso for the current interface.
-- @huggingface/transformers v4 for local browser model inference (`src/lib/models/adapter.ts:443`): pipeline(), env.allowLocalModels, device webgpu/wasm, tested in `tests/phase-schema/webmodel-adapter.test.ts`.
-- LogRocket v12 for session replay and user-scoped telemetry (`src/lib/telemetry/logrocket.ts`): initLogRocket(), identifyUser(), trackEvent(), captureException(), isLogRocketInitialized(), tested in `tests/telemetry-logrocket.test.ts` and `tests/logrocket-audit.test.ts`.
+- **Nodes:**
+  - `profiles/{uid}` — denormalized user profile.
+  - `threads/{id}` — forum threads (denormalized author fields).
+  - `replies/{id}` — forum replies.
+  - `upvotes/{uid}_{tid}_{rid}` — deterministic key, dedupes votes.
+- **Events:** counters update atomically with `increment()`; realtime streams
+  use `onValue()` subscriptions (`src/lib/firestore.ts`).
+- **Rules:** `database.rules.json`; deploy with
+  `firebase deploy --only database`.
+- **Auth:** Firebase Google/GitHub sign-in to project `website-6e8b1`
+  (`firebase` at `package.json:49`).
+- **Demo mode:** `isFirebaseConfigured()` in `src/lib/env.ts` requires four
+  `NEXT_PUBLIC_FIREBASE_*` values (`API_KEY`, `AUTH_DOMAIN`, `PROJECT_ID`,
+  `APP_ID`); when any is missing, `DEMO_MODE` is set and auth falls back to
+  `src/lib/demoAuth.ts`.
 
-### Add after design review
+> **🟡 WARNING — known legacy artifacts:**
+> `firebase:deploy` (`package.json:15`) is **stale** — it targets
+> `--only firestore:rules,firestore:indexes`, but the project has no Firestore
+> deployment path. The current data-tier deploy is
+> `firebase deploy --only database` (rules: `database.rules.json`). The script
+> is kept as history and must not be used as the current deploy path.
 
-- a test runner and browser E2E runner;
-- a schema/contract validation library;
-- a model manifest signing/verification library;
-- a WebGPU/WASM runtime selected through a compatibility proof-of-concept;
-- a structured logging/telemetry client;
-- a dependency security scanner in CI;
-- a migration framework for IndexedDB schemas.
+<!-- AGENT: AI -->
+## 5. 🎯 AI stack
 
-### Dependency rules
-
-1. Pin reproducible versions in lockfiles.
-2. Review new native bindings and model-runtime dependencies for platform
-   support and supply-chain risk.
-3. Do not add a browser model runtime until its license, memory behavior,
-   mobile support, and maintenance status are documented.
-4. Keep secrets out of client dependencies and bundles.
-5. Record the reason for every production dependency in a decision log.
-
-> **🔵 INFO:** Dependency rules are intentionally conservative — every addition requires design review and supply-chain assessment.
-
-### ✅ Verification Gate — Section 5
-- [ ] All current statements match repo files
-- [ ] All target statements are clearly marked as recommendations
-- [ ] No dead references to removed features
-
-<!-- AGENT: GitHub -->
-## 6. 🧪 Testing stack
-
-| Test class | Current tooling | Coverage |
-|---|---|---|
-| Pure workspace operations | Vitest (tests/phase1/, 9 files) | Deterministic operation/reducer |
-| IDE reliability | Vitest (tests/phase2/, 4 test + 2 helpers) | Runner, commands, keyboard, a11y |
-| AI orchestration | Vitest (tests/phase3/, 7 files) | Streaming, redaction, fallback, permissions |
-| WebModel delivery | Vitest (tests/phase4/, 1 file, 36 tests) | Manifest/shard/signature |
-| Identity & GitHub security | Vitest (tests/phase5/, 5 files) | Grants, ID-token, proxy, client fallback |
-| Sync & collaboration | Vitest (tests/phase6/, 7 files) | Batch, conflict, protocol, recovery, reconnect |
-| Mobile/PWA | Vitest (tests/phase7/, 2 files) | PWA manifest, caching, offline, responsive |
-| Production health | Vitest (tests/phase8/, 1 file) | Per-service health endpoints |
-| Plugin ecosystem | Vitest (tests/phase9/, 3 files) | Loader, manifest, registry |
-| Schema validation | Vitest (tests/phase-schema/, 10 files, 326 tests) | Primitives, composites, operation contracts |
-| SLO compliance | Vitest (tests/phase-schema/slo.test.ts, runbooks.test.ts) | 6 SLO definitions, 4 runbooks |
-| LogRocket telemetry | Vitest (tests/telemetry-logrocket.test.ts, logrocket-audit.test.ts) | Init, identify, track, captureException |
-| Contract tests | Vitest (tests/contract/, 3 files) | Workspace, terminal, model contracts |
-| E2E tests | Playwright (tests/e2e/flows/, 8 tests across 6 files) | Auth, home, files, ide, omni-ai, terminal |
-
-### ✅ Verification Gate — Section 6
-- [ ] All current statements match repo files
-- [ ] All target statements are clearly marked as recommendations
-- [ ] No dead references to removed features
+- **Local inference:** `@huggingface/transformers` (`package.json:41`) runs
+  in-page models via WebGPU/WASM through the WebModel adapter
+  (`src/lib/models/adapter.ts`); local **Ollama** serves models on
+  `localhost:11434` with pull-progress streaming into the model hub.
+- **Cloud inference:** the Worker's `/api/ai/generate` route proxies to cloud
+  providers (`src/lib/ai/providers.ts`) with a provider registry
+  (`src/lib/ai/provider-registry.ts`) and orchestrator
+  (`src/lib/ai/orchestrator.ts`).
+- **Gemini gating:** cloud Gemini is env-gated on `GEMINI_API_KEY`
+  (`workers/worker.ts`); `isGeminiConfigured()` returns `false` by default in
+  `src/lib/env.ts`, so cloud AI is **not configured in production** on the
+  mainline (`🔄` runtime-detected).
+- **Model catalog & safety:** model manifests/downloads and device profiles
+  live under `src/lib/models/`; tool permissions and AI redaction under
+  `src/lib/ai/` (rate limiter, tool-permission prompts).
 
 <!-- AGENT: Deploy -->
-## 7. 📊 Observability stack
+## 6. 🚀 Backend — Cloudflare Worker
 
-Use structured, privacy-safe events with:
+A single first-party Worker (`workers/worker.ts`, config in `wrangler.toml`)
+serves the static `out/` directory and intercepts `/api/*`.
 
-- correlation IDs;
-- operation IDs;
-- duration and outcome;
-- device/runtime capability class;
-- retry category;
-- no source code, prompts, model output, tokens, or GitHub credentials.
+- **Routes:** `/api/health`, `/api/ai/generate` (cloud AI), `/api/gh/*`
+  (GitHub OAuth proxy). SPA fallback for non-API paths.
+- **Rate limit:** 100 requests per 60-second window per client key
+  (`workers/worker.ts`).
+- **Env surface** (`Env` in `workers/worker.ts`): `GEMINI_API_KEY`,
+  `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `GH_GRANT_SECRET`, `GH_TOKENS`
+  (KV), `APP_ORIGIN`, `NEXT_PUBLIC_FIREBASE_*`.
+- **GitHub OAuth proxy status:** ⚠️ implemented but **not enabled in
+  production** — it is presence-guarded on `GH_GRANT_SECRET` +
+  `GITHUB_CLIENT_ID`/`GITHUB_CLIENT_SECRET` + the `GH_TOKENS` KV, none of which
+  are bound in prod (`🎯` future enablement).
+- **Live deployment:** `https://website.vasudevaya.workers.dev` (version
+  `f7532256`); `deploy` script at `package.json:12` (build + `wrangler
+  deploy`). Rollback: `npx wrangler rollback`.
+- No KV is used on production request paths; no Cloudflare Pages.
 
-Expose:
+<!-- AGENT: Deploy -->
+## 7. 📚 CI/CD & deployment
 
-- client boot and route timing;
-- workspace save/sync status;
-- model download and verification progress;
-- AI first-token/error/cancellation metrics;
-- terminal run startup and quota failures;
-- GitHub clone/push outcomes;
-- edge health and dependency health.
+### Scripts (`package.json:6-15`)
 
-**Monitoring sources:**
+| Script | Line | Command | Status |
+|---|---|---|---|
+| `dev` | 7 | `next dev` | ✅ current |
+| `build` | 8 | `next build` | ✅ current |
+| `lint` | 9 | `tsc --noEmit` | ✅ current (typecheck, not linter) |
+| `test` | 10 | `vitest run` | ✅ current |
+| `start` | 11 | `npx serve out` | ✅ current (static preview) |
+| `deploy` | 12 | `npm run build && npx wrangler deploy` | ✅ current |
+| `cf-preview` | 13 | `npm run build && npx wrangler dev` | ✅ current |
+| `firebase:setup` | 14 | `bash scripts/firebase-setup.sh` | ✅ current |
+| `firebase:deploy` | 15 | `firebase deploy --only firestore:rules,firestore:indexes` | 🔄 stale — targets Firestore; data tier is RTDB (`firebase deploy --only database`) |
 
-| Signal | Source | Dashboard |
-|--------|--------|-----------|
-| Client-side errors | @sentry/react (src/lib/telemetry/sentry.ts) + ErrorBoundary | Sentry |
-| Session replay | LogRocket (src/lib/telemetry/logrocket.ts) | LogRocket |
-| SLO compliance | src/lib/slo/index.ts checkSLOs() | In-app |
-| Incident response | src/lib/incident-runbooks/index.ts INCIDENT_RUNBOOKS | Runbook |
-| Telemetry events | src/lib/telemetry/index.ts event/timing/error | Log sink |
+### GitHub Actions (`.github/workflows/ci.yml`)
 
-> :blue_circle: INFO: Client-side monitoring uses @sentry/react (NEXT_PUBLIC_SENTRY_DSN) for error tracking and LogRocket (NEXT_PUBLIC_LOGROCKET_ID, NEXT_PUBLIC_LOGROCKET_ENVIRONMENT) for session replay, both initialized in app/layout.tsx (Sentry first, then LogRocket). SLO compliance and incident runbooks are defined in source (src/lib/slo/index.ts, src/lib/incident-runbooks/index.ts) and tested in tests/phase-schema/.
+- **lint:** `npx tsc --noEmit` (Node 22).
+- **test:** `npx vitest run`.
+- **build:** `npm run build` (Next static export).
+- **e2e:** build + `playwright install` + 8 Playwright cases across 6 files.
+- Triggered on push to `main` and pull requests.
 
-### ✅ Verification Gate — Section 7
-- [ ] All current statements match repo files
-- [ ] All target statements are clearly marked as recommendations
-- [ ] No dead references to removed features
+### Deploy & rollback
 
-<!-- AGENT: Browser -->
-## 8. 🔒 Security stack
+- Rules deploy (real): `firebase deploy --only database` using
+  `database.rules.json`.
+- Worker deploy: `npm run deploy` (`package.json:12`), rollback with
+  `npx wrangler rollback`. Live site: `https://website.vasudevaya.workers.dev`.
 
-- HTTPS-only deployment and secure cookies where cookies are used.
-- Strict security headers from the edge.
-- Server-side OAuth and short-lived grants.
-- Signed model manifests and shard digests.
-- Sandboxed execution with explicit quotas.
-- Plugin capability manifests and signature verification.
-- Redacted structured logs.
-- Dependency and secret scanning in CI.
-- Role-based authorization on every privileged endpoint.
-- Explicit demo-mode labeling.
-
-> **🔴 CRITICAL:** Current code inherits browser-stored GitHub tokens (`src/lib/github.ts:8-20`) and unrestricted terminal evaluation (`src/components/TerminalPanel.tsx:157-169`) — these are NOT production guarantees.
-
-The current code provides useful starting functionality, but the target stack
-must not inherit browser-stored GitHub tokens (`src/lib/github.ts:8-20`) or
-unrestricted terminal evaluation (`src/components/TerminalPanel.tsx:157-169`)
-as production guarantees.
-
-### ✅ Verification Gate — Section 8
-- [ ] All current statements match repo files
-- [ ] All target statements are clearly marked as recommendations
-- [ ] No dead references to removed features
-
-<!-- AGENT: Packages -->
-## 9. 🚀 Deployment and release stack
-
-1. Pull request checks: typecheck, lint, unit tests, contract tests, dependency
-   audit, and static analysis.
-2. Preview deployment: isolated environment and seeded test services.
-3. Production build: immutable static assets and versioned Worker.
-4. Progressive rollout: canary edge deployment and rollback.
-5. Post-deploy checks: health, model catalog, AI proxy, auth, and browser smoke
-   tests.
-6. Release notes: distinguish implemented/tested, implemented/untested, and
-    planned capabilities.
-
-### ✅ Verification Gate — Section 9
-- [ ] All current statements match repo files
-- [ ] All target statements are clearly marked as recommendations
-- [ ] No dead references to removed features
+> **🟡 WARNING — audit gap:** CI has no `npm audit` job. Dependency scanning is
+> manual; as of September 2026 a full `npm audit` reports 4 high-severity
+> advisories.
 
 <!-- AGENT: Testing -->
-## 10. 📝 Architecture decisions to record
+## 8. 🧪 Testing
 
-Before implementation, create short ADRs for:
+- **Unit (Vitest):** `1032/1032` passing across **64 files**
+  (`npm test`, `package.json:10`).
+- **E2E (Playwright):** **8 cases** across **6 files** in `tests/e2e/flows/`
+  (auth, home, files, ide, omni-ai, terminal), config at
+  `tests/e2e/playwright.config.ts`.
 
-1. IndexedDB versus OPFS as the canonical workspace store.
-2. WebGPU/WASM runtime selection for WebModel.
-3. Server-side versus browser-mediated GitHub OAuth.
-4. Remote runner versus desktop companion for native execution.
-5. SSE versus WebSocket for sync and real-time events.
-6. Firestore security rules versus other access-control approaches for sync.
-7. Firebase vs a custom OAuth backend for production identity (and where Drive
-   token refresh lives).
-8. Plugin signature and permission model.
+Suites by directory:
 
-Each ADR should include context, decision, consequences, alternatives, and a
-verification plan.
+| Directory | Focus |
+|---|---|
+| `tests/phase1/` (9) | Workspace ops, paths, outbox recovery, export, conflict, build state, multi-tab, legacy |
+| `tests/phase2/` (2 + Node worker harness) | Terminal runner, commands |
+| `tests/phase3/` (7) | AI streaming, fallback, redaction, rate limiter, provider registry, tool permissions |
+| `tests/phase4/` (1) | WebModel manifests |
+| `tests/phase5/` (5) | GitHub proxy, grants, client fallback, Firebase ID-token verify |
+| `tests/phase6/` (7) | Sync batch, conflict, protocol, recovery, reconnect storm, convergence |
+| `tests/phase8/` (1) | Per-service health endpoints |
+| `tests/phase9/` (3) | Plugin loader, manifest, registry |
+| `tests/phase-schema/` (10) | Schemas, contracts, SLOs, runbooks, edge contract, telemetry |
+| `tests/contract/` (3) | Workspace / terminal / model contracts |
+| `tests/` root (12) | Telemetry (Sentry, LogRocket), sources, security, edge/manifest/migration edges |
+| `tests/e2e/flows/` (6) | Playwright end-to-end flows |
 
-### ✅ Verification Gate — Section 10
-- [ ] All current statements match repo files
-- [ ] All target statements are clearly marked as recommendations
-- [ ] No dead references to removed features
+<!-- AGENT: Browser -->
+## 9. 🔒 Security & privacy stack
 
-## ✅ Master Verification Checklist
-- [ ] All current statements are grounded in repo files
-- [ ] All target choices are labeled as recommendations
-- [ ] All file references are accurate
-- [ ] All agent markers are present
+- **Data-tier rules:** Firebase Realtime Database gated by
+  `database.rules.json`; auth-aware read/write on `profiles/`, `threads/`,
+  `replies/`, `upvotes/`.
+- **Output sanitization:** DOMPurify (`package.json:47`) applied via
+  `src/lib/sanitize.ts` before HTML rendering.
+- **Edge rate limiting:** 100 req / 60 s in `workers/worker.ts` protects the
+  API proxy surface.
+- **Secrets are env-only:** cloud AI key via `wrangler secret put
+  GEMINI_API_KEY` (absent in prod ⇒ Gemini off by default); GitHub OAuth
+  secrets (`GH_GRANT_SECRET`, `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`,
+  `GH_TOKENS`) are not bound in production, so `/api/gh/*` is disabled.
+  `NEXT_PUBLIC_FIREBASE_*` in `wrangler.toml` are public Firebase web config
+  by design.
+- **GitHub OAuth proxy:** 🎯/⚠️ implemented, presence-guarded, **not enabled
+  in prod**; browser-stored GitHub token is a known limitation of the current
+  direct-integration path.
+- **Demo mode:** labeled fallback (`DEMO_MODE` in `src/lib/env.ts`) when
+  Firebase is not configured — never presented as production auth.
+- **Telemetry:** Sentry (`@sentry/react`, `package.json:42`) + LogRocket
+  (`package.json:52`) initialized via `src/lib/telemetry/index.ts`; prompts,
+  outputs, and credentials are expected to be redacted from events.
+- **Supply chain:** overrides pin `adm-zip` 0.6.1, `sharp` 0.35.4, `postcss`
+  8.5.28 (`package.json:83-87`; first overrides block `62-64`); npm audit is
+  **manual** — ⚠️ 4 high advisories as of Sep 2026, no CI audit job yet.
+
+<!-- AGENT: Testing -->
+## 10. 📝 Reference index
+
+| Module | Purpose |
+|---|---|
+| `package.json` | Manifest (88 lines): scripts 6-15, deps 17-61, overrides 62-64, devDeps 65-82, override pins 83-87 |
+| `next.config.mjs` | Static export build config |
+| `wrangler.toml` | Worker config — name `website`, `main: workers/worker.ts`, `[assets] directory = "out"`, `[vars]` Firebase web config |
+| `workers/worker.ts` | API routes, rate limit, static + SPA serving, `Env` surface |
+| `workers/github-proxy.ts` | GitHub OAuth service using `KvLike` token store |
+| `workers/grants.ts`, `workers/firebase-verify.ts` | Grant + Firebase ID-token verification for the proxy |
+| `.github/workflows/ci.yml` | CI: lint, test, build, e2e |
+| `database.rules.json` | RTDB security rules (deploy: `firebase deploy --only database`) |
+| `src/lib/env.ts` | Capability detection: `isFirebaseConfigured()` (4 `NEXT_PUBLIC_FIREBASE_*` vars), `isGeminiConfigured()` (false by default), `DEMO_MODE` |
+| `src/lib/firestore.ts` | **Realtime Database** data layer; `isFirestoreAvailable()` legacy alias at line 43 |
+| `src/lib/firebase.ts` | Firebase app + Google/GitHub auth setup |
+| `src/lib/demoAuth.ts` | Demo-mode auth fallback |
+| `src/lib/client.ts` | Unified `client` facade (auth, storage, ai, sync) |
+| `src/lib/drive.ts` | Google Drive v3 browser calls; scopes `drive.readonly` + `drive.file` at lines 8-9; token TTL cache |
+| `src/lib/github.ts` | GitHub REST client (blob/tree/commit/ref push) |
+| `src/lib/models/adapter.ts` | WebModel adapter registry (`@huggingface/transformers` pipeline) |
+| `src/lib/ai/` | Providers, provider registry, orchestrator, rate limiter, tool permissions |
+| `src/lib/workspace/` | Opslog (`operations.ts`), export (`export.ts`), outbox, conflict, migrations, db |
+| `src/lib/terminal/` | SandboxRunner, runner, quota, commands |
+| `src/lib/telemetry/` | Sentry + LogRocket init and event API |
+| `src/lib/schema/` | Operation/validation schemas |
+| `src/lib/slo/`, `src/lib/incident-runbooks/` | SLO checks + incident runbooks |
+| `src/lib/plugins/`, `src/lib/sync/` | Plugin registry; sync protocol/batch/conflict |
+| `src/components/` | App shell, `CloudCodeEditor`, `CloudDiffEditor`, terminal panel |
+| `tests/` | Vitest suites (64 files, 1032 tests); `tests/e2e/` Playwright (8 cases / 6 files) |
