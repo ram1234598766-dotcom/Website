@@ -250,7 +250,7 @@ serves the static `out/` directory and intercepts `/api/*`.
 
 - **lint:** `npx tsc --noEmit` (Node 22).
 - **test:** `npx vitest run`.
-- **build:** `npm run build` (Next static export).
+- **build:** `next build` (Next static export), then `npx opennextjs-cloudflare build` (Worker bundle).
 - **e2e:** build + `playwright install` + 9 Playwright cases across 7 files.
 - Triggered on push to `main` and pull requests.
 

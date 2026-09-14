@@ -101,8 +101,11 @@ jobs:
           restore-keys: |
             opennext-
 
-      - name: Build
-        run: npm run build
+      - name: Build Next.js
+        run: npx next build
+
+      - name: Build Cloudflare Worker
+        run: npx opennextjs-cloudflare build
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4

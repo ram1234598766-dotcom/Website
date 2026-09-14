@@ -78,7 +78,8 @@ Open the printed localhost URL. Every `NEXT_PUBLIC_FIREBASE_*` variable is optio
 | Command | What it does |
 |---------|--------------|
 | `npm run dev` | Start the dev server (`next dev`) |
-| `npm run build` | Production build → `.next/` + OpenNext worker bundle in `.open-next/` |
+| `npm run build` | Next.js production build → `.next/` |
+| `npm run deploy` | OpenNext Worker bundle (`.open-next/`) + deploy |
 | `npm run lint` | Type-check without emitting (`tsc --noEmit`) |
 | `npm test` | Run the Vitest suite — 1047/1047 tests across 65 files |
 | `npm run deploy` | `opennextjs-cloudflare build && opennextjs-cloudflare deploy` — one Worker unit (worker + assets) |
@@ -91,7 +92,7 @@ Open the printed localhost URL. Every `NEXT_PUBLIC_FIREBASE_*` variable is optio
 ## Testing
 
 - **Unit/integration** — `npm test` runs Vitest: 1047/1047 tests passing across 65 files (Sep 14, 2026).
-- **E2E** — Playwright: 9 `test()` cases across 7 files in `tests/e2e/flows` (auth 2, terminal 2, files 1, home 1, ide 1, ide-run 1, omni-ai 1), run with `npx playwright test --config=tests/e2e/playwright.config.ts`; the config's webServer builds and serves the hybrid app (`npm run build && npx next start -p 4173`).
+- **E2E** — Playwright: 9 `test()` cases across 7 files in `tests/e2e/flows` (auth 2, terminal 2, files 1, home 1, ide 1, ide-run 1, omni-ai 1), run with `npx playwright test --config=tests/e2e/playwright.config.ts`; the config's webServer builds and serves the hybrid app (`npx next build && npx next start -p 4173`).
 - **CI** (`.github/workflows/ci.yml`) — on push/PR with Node 22: `npm ci`, lint (`tsc --noEmit`), unit tests (`vitest run`, excluding `tests/e2e/**`), build (`next build`), Playwright E2E, and an **`npm audit` job** (`npm audit --audit-level=high`; 0 vulnerabilities as of Sep 14, 2026).
 
 ---
