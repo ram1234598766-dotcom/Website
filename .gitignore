@@ -21,6 +21,7 @@ test-results/
 # secrets
 .env*
 !.env.example
+!.env.production
 
 # system files
 .DS_Store
