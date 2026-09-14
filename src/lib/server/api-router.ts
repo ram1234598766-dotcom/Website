@@ -148,7 +148,7 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
       try { body = await request.json(); } catch { return json({ error: 'Invalid JSON body' }, 400); }
       if (!body.provider) return json({ error: 'provider is required' }, 400);
       if (!body.apiKey) return json({ error: 'apiKey is required' }, 400);
-      const supported = ['openai', 'anthropic', 'google', 'ollama'];
+      const supported = ['openai', 'anthropic', 'google'];
       if (!supported.includes(body.provider)) {
         return json({ error: `Unsupported provider: ${body.provider}` }, 400);
       }
