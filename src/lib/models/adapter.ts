@@ -438,6 +438,13 @@ function resolveHFModelId(vantaosModelId: string): string {
   return MODEL_ID_MAP[vantaosModelId] || vantaosModelId;
 }
 
+const MAX_RETRIES = 2;
+const RETRY_DELAY_MS = 2000;
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 async function runInference(prompt: string, modelId: string, timeoutMs = INFERENCE_TIMEOUT_MS): Promise<string> {
   const transformers = await import('@huggingface/transformers');
   const { pipeline, env } = transformers;
@@ -447,25 +454,64 @@ async function runInference(prompt: string, modelId: string, timeoutMs = INFEREN
 
   const hfModelId = resolveHFModelId(modelId);
 
-  let timeoutId: ReturnType<typeof setTimeout>;
-  const timeoutPromise = new Promise<never>((_, reject) => {
-    timeoutId = setTimeout(
-      () => reject(new Error(`Inference timed out after ${timeoutMs / 1000}s`)),
-      timeoutMs,
-    );
-  });
+  let lastError: Error | null = null;
 
-  const inferencePromise = (async () => {
-    env.allowLocalModels = false;
-    const generator = await pipeline('text-generation', hfModelId, { device });
-    const output = await generator(prompt, { max_new_tokens: 128, return_full_text: false });
-    if (Array.isArray(output) && output.length > 0 && output[0].generated_text) {
-      return output[0].generated_text;
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    if (attempt > 0) {
+      await delay(RETRY_DELAY_MS * attempt);
     }
-    throw new Error('Empty inference output');
-  })();
 
-  return Promise.race([inferencePromise, timeoutPromise]).finally(() => clearTimeout(timeoutId));
+    let timeoutId: ReturnType<typeof setTimeout>;
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timeoutId = setTimeout(
+        () => reject(new Error(`Inference timed out after ${timeoutMs / 1000}s`)),
+        timeoutMs,
+      );
+    });
+
+    try {
+      const inferencePromise = (async () => {
+        env.allowLocalModels = false;
+        const generator = await pipeline('text-generation', hfModelId, { device });
+        const output = await generator(prompt, { max_new_tokens: 128, return_full_text: false });
+        if (Array.isArray(output) && output.length > 0 && output[0].generated_text) {
+          return output[0].generated_text;
+        }
+        throw new Error('Empty inference output');
+      })();
+
+      const result = await Promise.race([inferencePromise, timeoutPromise]);
+      clearTimeout(timeoutId);
+      return result;
+    } catch (err) {
+      clearTimeout(timeoutId);
+      lastError = err instanceof Error ? err : new Error(String(err));
+
+      const isNetworkError = lastError.message.includes('fetch') ||
+        lastError.message.includes('NetworkError') ||
+        lastError.message.includes('503') ||
+        lastError.message.includes('502') ||
+        lastError.message.includes('Service unavailable') ||
+        lastError.message.includes('Failed to fetch');
+
+      if (!isNetworkError || attempt === MAX_RETRIES) {
+        break;
+      }
+    }
+  }
+
+  const msg = lastError?.message || 'unknown error';
+  if (msg.includes('503') || msg.includes('Service unavailable') || msg.includes('Failed to fetch')) {
+    throw new Error(
+      'Hugging Face is temporarily unavailable. The model may be loading — try again in a moment, or switch to a cloud provider (Gemini, OpenRouter) in Settings.'
+    );
+  }
+  if (msg.includes('timed out')) {
+    throw new Error(
+      'Model loading timed out. The model may be large for your device — try a smaller model or switch to a cloud provider in Settings.'
+    );
+  }
+  throw new Error(`WebModel error: ${msg}`);
 }
 
 /**
