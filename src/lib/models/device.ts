@@ -143,9 +143,27 @@ export function meetsRequirements(
   caps: DeviceCapabilities,
   req: RuntimeRequirements,
 ): boolean {
-  if (req.webgpu && !caps.webgpu) return false;
-  if (req.wasm && !caps.wasm) return false;
-  if (caps.deviceMemoryMB < req.minMemoryMB) return false;
-  if (caps.storageQuotaMB < req.minStorageMB) return false;
-  return true;
+  return requirementGaps(caps, req).length === 0;
+}
+
+/**
+ * Return a human-readable list of the reasons the given device does NOT
+ * meet the manifest's runtime requirements. An empty array means the
+ * device is compatible. Used to explain *why* a model is blocked, rather
+ * than just showing an opaque "incompatible" badge.
+ */
+export function requirementGaps(
+  caps: DeviceCapabilities,
+  req: RuntimeRequirements,
+): string[] {
+  const gaps: string[] = [];
+  if (req.webgpu && !caps.webgpu) gaps.push('WebGPU is not supported by this browser');
+  if (req.wasm && !caps.wasm) gaps.push('WebAssembly is not available');
+  if (caps.deviceMemoryMB < req.minMemoryMB) {
+    gaps.push(`Needs ${req.minMemoryMB} MiB RAM (you have ${caps.deviceMemoryMB} MiB)`);
+  }
+  if (caps.storageQuotaMB < req.minStorageMB) {
+    gaps.push(`Needs ${req.minStorageMB} MiB storage (you have ${caps.storageQuotaMB} MiB)`);
+  }
+  return gaps;
 }

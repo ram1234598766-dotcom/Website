@@ -22,7 +22,7 @@ import { motion, AnimatePresence } from 'motion/react';
 // @ts-ignore Module resolution works at runtime via Next.js bundler
 import { ModelManifest, DeviceProfile } from '@/src/lib/models/manifest';
 // @ts-ignore Module resolution works at runtime via Next.js bundler
-import { detectDevice, meetsRequirements } from '@/src/lib/models/device';
+import { detectDevice, meetsRequirements, requirementGaps } from '@/src/lib/models/device';
 
 /* ------------------------------------------------------------------ */
 /*  Demo data — in production this comes from a registry endpoint.     */
@@ -209,6 +209,9 @@ export default function ModelManager() {
           const compatible = useMemo(() => deviceCaps
             ? meetsRequirements(deviceCaps, manifest.runtimeRequirements)
             : null, [deviceCaps, manifest.runtimeRequirements]);
+          const gaps = useMemo(() => deviceCaps
+            ? requirementGaps(deviceCaps, manifest.runtimeRequirements)
+            : [], [deviceCaps, manifest.runtimeRequirements]);
 
           return (
             <motion.div
@@ -278,10 +281,19 @@ export default function ModelManager() {
                 {/* Actions */}
                 <div className="flex flex-col items-end gap-2">
                   {compatible === false && (
-                    <span className="flex items-center gap-1 text-xs text-red-400">
-                      <AlertTriangle className="h-3 w-3" />
-                      Incompatible with this device
-                    </span>
+                    <div className="flex flex-col items-end gap-1.5">
+                      <span className="flex items-center gap-1 text-xs text-red-400">
+                        <AlertTriangle className="h-3 w-3" />
+                        Incompatible with this device
+                      </span>
+                      <ul className="text-right space-y-0.5">
+                        {gaps.map((gap) => (
+                          <li key={gap} className="text-[11px] text-red-400/80">
+                            {gap}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
                   )}
 
                   <AnimatePresence mode="wait">

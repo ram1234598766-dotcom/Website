@@ -15,7 +15,7 @@ import {
 } from '../../src/lib/models/manifest';
 import type { ModelManifest } from '../../src/lib/models/manifest';
 import { ResumableShardDownloader } from '../../src/lib/models/downloader';
-import { detectDeviceSync, meetsRequirements } from '../../src/lib/models/device';
+import { detectDeviceSync, meetsRequirements, requirementGaps } from '../../src/lib/models/device';
 
 /* ------------------------------------------------------------------ */
 /*  Manifest validation                                                */
@@ -485,5 +485,71 @@ describe('meetsRequirements', () => {
         { webgpu: false, wasm: true, minMemoryMB: 512, minStorageMB: 16 },
       ),
     ).toBe(false);
+  });
+});
+
+describe('requirementGaps', () => {
+  const caps = {
+    profile: 'laptop' as const,
+    webgpu: true,
+    wasm: true,
+    deviceMemoryMB: 8192,
+    storageQuotaMB: 4096,
+    cores: 8,
+  };
+
+  it('returns an empty array when all requirements are met', () => {
+    expect(
+      requirementGaps(caps, { webgpu: false, wasm: true, minMemoryMB: 4096, minStorageMB: 1024 }),
+    ).toEqual([]);
+  });
+
+  it('lists WebGPU as a gap when required but unavailable', () => {
+    const gaps = requirementGaps(
+      { ...caps, webgpu: false },
+      { webgpu: true, wasm: false, minMemoryMB: 512, minStorageMB: 16 },
+    );
+    expect(gaps).toContain('WebGPU is not supported by this browser');
+    expect(gaps).toHaveLength(1);
+  });
+
+  it('lists WASM as a gap when required but unavailable', () => {
+    const gaps = requirementGaps(
+      { ...caps, wasm: false },
+      { webgpu: false, wasm: true, minMemoryMB: 512, minStorageMB: 16 },
+    );
+    expect(gaps).toContain('WebAssembly is not available');
+  });
+
+  it('explains the memory shortfall with both numbers', () => {
+    const gaps = requirementGaps(
+      { ...caps, deviceMemoryMB: 256 },
+      { webgpu: false, wasm: false, minMemoryMB: 512, minStorageMB: 16 },
+    );
+    expect(gaps).toContain('Needs 512 MiB RAM (you have 256 MiB)');
+  });
+
+  it('explains the storage shortfall with both numbers', () => {
+    const gaps = requirementGaps(
+      { ...caps, storageQuotaMB: 8 },
+      { webgpu: false, wasm: false, minMemoryMB: 512, minStorageMB: 16 },
+    );
+    expect(gaps).toContain('Needs 16 MiB storage (you have 8 MiB)');
+  });
+
+  it('reports every failing requirement at once (multiple gaps)', () => {
+    const gaps = requirementGaps(
+      { ...caps, webgpu: false, wasm: false, deviceMemoryMB: 256, storageQuotaMB: 8 },
+      { webgpu: true, wasm: true, minMemoryMB: 512, minStorageMB: 16 },
+    );
+    expect(gaps).toHaveLength(4);
+  });
+
+  it('stays consistent with meetsRequirements (gaps empty iff compatible)', () => {
+    const req = { webgpu: true, wasm: true, minMemoryMB: 4096, minStorageMB: 1024 };
+    expect(meetsRequirements(caps, req)).toBe(requirementGaps(caps, req).length === 0);
+    expect(meetsRequirements({ ...caps, webgpu: false }, req)).toBe(
+      requirementGaps({ ...caps, webgpu: false }, req).length === 0,
+    );
   });
 });
