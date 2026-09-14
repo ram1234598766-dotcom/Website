@@ -175,6 +175,7 @@ export default function TerminalPanel({
       clearTimeout(resizeTimer);
       window.removeEventListener('resize', doFit);
       window.removeEventListener('terminal-send', handleTerminalSend);
+      window.dispatchEvent(new CustomEvent('terminal-disposed'));
       term.dispose();
       xtermRef.current = null;
     };

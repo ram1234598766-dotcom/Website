@@ -98,8 +98,13 @@ export default function CloudOS() {
 
   useEffect(() => {
     const onReady = () => { terminalReadyRef.current = true; };
+    const onDisposed = () => { terminalReadyRef.current = false; };
     window.addEventListener('terminal-ready', onReady);
-    return () => window.removeEventListener('terminal-ready', onReady);
+    window.addEventListener('terminal-disposed', onDisposed);
+    return () => {
+      window.removeEventListener('terminal-ready', onReady);
+      window.removeEventListener('terminal-disposed', onDisposed);
+    };
   }, []);
 
   useEffect(() => {
@@ -124,19 +129,21 @@ export default function CloudOS() {
     };
   }, [isResizingTerminal]);
 
-  const dispatchRun = () => {
+  const dispatchRun = useCallback(() => {
     const file = files.find(f => f.id === activeFileId);
     if (!file) return;
     const code = file.content.slice(0, 500);
     // Send the raw code (not JSON.stringify) — the terminal's `js` command
     // takes everything after the command verbatim, so quotes/newlines survive.
     window.dispatchEvent(new CustomEvent("terminal-send", { detail: "js " + code }));
-  };
+  }, [files, activeFileId]);
 
   const handleRun = useCallback(() => {
     setIsTerminalOpen(true);
     // The terminal is mounted on demand — wait for it to signal it is ready
-    // before sending the command so a run is never silently dropped.
+    // before sending the command so a run is never silently dropped. The
+    // ready ref is cleared on dispose (terminal unmount), so a closed-and-
+    // reopened terminal never runs against a stale "ready" flag.
     if (terminalReadyRef.current) {
       dispatchRun();
     } else {
@@ -146,7 +153,7 @@ export default function CloudOS() {
       };
       window.addEventListener('terminal-ready', onReady);
     }
-  }, [])
+  }, [dispatchRun])
 
   const [dirtyTabs, setDirtyTabs] = useState<string[]>([]);
   const [splitMode, setSplitMode] = useState<'none' | 'side-by-side' | 'stacked'>('none');

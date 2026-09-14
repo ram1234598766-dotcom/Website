@@ -2,7 +2,7 @@
 
 **The intelligent developer cloud.** Write, build, and deploy full-stack applications entirely in the browser.
 
-VantaOS (`vantaos` v2.0.0, private) is a Cloud OS web app: a browser-based workspace that ships with a file manager, a CodeMirror 6 editor spanning 15 languages, a diff editor, an xterm.js terminal, an Omni-AI chat assistant, Google Drive sync, GitHub import/push, and a Firebase forum with an admin panel. It's built as a static Next.js 15 export served by a single Cloudflare Worker, with Firebase Realtime Database as its data tier. It's for developers who want a zero-config cloud workspace that starts offline-friendly in demo mode and can also talk to on-device models on `localhost`.
+VantaOS (`vantaos` v2.0.0, private) is a Cloud OS web app: a browser-based workspace that ships with a file manager, a CodeMirror 6 editor spanning 15 languages, a diff editor, an xterm.js terminal, an Omni-AI chat assistant, Google Drive sync, GitHub import/push, and a Firebase forum with an admin panel. It's built as a static Next.js 15 export served by a single Cloudflare Worker, with Firebase Realtime Database as its data tier. It's for developers who want a zero-config cloud workspace that starts offline-friendly in demo mode and can also run an in-browser WebModel (Transformers.js on WebGPU/WASM) with no external service.
 
 ---
 
@@ -15,7 +15,7 @@ File manager with tabs, split views, a CodeMirror 6 editor covering 15 languages
 xterm.js terminal with a virtual file system and command history. Run inline JavaScript, browse and edit files, and test code as you write — all sandboxed in a Web Worker through `SandboxRunner` (`new Function`), so shell code never executes on the page thread.
 
 ### 🧠 Omni-AI assistant
-Chat with cloud AI through the Worker's `/api/ai/generate` proxy, or stay fully local using models served by a local Ollama daemon (`localhost:11434`) and `@huggingface/transformers`. Live tool commands like `calc`, `js`, `weather`, and `fetch` are available; Omni-ai uses `dompurify` to sanitize all rendered HTML.
+Chat with cloud AI through the Worker's `/api/ai/generate` proxy, or run `@huggingface/transformers` models entirely in your browser (WebGPU/WASM) with no API key. Cloud providers OpenRouter, Gemini, and OpenAI are available via API key — called through the proxy, with a direct-call fallback for OpenRouter and Gemini when the proxy isn't deployed. Live tool commands like `calc`, `js`, `weather`, and `fetch` are available; Omni-ai uses `dompurify` to sanitize all rendered HTML.
 
 ### 🤖 Local model hub
 Browse real open-source models with their actual sizes, pull them into a local Ollama daemon, and run them in one command — no cloud account required.
@@ -68,7 +68,7 @@ cp .env.example .env.local     # fill in values only if you want Firebase/Gemini
 npm run dev
 ```
 
-Open the printed localhost URL. Every `NEXT_PUBLIC_FIREBASE_*` variable is optional: without them the app starts in demo mode with local accounts. To enable Omni-AI cloud generation, just set the `GEMINI_API_KEY` env var (plus the Firebase variables your setup needs). No config is required for the editors, terminal, GitHub browsing, Google Drive demo, or a local Ollama install.
+Open the printed localhost URL. Every `NEXT_PUBLIC_FIREBASE_*` variable is optional: without them the app starts in demo mode with local accounts. No config is required for the editors, terminal, GitHub browsing, Google Drive demo, or the in-browser WebModel. A local Ollama install is only needed for the dedicated model-hub page that pulls models into an on-device daemon.
 
 ---
 

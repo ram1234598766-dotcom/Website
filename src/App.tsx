@@ -30,6 +30,7 @@ export default function App() {
   const [appReady, setAppReady] = useState(false);
   const onSignIn = useCallback(() => { setAuthMode('signin'); setShowAuthModal(true); }, []);
   const onSignUp = useCallback(() => { setAuthMode('signup'); setShowAuthModal(true); }, []);
+  const onSignOut = useCallback(() => { client.auth.signOut(); }, []);
   const handleCloseCommandPalette = useCallback(() => setIsCommandPaletteOpen(false), []);
   const handleCloseAuthModal = useCallback(() => setShowAuthModal(false), []);
   const handleRefreshSession = useCallback(() => client.auth.refreshSession?.(), []);
@@ -120,6 +121,7 @@ export default function App() {
             isAdmin={isAdmin}
             onSignIn={onSignIn}
             onSignUp={onSignUp}
+            onSignOut={onSignOut}
           />
 
           <main className="flex-1 flex flex-col max-w-7xl mx-auto w-full p-4 sm:p-8 relative z-10">

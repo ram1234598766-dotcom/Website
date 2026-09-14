@@ -15,7 +15,7 @@ export const metadata: Metadata = {
     template: '%s · VantaOS',
   },
   description:
-    'Write, build, and deploy full-stack applications entirely in the browser. A cloud IDE with a CodeMirror-based editor, a built-in terminal, Omni-AI assistant, local model hub, and GitHub sync.',
+    'Write, build, and deploy full-stack applications entirely in the browser. A cloud IDE with a CodeMirror-based editor, a built-in terminal, Omni-AI assistant with in-browser WebModel, and GitHub sync.',
   keywords: [
     'cloud IDE',
     'browser IDE',
@@ -24,8 +24,10 @@ export const metadata: Metadata = {
     'online code editor',
     'AI coding assistant',
     'CodeMirror',
+    'WebAssembly',
     'GitHub sync',
-    'Ollama',
+    'in-browser AI',
+    'browser LLM',
   ],
   authors: [{ name: 'Mrityunjay K' }],
   creator: 'Mrityunjay K',

@@ -1,4 +1,4 @@
-export type ProviderId = 'ollama' | 'openrouter' | 'gemini' | 'openai' | 'webmodel';
+export type ProviderId = 'webmodel' | 'openrouter' | 'gemini' | 'openai';
 
 export interface ProviderModel {
   id: string;
@@ -14,10 +14,10 @@ export interface ProviderConfig {
 }
 
 export const PROVIDERS: ProviderConfig[] = [
-  { id: 'ollama', name: 'Local Ollama',
-    models: [{ id: 'llama3', name: 'llama3' }],
-    defaultModel: 'llama3',
-    desc: 'Run: set OLLAMA_ORIGINS=* && ollama serve' },
+  { id: 'webmodel', name: 'WebModel',
+    models: [{ id: 'gpt2', name: 'GPT-2' }, { id: 'tinyllama', name: 'SmolLM2-135M' }],
+    defaultModel: 'gpt2',
+    desc: 'Runs in your browser via Transformers.js (WebGPU/WASM). No API key.' },
   { id: 'openrouter', name: 'OpenRouter',
     models: [{ id: 'openai/gpt-4o', name: 'GPT-4o' }, { id: 'google/gemini-2.5-flash', name: 'Gemini 2.5 Flash' }],
     defaultModel: 'openai/gpt-4o', desc: '200+ models. Get key at openrouter.ai/keys' },

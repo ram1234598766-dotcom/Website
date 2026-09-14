@@ -1,14 +1,20 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { BrainCircuit, Send, Settings, Key, Globe, Zap, Bot, Trash2, Server, RefreshCw, Loader2 } from 'lucide-react';
+import { BrainCircuit, Send, Settings, Key, Globe, Zap, Bot, Trash2, Loader2, Cpu } from 'lucide-react';
 import { SandboxRunner } from '../lib/terminal/runner';
 import { ToolPermissionManager, DEFAULT_TOOLS, type ToolPermissionState } from '../lib/ai/tool-permissions';
+import { queryWebModel } from '../lib/models/adapter';
 
-type AIProvider = 'ollama' | 'openrouter' | 'gemini' | 'openai';
+type AIProvider = 'webmodel' | 'openrouter' | 'gemini' | 'openai';
 
 const SETTINGS_KEY = 'vantaos_omni_settings';
 const HISTORY_KEY = 'vantaos_omni_history';
+
+const WEB_MODELS: { id: string; name: string }[] = [
+  { id: 'gpt2', name: 'GPT-2' },
+  { id: 'tinyllama', name: 'SmolLM2-135M' },
+];
 
 /** Shared sandbox for the inline JS / calculation tools. */
 const omniRunner = new SandboxRunner();
@@ -20,25 +26,34 @@ const toolPermissionManager = new ToolPermissionManager(async (toolId, toolName,
 
 async function runInSandbox(code: string): Promise<string> {
   const res = await omniRunner.run(code).result;
-  if (res.terminated) return `(stopped ÔÇö ${res.terminated})`;
+  if (res.terminated) return `(stopped: ${res.terminated})`;
   if (!res.ok) return res.error ?? 'Execution failed.';
   const consoleLines = res.output.length ? `${res.output.join('\n')}\n` : '';
   return `${consoleLines}${res.value}`;
 }
 
-interface StoredSettings { provider: AIProvider; model: string; apiKey: string; ollamaUrl: string; }
+interface StoredSettings { provider: AIProvider; model: string; apiKey: string; }
 
 function loadSettings(): StoredSettings {
   try {
     const d = localStorage.getItem(SETTINGS_KEY);
     if (d) {
-      const parsed = JSON.parse(d);
-      // The old 'local' offline provider was removed ÔÇö migrate to Ollama.
-      if (parsed.provider === 'local') parsed.provider = 'ollama';
-      return parsed;
+      const parsed = JSON.parse(d) as { provider?: string; model?: string; apiKey?: string };
+      // Legacy 'local' and 'ollama' providers were removed — migrate them to
+      // the in-browser WebModel so the user keeps a working default.
+      if (parsed.provider === 'local' || parsed.provider === 'ollama') parsed.provider = 'webmodel';
+      const provider: AIProvider =
+        parsed.provider === 'openrouter' || parsed.provider === 'gemini' || parsed.provider === 'openai' || parsed.provider === 'webmodel'
+          ? parsed.provider
+          : 'webmodel';
+      return {
+        provider,
+        model: parsed.model || 'gpt2',
+        apiKey: parsed.apiKey || '',
+      };
     }
   } catch {}
-  return { provider: 'ollama', model: 'llama3', apiKey: '', ollamaUrl: 'http://localhost:11434' };
+  return { provider: 'webmodel', model: 'gpt2', apiKey: '' };
 }
 function saveSettings(s: StoredSettings) { localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)); }
 
@@ -47,53 +62,31 @@ async function getWeather(city: string): Promise<string> {
     const res = await fetch(`https://wttr.in/${encodeURIComponent(city)}?format=j1`);
     const data = await res.json();
     const c = data.current_condition?.[0];
-    if (c) return `­ƒîñ´©Å **Weather in ${city}**: ${c.temp_C}┬░C (${c.temp_F}┬░F), ${c.weatherDesc?.[0]?.value || 'clear'}\n­ƒÆº Humidity: ${c.humidity}% ┬À ­ƒî¼´©Å Wind: ${c.windspeedKmph} km/h`;
+    if (c) return `**Weather in ${city}**: ${c.temp_C}C (${c.temp_F}F), ${c.weatherDesc?.[0]?.value || 'clear'}\nHumidity: ${c.humidity}% | Wind: ${c.windspeedKmph} km/h`;
     return '';
   } catch { return ''; }
 }
 
-// ====== OLLAMA ======
-async function ollamaListModels(url: string): Promise<{ name: string }[]> {
-  try {
-    const res = await fetch(`${url}/api/tags`, { signal: AbortSignal.timeout(2000) });
-    if (!res.ok) return [];
-    const data = await res.json();
-    return (data.models || []).map((m: any) => ({ name: m.name }));
-  } catch { return []; }
-}
-
-async function ollamaGenerate(url: string, model: string, prompt: string): Promise<string> {
-  const res = await fetch(`${url}/api/generate`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model, prompt, stream: false }),
-    signal: AbortSignal.timeout(30000),
-  });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const data = await res.json();
-  return data.response || '';
-}
-
-// ====== LOCAL/ONLINE QUERY ======
+// ====== LOCAL/TOOL QUERY ======
 // Omni-AI is online-only. `localQuery` handles explicit tool commands that
-// run against live services (weather, fetch), and routes everything else
-// through a connected AI provider (Ollama or a cloud API). There is no
-// offline knowledge-base fallback ÔÇö if no provider is connected, we say so.
-export async function localQuery(msg: string, settings: StoredSettings): Promise<string> {
+// run against live services (weather, fetch) or the sandbox (calc, js),
+// and returns null for anything that needs a real AI provider.
+export async function localQuery(msg: string, settings: StoredSettings): Promise<string | null> {
   const q = msg.trim();
   const ql = q.toLowerCase();
 
-  // Explicit tool commands (still work without an LLM, but they hit live APIs)
+  // Explicit tool commands (work without an LLM, but they hit live APIs)
   if (ql === 'help' || q === '?') {
-    return `## ­ƒñû Omni-AI Commands
+    return `## Omni-AI Commands
 
-ÔÇó **Ask anything** ÔÇö questions, knowledge, explanations
-ÔÇó **­ƒîñ´©Å Weather** ÔÇö \`weather in Paris\`
-ÔÇó **­ƒôè Math** ÔÇö \`calc 2^10\`
-ÔÇó **­ƒÆ╗ Code** ÔÇö \`js [1,2,3].map(x=>x*2)\`
-ÔÇó **­ƒöù Fetch** ÔÇö \`fetch https://...\`
-ÔÇó **ÔÅ░ Time** ÔÇö \`what time is it\`
+* **Ask anything** — questions, knowledge, explanations
+* **Weather** — \`weather in Paris\`
+* **Math** — \`calc 2^10\`
+* **Code** — \`js [1,2,3].map(x=>x*2)\`
+* **Fetch** — \`fetch https://...\`
+* **Time** — \`what time is it\`
 
-For AI answers, connect a provider in ÔÜÖ´©Å Settings ÔÇö local Ollama, or a cloud API (OpenRouter, Gemini, OpenAI).`;
+For AI answers, use WebModel (free, runs in your browser) or connect a cloud provider (OpenRouter, Gemini, OpenAI) in Settings.`;
   }
   if (ql.startsWith('weather') || ql.startsWith('temperature')) {
     const canExec = await toolPermissionManager.canExecute('weather');
@@ -124,53 +117,87 @@ For AI answers, connect a provider in ÔÜÖ´©Å Settings ÔÇö local Ollama,
       const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
       const text = await res.text();
       const body = text.replace(/<script[\s\S]*?<\/script>/gi, '').replace(/<style[\s\S]*?<\/style>/gi, '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 1500);
-      return `­ƒôä **Content from ${url}**\n\n${body}`;
+      return `**Content from ${url}**\n\n${body}`;
     } catch { return `Failed to fetch that URL.`; }
   }
   if (ql.includes('time') && (ql.includes('what') || ql.includes('current') || ql.includes('now'))) {
-    return `­ƒòÉ **${new Date().toLocaleString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZoneName: 'short' })}**`;
+    return `**${new Date().toLocaleString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZoneName: 'short' })}**`;
   }
 
-  // AI answers require a connected provider (Ollama or cloud). No offline fallback.
-  if (settings.ollamaUrl) {
-    try {
-      const models = await ollamaListModels(settings.ollamaUrl);
-      if (models.length > 0) {
-        const model = settings.model !== '' ? settings.model : models[0].name;
-        const system = `You are Omni-AI, a helpful assistant. Answer concisely.\nDate: ${new Date().toLocaleDateString()}`;
-        try {
-          const response = await ollamaGenerate(settings.ollamaUrl, model, `${system}\n\nUser: ${q}\nAnswer:`);
-          if (response) return response;
-        } catch { /* fall through to provider-unavailable message */ }
-      }
-    } catch { /* Ollama unreachable */ }
-  }
+  // Not a tool command — hand off to an AI provider.
+  return null;
+}
 
-  return `ÔÜá´©Å **No AI provider is connected.**
-
-Connect one in ÔÜÖ´©Å Settings to get AI answers:
-ÔÇó **Local Ollama** ÔÇö install it, run \`set OLLAMA_ORIGINS=* && ollama serve\` (Windows) or \`OLLAMA_ORIGINS=* ollama serve\` (Mac/Linux), then press refresh in settings.
-ÔÇó **Cloud provider** ÔÇö pick OpenRouter, Gemini, or OpenAI and paste your API key.
-
-You can still use the tools above (weather, calc, js, fetch) anytime.`;
+// ====== IN-BROWSER WEBMODEL ======
+async function webmodelQuery(prompt: string, model: string): Promise<string> {
+  const modelId = model === 'tinyllama' ? 'tinyllama' : 'gpt2';
+  // Generous timeout so the first-use Hugging Face model download can finish.
+  return queryWebModel(prompt, modelId, 120000);
 }
 
 // ====== CLOUD PROVIDER ======
 async function cloudQuery(provider: AIProvider, model: string, apiKey: string, messages: { role: string; content: string }[]): Promise<string> {
-  const res = await fetch('/api/ai/generate', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ provider, model, apiKey, messages }),
-  });
-  if (!res.ok) {
+  try {
+    const res = await fetch('/api/ai/generate', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ provider, model, apiKey, messages }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      return data.text || 'No response.';
+    }
     let message = `Error (${res.status})`;
     try { const err = await res.json(); if (err?.error) message = err.error; } catch {}
-    if (res.status === 404) {
-      message = 'The AI proxy (/api/ai/generate) is only available when deployed. Run `npm run deploy` to serve it from the Cloudflare Worker, or use a local provider.';
-    }
     throw new Error(message);
+  } catch (err) {
+    // The Worker proxy is unavailable in dev/e2e (static export). Fall back to
+    // direct browser calls for CORS-enabled providers; OpenAI blocks browsers,
+    // so it always requires the Worker.
+    if (provider === 'openrouter') return openrouterDirect(model, apiKey, messages);
+    if (provider === 'gemini') return geminiDirect(model, apiKey, messages);
+    return rethrowWithWorkerHint(err);
+  }
+}
+
+function rethrowWithWorkerHint(err: unknown): never {
+  const message = err instanceof Error ? err.message : 'Unknown error';
+  const hint = 'The AI proxy (/api/ai/generate) is only available when deployed. Run `npm run deploy` to serve it from the Cloudflare Worker. OpenAI cannot be called directly from the browser.';
+  throw new Error(`${hint} ${message}`.trim());
+}
+
+async function openrouterDirect(model: string, apiKey: string, messages: { role: string; content: string }[]): Promise<string> {
+  const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+    body: JSON.stringify({ model, messages }),
+    signal: AbortSignal.timeout(60000),
+  });
+  if (!res.ok) {
+    let detail = '';
+    try { const err = await res.json(); detail = err?.error?.message || ''; } catch {}
+    throw new Error(`OpenRouter error (${res.status})${detail ? `: ${detail}` : ''}`);
   }
   const data = await res.json();
-  return data.text || 'No response.';
+  return data?.choices?.[0]?.message?.content || 'No response.';
+}
+
+async function geminiDirect(model: string, apiKey: string, messages: { role: string; content: string }[]): Promise<string> {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: messages.map((m) => ({
+        role: m.role === 'assistant' ? 'model' : 'user',
+        parts: [{ text: m.content }],
+      })),
+    }),
+    signal: AbortSignal.timeout(60000),
+  });
+  if (!res.ok) throw new Error(`Gemini error (${res.status})`);
+  const data = await res.json();
+  const text = data?.candidates?.[0]?.content?.parts?.map((p: any) => p.text).join('') || '';
+  return text || 'No response.';
 }
 
 export default function OmniAI() {
@@ -180,35 +207,23 @@ export default function OmniAI() {
   const [showSettings, setShowSettings] = useState(false);
   const [settings, setSettings] = useState<StoredSettings>(loadSettings);
   const [tempApiKey, setTempApiKey] = useState(settings.apiKey);
-  const [tempOllamaUrl, setTempOllamaUrl] = useState(settings.ollamaUrl);
-  const [ollamaModels, setOllamaModels] = useState<{ name: string }[]>([]);
-  const [ollamaStatus, setOllamaStatus] = useState<'checking' | 'offline' | 'online'>('offline');
   const [toolPerms, setToolPerms] = useState<ToolPermissionState>({});
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     try { const d = localStorage.getItem(HISTORY_KEY); if (d) setMessages(JSON.parse(d)); } catch {}
-    checkOllama();
   }, []);
 
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 
-  async function checkOllama() {
-    const url = tempOllamaUrl || settings.ollamaUrl;
-    setOllamaStatus('checking');
-    const models = await ollamaListModels(url);
-    setOllamaModels(models);
-    setOllamaStatus(models.length > 0 ? 'online' : 'offline');
-  }
+  const isWebModelReady = settings.provider === 'webmodel';
+  const isCloudReady = settings.provider !== 'webmodel' && !!settings.apiKey;
 
-  const isOllamaReady = ollamaStatus === 'online';
-  const isCloudReady = settings.provider !== 'ollama' && !!settings.apiKey;
-
-  const PROVIDERS = [
-    { id: 'ollama' as AIProvider, name: 'Local Ollama', icon: Server,
-      models: ollamaModels.length > 0 ? ollamaModels.map(m => ({ id: m.name, name: m.name })) : [{ id: 'llama3', name: 'llama3' }],
-      defaultModel: ollamaModels[0]?.name || 'llama3',
-      desc: isOllamaReady ? `Ô£à ${ollamaModels.length} models available` : 'Run: set OLLAMA_ORIGINS=* && ollama serve' },
+  const PROVIDERS: { id: AIProvider; name: string; icon: React.ComponentType<{ className?: string }>; models: { id: string; name: string }[]; defaultModel: string; desc: string; }[] = [
+    { id: 'webmodel' as AIProvider, name: 'WebModel', icon: Cpu,
+      models: WEB_MODELS,
+      defaultModel: 'gpt2',
+      desc: 'Free, private, runs entirely in your browser with Transformers.js (WebGPU/WASM). Models download on first use.' },
     { id: 'openrouter' as AIProvider, name: 'OpenRouter', icon: Globe,
       models: [{ id: 'openai/gpt-4o', name: 'GPT-4o' }, { id: 'google/gemini-2.5-flash', name: 'Gemini 2.5 Flash' }],
       defaultModel: 'openai/gpt-4o', desc: '200+ models. Get key at openrouter.ai/keys' },
@@ -232,10 +247,13 @@ export default function OmniAI() {
     setIsGenerating(true);
     try {
       let text: string;
-      if (settings.provider === 'ollama') {
-        text = await localQuery(input.trim(), settings);
+      const toolResult = await localQuery(input.trim(), settings);
+      if (toolResult !== null) {
+        text = toolResult;
+      } else if (settings.provider === 'webmodel') {
+        text = await webmodelQuery(input.trim(), settings.model);
       } else {
-        if (!settings.apiKey) throw new Error('Add your API key in Settings (ÔÜÖ´©Å)');
+        if (!settings.apiKey) throw new Error('Add your API key in Settings to use this cloud provider.');
         text = await cloudQuery(settings.provider, settings.model, settings.apiKey, [{ role: 'user', content: input.trim() }]);
       }
       const finalMessages = [...newMessages, { role: 'assistant', content: text }];
@@ -258,7 +276,7 @@ export default function OmniAI() {
   };
 
   const saveApiSettings = () => {
-    const newSettings = { ...settings, apiKey: tempApiKey, ollamaUrl: tempOllamaUrl };
+    const newSettings = { ...settings, apiKey: tempApiKey };
     setSettings(newSettings);
     saveSettings(newSettings);
     setShowSettings(false);
@@ -267,7 +285,7 @@ export default function OmniAI() {
   const toggleToolPermission = (toolId: string, perm: 'allow' | 'deny') => {
     toolPermissionManager.setPermission(toolId, perm);
     setToolPerms((prev) => ({ ...prev, [toolId]: perm }));
-};
+  };
 
   return (
     <div className="w-full max-w-5xl mx-auto flex flex-col min-h-[85vh] bg-[#0a0d12] rounded-3xl overflow-hidden shadow-2xl border border-slate-800">
@@ -275,19 +293,19 @@ export default function OmniAI() {
       <div className="bg-[#161B22] border-b border-slate-800 p-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
           <div className={`w-12 h-12 rounded-xl border flex items-center justify-center shadow-lg ${
-            isOllamaReady ? 'bg-emerald-900/40 border-emerald-500/20' :
+            isWebModelReady ? 'bg-emerald-900/40 border-emerald-500/20' :
             isCloudReady ? 'bg-blue-900/40 border-blue-500/20' :
             'bg-slate-800/40 border-slate-700/30'}`}>
-            {isOllamaReady ? <Server className="w-6 h-6 text-emerald-400" /> :
+            {isWebModelReady ? <Cpu className="w-6 h-6 text-emerald-400" /> :
              isCloudReady ? <BrainCircuit className="w-6 h-6 text-blue-400" /> :
              <Zap className="w-6 h-6 text-amber-400" />}
           </div>
           <div>
             <h1 className="text-2xl font-bold text-white tracking-tight">Omni-AI</h1>
             <div className="flex items-center gap-2 mt-1">
-              {isOllamaReady ? (
+              {isWebModelReady ? (
                 <><span className="w-2 h-2 rounded-full bg-emerald-500 shadow-lg"></span>
-                <span className="text-xs font-mono text-emerald-400 uppercase tracking-widest">Ollama ┬À {ollamaModels[0]?.name}</span></>
+                <span className="text-xs font-mono text-emerald-400 uppercase tracking-widest">WebModel | {settings.model || 'gpt2'}</span></>
               ) : isCloudReady ? (
                 <><span className="w-2 h-2 rounded-full bg-blue-500"></span>
                 <span className="text-xs font-mono text-blue-400 uppercase tracking-widest">{provider.name}</span></>
@@ -304,7 +322,7 @@ export default function OmniAI() {
             title="Clear history">
             <Trash2 className="w-5 h-5" />
           </button>
-          <button onClick={() => { setShowSettings(!showSettings); setTempApiKey(settings.apiKey); setTempOllamaUrl(settings.ollamaUrl); }} aria-label="Settings"
+          <button onClick={() => { setShowSettings(!showSettings); setTempApiKey(settings.apiKey); }} aria-label="Settings"
             className={`p-2.5 rounded-xl transition-colors cursor-pointer ${showSettings ? 'bg-indigo-500/20 text-indigo-300' : 'text-slate-400 hover:bg-white/10 hover:text-white'}`}
             title="Settings">
             <Settings className="w-5 h-5" />
@@ -317,34 +335,32 @@ export default function OmniAI() {
         <div className="bg-[#0a0d12] border-b border-slate-800 p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
           <h3 className="text-white font-bold flex items-center gap-2"><Key className="w-4 h-4" /> Configuration</h3>
 
-          {/* Ollama Connection */}
+          {/* In-browser WebModel */}
           <div className="bg-black/40 p-4 rounded-xl border border-slate-700">
-            <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
-                <Server className={`w-4 h-4 ${isOllamaReady ? 'text-emerald-400' : 'text-slate-500'}`} />
-                <span className="text-sm font-medium text-slate-300">Local Ollama</span>
-                {ollamaStatus === 'checking' && <Loader2 className="w-3 h-3 animate-spin text-slate-400" />}
-                {isOllamaReady && <span className="text-xs bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full">ÔùÅ {ollamaModels.length} models</span>}
-                {!isOllamaReady && ollamaStatus !== 'checking' && <span className="text-xs text-slate-500">offline</span>}
+                <Cpu className="w-4 h-4 text-emerald-400" />
+                <span className="text-sm font-medium text-slate-300">In-browser WebModel</span>
+                <span className="text-xs bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full">ready</span>
               </div>
-              <button onClick={checkOllama} aria-label="Refresh Ollama connection" className="p-1.5 bg-slate-800 hover:bg-slate-700 rounded text-slate-400 transition-colors cursor-pointer focus-visible:ring-2 focus-visible:ring-indigo-400">
-                <RefreshCw className="w-3.5 h-3.5" />
-              </button>
             </div>
-            <div className="flex gap-2">
-              <input type="text" value={tempOllamaUrl} onChange={(e) => setTempOllamaUrl(e.target.value)} aria-label="Ollama URL"
-                placeholder="http://localhost:11434"
-                className="flex-1 bg-black/60 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-300 font-mono focus-visible:ring-2 focus-visible:ring-indigo-500" />
-            </div>
-            {!isOllamaReady && ollamaStatus !== 'checking' && (
-              <p className="text-[10px] text-amber-400 mt-2">Run in terminal: <code className="bg-black/60 px-1 py-0.5 rounded text-emerald-400">set OLLAMA_ORIGINS=* && ollama serve</code></p>
+            <p className="text-xs text-slate-400 mb-3">Runs entirely in your browser on WebGPU or WASM. No API key, no data leaves your device. The model downloads from Hugging Face on first use.</p>
+            {settings.provider === 'webmodel' && (
+              <div>
+                <label className="block text-xs text-slate-400 font-medium mb-1">Model</label>
+                <select value={settings.model} onChange={(e) => updateSettings(prev => ({ ...prev, model: e.target.value }))}
+                  aria-label="WebModel model"
+                  className="w-full bg-black/40 border border-slate-700 rounded-xl px-4 py-3 text-white text-sm cursor-pointer">
+                  {WEB_MODELS.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                </select>
+              </div>
             )}
           </div>
 
           {/* Provider Selection */}
           <div>
             <label className="text-xs text-slate-400 font-medium uppercase tracking-wider mb-2 block">AI Provider</label>
-            <div role="radiogroup" aria-label="AI Provider" className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+            <div role="radiogroup" aria-label="AI Provider" className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               {PROVIDERS.map(p => {
                 const Icon = p.icon;
                 const active = settings.provider === p.id;
@@ -360,20 +376,8 @@ export default function OmniAI() {
             <p className="text-xs text-slate-500 mt-2">{provider.desc}</p>
           </div>
 
-          {/* Model picker for Ollama */}
-          {settings.provider === 'ollama' && isOllamaReady && (
-            <div>
-              <label className="text-xs text-slate-400 font-medium uppercase tracking-wider mb-2 block">Model</label>
-              <select value={settings.model} onChange={(e) => updateSettings(prev => ({ ...prev, model: e.target.value }))}
-                aria-label="Ollama model"
-                className="w-full bg-black/40 border border-slate-700 rounded-xl px-4 py-3 text-white text-sm cursor-pointer">
-                {ollamaModels.map(m => <option key={m.name} value={m.name}>{m.name}</option>)}
-              </select>
-            </div>
-          )}
-
           {/* API Key for cloud providers */}
-          {(settings.provider === 'openrouter' || settings.provider === 'gemini' || settings.provider === 'openai') && (
+          {settings.provider !== 'webmodel' && (
             <div>
               <label className="text-xs text-slate-400 font-medium uppercase tracking-wider mb-2 block">API Key</label>
               <input type="password" value={tempApiKey} onChange={(e) => setTempApiKey(e.target.value)} aria-label={`${provider.name} API key`}
@@ -417,17 +421,17 @@ export default function OmniAI() {
           {messages.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-slate-500">
               <div className="w-16 h-16 rounded-2xl border bg-indigo-900/20 border-indigo-500/20 flex items-center justify-center mb-4">
-                {isOllamaReady ? <Server className="w-8 h-8 text-emerald-400" /> : isCloudReady ? <BrainCircuit className="w-8 h-8 text-blue-400" /> : <Zap className="w-8 h-8 text-indigo-400" />}
+                {isWebModelReady ? <Cpu className="w-8 h-8 text-emerald-400" /> : isCloudReady ? <BrainCircuit className="w-8 h-8 text-blue-400" /> : <Zap className="w-8 h-8 text-indigo-400" />}
               </div>
               <p className="text-lg font-medium text-slate-400 mb-1">
-                {isOllamaReady ? '­ƒºá Local AI Ready' : isCloudReady ? `${provider.name} connected` : 'Connect an AI provider'}
+                {isWebModelReady ? 'Browser AI Ready' : isCloudReady ? `${provider.name} connected` : 'Connect an AI provider'}
               </p>
               <p className="text-sm text-slate-500 max-w-md text-center mb-6">
-                {isOllamaReady
-                  ? `Connected to Ollama (${ollamaModels.length} models). Ask anything!`
+                {isWebModelReady
+                  ? 'Running locally in your browser via Transformers.js (WebGPU/WASM). Models download on first use.'
                   : isCloudReady
                     ? 'Your AI provider is connected. Ask anything!'
-                    : 'Omni-AI is online-only ÔÇö connect a provider in ÔÜÖ´©Å Settings (Ollama, OpenRouter, Gemini, or OpenAI) to get AI answers.'}
+                    : 'Pick WebModel for free, private in-browser AI, or add an API key for a cloud provider (OpenRouter, Gemini, OpenAI) in Settings.'}
               </p>
               <div className="grid grid-cols-2 gap-2 max-w-sm w-full">
                 {[
@@ -469,7 +473,7 @@ export default function OmniAI() {
         <div className="p-4 sm:p-6 bg-[#161B22] border-t border-slate-800">
           <form onSubmit={handleSend} className="relative flex items-center">
             <input type="text" value={input} onChange={(e) => setInput(e.target.value)} aria-label="Message"
-              placeholder={isOllamaReady ? 'Ask your local AI anything...' : 'Ask a question, search the web...'}
+              placeholder={isWebModelReady ? 'Ask your browser AI anything...' : 'Ask a question, search the web...'}
               disabled={isGenerating}
               className="w-full bg-[#0a0d12] border border-slate-700 text-white text-sm md:text-base rounded-2xl pl-5 pr-14 py-4 focus-visible:ring-2 focus-visible:ring-indigo-400 shadow-inner disabled:opacity-50 transition-colors placeholder-slate-600" />
             <button type="submit" disabled={!input.trim() || isGenerating} aria-label="Send message"
@@ -478,10 +482,10 @@ export default function OmniAI() {
             </button>
           </form>
           <div className="text-[10px] text-slate-500 mt-3 px-2 flex items-center gap-3">
-            {isOllamaReady ? (
-              <span>­ƒºá Local Ollama ┬À <button onClick={() => setShowSettings(true)} className="text-indigo-400 hover:underline cursor-pointer">Change model</button></span>
+            {isWebModelReady ? (
+              <span>Browser AI | <button onClick={() => setShowSettings(true)} className="text-indigo-400 hover:underline cursor-pointer">Change model</button></span>
             ) : (
-              <span>ÔÜí Online only ┬À <button onClick={() => setShowSettings(true)} className="text-indigo-400 hover:underline cursor-pointer">Connect a provider</button> ┬À Type <span className="text-indigo-400">help</span> for commands</span>
+              <span>Online only | <button onClick={() => setShowSettings(true)} className="text-indigo-400 hover:underline cursor-pointer">Connect a provider</button> | Type <span className="text-indigo-400">help</span> for commands</span>
             )}
           </div>
         </div>

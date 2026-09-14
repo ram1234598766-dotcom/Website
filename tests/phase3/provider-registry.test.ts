@@ -5,7 +5,7 @@ describe('Provider config registry', () => {
   it('exports all four default providers', () => {
     expect(PROVIDERS).toHaveLength(4);
     const ids = PROVIDERS.map((p) => p.id);
-    expect(ids).toContain('ollama');
+    expect(ids).toContain('webmodel');
     expect(ids).toContain('openrouter');
     expect(ids).toContain('gemini');
     expect(ids).toContain('openai');
@@ -22,9 +22,9 @@ describe('Provider config registry', () => {
     }
   });
 
-  it('ollama default model is llama3', () => {
-    const ollama = getProviderById('ollama');
-    expect(ollama?.defaultModel).toBe('llama3');
+  it('webmodel default model is gpt2', () => {
+    const webmodel = getProviderById('webmodel');
+    expect(webmodel?.defaultModel).toBe('gpt2');
   });
 
   it('getProviderById returns undefined for unknown ids', () => {

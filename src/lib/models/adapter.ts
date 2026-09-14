@@ -438,7 +438,7 @@ function resolveHFModelId(vantaosModelId: string): string {
   return MODEL_ID_MAP[vantaosModelId] || vantaosModelId;
 }
 
-async function runInference(prompt: string, modelId: string): Promise<string> {
+async function runInference(prompt: string, modelId: string, timeoutMs = INFERENCE_TIMEOUT_MS): Promise<string> {
   const transformers = await import('@huggingface/transformers');
   const { pipeline, env } = transformers;
 
@@ -450,8 +450,8 @@ async function runInference(prompt: string, modelId: string): Promise<string> {
   let timeoutId: ReturnType<typeof setTimeout>;
   const timeoutPromise = new Promise<never>((_, reject) => {
     timeoutId = setTimeout(
-      () => reject(new Error(`Inference timed out after ${INFERENCE_TIMEOUT_MS / 1000}s`)),
-      INFERENCE_TIMEOUT_MS,
+      () => reject(new Error(`Inference timed out after ${timeoutMs / 1000}s`)),
+      timeoutMs,
     );
   });
 
@@ -466,6 +466,27 @@ async function runInference(prompt: string, modelId: string): Promise<string> {
   })();
 
   return Promise.race([inferencePromise, timeoutPromise]).finally(() => clearTimeout(timeoutId));
+}
+
+/**
+ * Run a single-shot chat-style generation on a WebModel, without going
+ * through the verified-manifest registry (Omni-AI chat path).
+ *
+ * Downloads the model from Hugging Face on first use and executes with
+ * Transformers.js on WebGPU or WASM. Throws if the runtime is unsuitable
+ * or inference fails/times out.
+ *
+ * @param prompt - The user prompt for generation
+ * @param modelId - Supported short id: `gpt2`, `tinyllama`, or `webmodel`
+ * @param timeoutMs - Optional timeout override (default 30s)
+ * @returns The generated text
+ */
+export async function queryWebModel(
+  prompt: string,
+  modelId: SupportedModelId = 'gpt2',
+  timeoutMs?: number,
+): Promise<string> {
+  return runInference(prompt, modelId, timeoutMs);
 }
 
 // ─── Runtime instance registry ────────────────────────

@@ -1,6 +1,7 @@
 import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
 import 'fake-indexeddb/auto';
 import { detectRuntime, resolveModel, modelCache, deleteDB } from '../../src/lib/models/adapter';
+import { buildWebModelProvider } from '../../src/lib/ai/webmodel-provider';
 import { PROVIDERS, getProviderById } from '../../src/lib/ai/providers';
 
 // ─── Helpers ─────────────────────────────────────
@@ -107,45 +108,46 @@ describe('WebModel model listing', () => {
 // ─── 3. WebModel provider configuration ───────────────────────────────────
 
 describe('WebModel provider config', () => {
-  it('webmodel provider id is in PROVIDERS list', () => {
-    const webmodelProvider = PROVIDERS.find((p) => p.id === 'webmodel');
-    expect(webmodelProvider).toBeUndefined();
+  it('webmodel provider is present in PROVIDERS with browser models', () => {
+    const webmodelProvider = getProviderById('webmodel');
+    expect(webmodelProvider).toBeDefined();
+    expect(webmodelProvider!.id).toBe('webmodel');
+    expect(webmodelProvider!.models.length).toBeGreaterThan(0);
+    expect(webmodelProvider!.defaultModel).toBe('gpt2');
   });
 
   it('buildWebModelProvider returns null when unsuitable', () => {
     const runtime = { webgpu: false, wasm: false, suitable: false };
-    const configs = [{ id: 'test', name: 'Test', models: [], defaultModel: '', desc: '' }];
-    expect(runtime.suitable).toBe(false);
+    const provider = buildWebModelProvider(runtime, []);
+    expect(provider).toBeNull();
   });
 
   it('buildWebModelProvider returns config when suitable', () => {
     const runtime = { webgpu: true, wasm: false, suitable: true };
     const models = [{ id: 'tiny-code', name: 'tiny-code-1.5b-q4' }];
-    expect(runtime.suitable).toBe(true);
-    expect(models.length).toBeGreaterThan(0);
+    const provider = buildWebModelProvider(runtime, models);
+    expect(provider).not.toBeNull();
+    expect(provider!.id).toBe('webmodel');
+    expect(provider!.defaultModel).toBe('tiny-code');
   });
 });
 
-// ─── 4. Fallback to Ollama when WebModel unavailable ──────────────────────
+// ─── 4. Provider coverage: WebModel + cloud, no local-LLM daemon ──────────
 
-describe('WebModel → Ollama fallback', () => {
-  it('falls back to Ollama when WebModel runtime is unsuitable', () => {
-    const runtime = detectRuntime();
-    if (!runtime.suitable) {
-      const ollamaProvider = getProviderById('ollama');
-      expect(ollamaProvider).toBeDefined();
-      expect(ollamaProvider!.id).toBe('ollama');
+describe('Provider coverage', () => {
+  it('no local-LLM daemon provider is registered (Ollama removed)', () => {
+    expect(getProviderById('ollama')).toBeUndefined();
+  });
+
+  it('cloud providers are always available in PROVIDERS', () => {
+    for (const id of ['openrouter', 'gemini', 'openai']) {
+      const p = getProviderById(id);
+      expect(p).toBeDefined();
+      expect(p!.models.length).toBeGreaterThan(0);
     }
   });
 
-  it('Ollama provider exists in PROVIDERS', () => {
-    const ollamaProvider = getProviderById('ollama');
-    expect(ollamaProvider).toBeDefined();
-    expect(ollamaProvider!.id).toBe('ollama');
-    expect(ollamaProvider!.models.length).toBeGreaterThan(0);
-  });
-
-  it('resolveModel returns null for unknown model (triggers fallback)', async () => {
+  it('resolveModel returns null for unknown model (browser cache miss)', async () => {
     const result = await resolveModel('nonexistent-model');
     expect(result).toBeNull();
   });
@@ -154,13 +156,12 @@ describe('WebModel → Ollama fallback', () => {
 // ─── 5. Provider selection order ──────────────────────────────────────────
 
 describe('Provider selection order', () => {
-  it('Ollama is in PROVIDERS', () => {
-    const ollama = PROVIDERS.find((p) => p.id === 'ollama');
-    expect(ollama).toBeDefined();
+  it('WebModel is first (default pick)', () => {
+    expect(PROVIDERS[0].id).toBe('webmodel');
   });
 
   it('Cloud providers are in PROVIDERS', () => {
-    const cloud = PROVIDERS.filter((p) => p.id !== 'ollama');
+    const cloud = PROVIDERS.filter((p) => p.id !== 'webmodel');
     expect(cloud.length).toBeGreaterThanOrEqual(1);
   });
 

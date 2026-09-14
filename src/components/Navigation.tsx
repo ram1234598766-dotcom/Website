@@ -1,5 +1,5 @@
 import { ViewState } from '../types';
-import { Box, Menu, X, Code2, BrainCircuit, TerminalSquare, ShieldAlert, UserPlus, LogIn, Cpu, Puzzle } from 'lucide-react';
+import { Box, Menu, X, Code2, BrainCircuit, TerminalSquare, ShieldAlert, UserPlus, LogIn, LogOut, Cpu, Puzzle } from 'lucide-react';
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import Logo from './Logo';
 
@@ -11,9 +11,10 @@ interface NavigationProps {
   isAdmin?: boolean;
   onSignIn?: () => void;
   onSignUp?: () => void;
+  onSignOut?: () => void;
 }
 
-export default function Navigation({ currentView, setCurrentView, userEmail, isSynced = false, isAdmin = false, onSignIn, onSignUp }: NavigationProps) {
+export default function Navigation({ currentView, setCurrentView, userEmail, isSynced = false, isAdmin = false, onSignIn, onSignUp, onSignOut }: NavigationProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
@@ -87,12 +88,20 @@ export default function Navigation({ currentView, setCurrentView, userEmail, isS
       <div className="flex items-center gap-4">
         {userEmail ? (
           <div className="hidden sm:flex items-center gap-3">
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-white/5 text-slate-300 rounded-full border border-white/10">
+<div className="flex items-center gap-2 px-3 py-1.5 bg-white/5 text-slate-300 rounded-full border border-white/10">
                <div className="w-5 h-5 rounded-full bg-indigo-500/20 text-indigo-300 flex items-center justify-center text-xs font-bold">
                  {userEmail.charAt(0).toUpperCase()}
                </div>
                <span className="text-sm font-medium">{userEmail.split('@')[0]}</span>
-            </div>
+             </div>
+             <button
+               onClick={() => onSignOut && onSignOut()}
+               title="Sign out"
+               aria-label="Sign out"
+               className="px-3 py-1.5 text-sm font-medium text-slate-400 border border-white/10 rounded-full hover:bg-red-500/10 hover:text-red-400 transition-colors cursor-pointer"
+             >
+               <LogOut className="w-4 h-4" />
+             </button>
           </div>
         ) : (
           <div className="hidden sm:flex items-center gap-3">
@@ -145,11 +154,19 @@ export default function Navigation({ currentView, setCurrentView, userEmail, isS
           ))}
           <div className="h-px bg-white/10 my-2"></div>
           {userEmail ? (
-            <div className="flex items-center gap-2 px-4 py-3 bg-white/5 text-slate-300 rounded-lg">
-              <div className="w-7 h-7 rounded-full bg-indigo-500/20 text-indigo-300 flex items-center justify-center text-sm font-bold">
-                {userEmail.charAt(0).toUpperCase()}
+            <div className="px-4 py-3 space-y-2">
+              <div className="flex items-center gap-2 bg-white/5 text-slate-300 rounded-lg">
+                <div className="w-7 h-7 rounded-full bg-indigo-500/20 text-indigo-300 flex items-center justify-center text-sm font-bold">
+                  {userEmail.charAt(0).toUpperCase()}
+                </div>
+                <span className="text-sm font-medium truncate">{userEmail}</span>
               </div>
-              <span className="text-sm font-medium truncate">{userEmail}</span>
+              <button
+                onClick={() => { if (onSignOut) onSignOut(); setMobileMenuOpen(false); }}
+                className="w-full px-4 py-3 text-sm font-semibold text-red-400 bg-red-500/10 rounded-lg text-center"
+              >
+                <LogOut className="w-4 h-4 inline-block mr-2 mb-0.5"/> Sign Out
+              </button>
             </div>
           ) : (
             <>
