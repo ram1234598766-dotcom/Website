@@ -9,6 +9,7 @@ build/
 dist/
 coverage/
 node_modules/
+scripts/_artifacts/
 
 # test artifacts
 playwright-report/
