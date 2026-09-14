@@ -100,7 +100,7 @@ export default function Navigation({ currentView, setCurrentView, userEmail, isS
       <div className="flex items-center gap-4">
         {userEmail ? (
           <div className="hidden sm:flex items-center gap-3">
-<div className="flex items-center gap-2 px-3 py-1.5 bg-white/5 text-slate-300 rounded-full border border-white/10">
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-white/5 text-slate-300 rounded-full border border-white/10">
                <div className="w-5 h-5 rounded-full bg-indigo-500/20 text-indigo-300 flex items-center justify-center text-xs font-bold">
                  {userEmail.charAt(0).toUpperCase()}
                </div>
@@ -110,9 +110,10 @@ export default function Navigation({ currentView, setCurrentView, userEmail, isS
                onClick={() => onSignOut && onSignOut()}
                title="Sign out"
                aria-label="Sign out"
-               className="px-3 py-1.5 text-sm font-medium text-slate-400 border border-white/10 rounded-full hover:bg-red-500/10 hover:text-red-400 transition-colors cursor-pointer"
+               className="vanta-signout-btn px-3.5 py-2 text-sm shrink-0"
              >
-               <LogOut className="w-4 h-4" />
+               <LogOut className="w-4 h-4" aria-hidden />
+               <span>Sign out</span>
              </button>
           </div>
         ) : (
