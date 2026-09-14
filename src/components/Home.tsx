@@ -11,9 +11,11 @@ import {
   GitBranch,
   MessageSquareText,
   Cpu,
+  Puzzle,
   Zap,
   ArrowRight,
   LogIn,
+  HardDrive,
   Code2,
   Globe,
   BookOpen,
@@ -35,7 +37,7 @@ interface HomeProps {
   onSignUp?: () => void;
 }
 
-type FeatureView = 'ide' | 'omni-ai' | 'models';
+type FeatureView = 'ide' | 'omni-ai' | 'models' | 'plugins';
 
 interface Feature {
   icon: React.ReactNode;
@@ -88,6 +90,13 @@ export default function Home({ setCurrentView, onSignIn, onSignUp }: HomeProps) 
       view: 'ide',
     },
     {
+      icon: <HardDrive className="w-6 h-6" />,
+      title: 'Google Drive Sync',
+      description:
+        'Connect Google Drive from the IDE to browse, open, and save files. Edits go into a dedicated VantaOS folder, and your own Drive files stay read-only.',
+      view: 'ide',
+    },
+    {
       icon: <MessageSquareText className="w-6 h-6" />,
       title: 'Omni-AI Assistant',
       description:
@@ -107,6 +116,13 @@ export default function Home({ setCurrentView, onSignIn, onSignUp }: HomeProps) 
       description:
         'Browse, download, and manage WebModel packages that run entirely in your browser on WebGPU/WASM — no daemons, no installs, nothing leaves your device.',
       view: 'models',
+    },
+    {
+      icon: <Puzzle className="w-6 h-6" />,
+      title: 'Plugin Ecosystem',
+      description:
+        'Install, enable, and manage signed extensions. Plugins run sandboxed and can only access the capabilities they declare.',
+      view: 'plugins',
     },
     {
       icon: <Zap className="w-6 h-6" />,
@@ -187,6 +203,15 @@ export default function Home({ setCurrentView, onSignIn, onSignUp }: HomeProps) 
             <br />
             <span className="text-gradient animate-vanta-shimmer">Developer Cloud</span>
           </motion.h1>
+
+          <motion.p
+            variants={fadeUp}
+            className="mt-3 flex items-center justify-center gap-3 text-xs font-bold uppercase tracking-[0.3em] text-[#646a80]"
+          >
+            <span className="h-px w-8 bg-gradient-to-r from-transparent to-indigo-400/60" aria-hidden />
+            <span>by <span className="text-indigo-300">Mrityunjay K</span></span>
+            <span className="h-px w-8 bg-gradient-to-l from-transparent to-indigo-400/60" aria-hidden />
+          </motion.p>
 
           <motion.p
             variants={fadeUp}
@@ -377,8 +402,9 @@ export default function Home({ setCurrentView, onSignIn, onSignUp }: HomeProps) 
               <motion.button
                 key={feature.title}
                 variants={fadeUp}
+                whileHover={{ y: -6, transition: { type: 'spring', stiffness: 260, damping: 20 } }}
                 onClick={() => open(feature.view)}
-                className="vanta-card group text-left p-7 flex flex-col gap-4 hover:-translate-y-1 hover:shadow-[0_18px_50px_rgba(79,70,229,0.18)] focus-visible:translate-y-0 cursor-pointer"
+                className="vanta-card group text-left p-7 flex flex-col gap-4 hover:shadow-[0_18px_50px_rgba(79,70,229,0.18)] cursor-pointer"
               >
                 <div className="w-14 h-14 rounded-2xl bg-black/40 border border-white/10 flex items-center justify-center text-indigo-400 transition-all duration-300 group-hover:scale-110 group-hover:bg-indigo-500/15 group-hover:border-indigo-400/40 group-hover:text-indigo-300 group-hover:shadow-[0_0_28px_rgba(99,102,241,0.35)]">
                   {feature.icon}
@@ -413,12 +439,13 @@ export default function Home({ setCurrentView, onSignIn, onSignUp }: HomeProps) 
             </p>
           </div>
           <div className="flex flex-wrap items-center justify-center gap-3">
-            {['React 19', 'TypeScript', 'Next.js', 'CodeMirror', 'Tailwind CSS', 'Motion', 'Firebase', 'Cloudflare'].map((tech, i) => (
+            {['React 19', 'TypeScript', 'Next.js', 'CodeMirror', 'Tailwind CSS', 'Motion', 'xterm.js', 'Firebase', 'Cloudflare'].map((tech, i) => (
               <motion.span
                 key={tech}
                 initial={{ opacity: 0, scale: 0.85 }}
                 whileInView={{ opacity: 1, scale: 1 }}
                 viewport={{ once: true, margin: '-40px' }}
+                whileHover={{ scale: 1.07, transition: { duration: 0.2, ease: 'easeOut' } }}
                 transition={{ duration: 0.4, delay: i * 0.05, ease: EASE }}
                 className="px-4 py-2 rounded-full glass text-sm font-semibold text-[#9499ad] hover:text-white hover:border-indigo-400/40 transition-colors"
               >
@@ -512,9 +539,15 @@ export default function Home({ setCurrentView, onSignIn, onSignUp }: HomeProps) 
             </p>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          <motion.div
+            variants={stagger}
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true, margin: '-60px' }}
+            className="grid grid-cols-1 lg:grid-cols-2 gap-5"
+          >
             {/* Editor guide */}
-            <div className="vanta-card overflow-hidden flex flex-col">
+            <motion.div variants={fadeUp} className="vanta-card overflow-hidden flex flex-col">
               <div className="px-7 pt-6 pb-4 border-b border-white/[0.08] flex items-center gap-3">
                 <FolderTree className="w-5 h-5 text-indigo-400" />
                 <h3 className="text-lg font-bold text-white">Cloud OS IDE</h3>
@@ -526,10 +559,10 @@ export default function Home({ setCurrentView, onSignIn, onSignUp }: HomeProps) 
                 <p><strong className="text-white">Run your code</strong> — hit <strong className="text-white">Compile &amp; Run</strong> to execute the active file's JavaScript in the terminal.</p>
                 <p><strong className="text-white">Diff &amp; split</strong> — toggle <strong className="text-white">Diff</strong> to compare against the last save, or use the split buttons for side-by-side editing.</p>
               </div>
-            </div>
+            </motion.div>
 
             {/* Terminal guide */}
-            <div className="vanta-card overflow-hidden flex flex-col">
+            <motion.div variants={fadeUp} className="vanta-card overflow-hidden flex flex-col">
               <div className="px-7 pt-6 pb-4 border-b border-white/[0.08] flex items-center gap-3">
                 <Terminal className="w-5 h-5 text-cyan-400" />
                 <h3 className="text-lg font-bold text-white">Terminal commands</h3>
@@ -558,10 +591,10 @@ export default function Home({ setCurrentView, onSignIn, onSignUp }: HomeProps) 
                 </div>
                 <p className="text-[#646a80] text-xs mt-1">Use <kbd className="px-1.5 py-0.5 bg-white/10 rounded text-white">↑</kbd>/<kbd className="px-1.5 py-0.5 bg-white/10 rounded text-white">↓</kbd> for history, <kbd className="px-1.5 py-0.5 bg-white/10 rounded text-white">Ctrl</kbd>+<kbd className="px-1.5 py-0.5 bg-white/10 rounded text-white">`</kbd> to toggle the panel.</p>
               </div>
-            </div>
+            </motion.div>
 
             {/* Keyboard shortcuts */}
-            <div className="vanta-card overflow-hidden flex flex-col">
+            <motion.div variants={fadeUp} className="vanta-card overflow-hidden flex flex-col">
               <div className="px-7 pt-6 pb-4 border-b border-white/[0.08] flex items-center gap-3">
                 <Keyboard className="w-5 h-5 text-purple-400" />
                 <h3 className="text-lg font-bold text-white">Keyboard shortcuts</h3>
@@ -581,10 +614,10 @@ export default function Home({ setCurrentView, onSignIn, onSignUp }: HomeProps) 
                   </div>
                 ))}
               </div>
-            </div>
+            </motion.div>
 
             {/* Omni-AI guide */}
-            <div className="vanta-card overflow-hidden flex flex-col">
+            <motion.div variants={fadeUp} className="vanta-card overflow-hidden flex flex-col">
               <div className="px-7 pt-6 pb-4 border-b border-white/[0.08] flex items-center gap-3">
                 <Sparkles className="w-5 h-5 text-emerald-400" />
                 <h3 className="text-lg font-bold text-white">Omni-AI assistant</h3>
@@ -595,10 +628,10 @@ export default function Home({ setCurrentView, onSignIn, onSignUp }: HomeProps) 
                 <p><strong className="text-white">Quick commands</strong> — <code className="text-[#818cf8] font-mono text-xs bg-black/30 px-1.5 py-0.5 rounded">calc 2^10</code>, <code className="text-[#818cf8] font-mono text-xs bg-black/30 px-1.5 py-0.5 rounded">js code...</code>, <code className="text-[#818cf8] font-mono text-xs bg-black/30 px-1.5 py-0.5 rounded">weather in London</code>, or just <code className="text-[#818cf8] font-mono text-xs bg-black/30 px-1.5 py-0.5 rounded">help</code>.</p>
                 <p><strong className="text-white">No account needed</strong> — WebModel works out of the box with zero setup. Tool commands (<code className="text-[#818cf8] font-mono text-xs bg-black/30 px-1.5 py-0.5 rounded">calc</code>, <code className="text-[#818cf8] font-mono text-xs bg-black/30 px-1.5 py-0.5 rounded">js</code>, <code className="text-[#818cf8] font-mono text-xs bg-black/30 px-1.5 py-0.5 rounded">weather</code>) respond instantly even without an AI model loaded.</p>
               </div>
-            </div>
+            </motion.div>
 
             {/* GitHub guide */}
-            <div className="vanta-card overflow-hidden flex flex-col">
+            <motion.div variants={fadeUp} className="vanta-card overflow-hidden flex flex-col">
               <div className="px-7 pt-6 pb-4 border-b border-white/[0.08] flex items-center gap-3">
                 <GitBranch className="w-5 h-5 text-purple-400" />
                 <h3 className="text-lg font-bold text-white">GitHub sync</h3>
@@ -608,10 +641,10 @@ export default function Home({ setCurrentView, onSignIn, onSignUp }: HomeProps) 
                 <p><strong className="text-white">Clone a repo</strong> — pick any repository from the list. Its files load into your workspace (up to 200 files).</p>
                 <p><strong className="text-white">Commit &amp; push</strong> — edit files, write a commit message, and click <strong className="text-white">Commit &amp; Push</strong> to push your changes to the branch.</p>
               </div>
-            </div>
+            </motion.div>
 
             {/* Models guide */}
-            <div className="vanta-card overflow-hidden flex flex-col">
+            <motion.div variants={fadeUp} className="vanta-card overflow-hidden flex flex-col">
               <div className="px-7 pt-6 pb-4 border-b border-white/[0.08] flex items-center gap-3">
                 <FileCode2 className="w-5 h-5 text-amber-400" />
                 <h3 className="text-lg font-bold text-white">In-browser model manager</h3>
@@ -621,10 +654,10 @@ export default function Home({ setCurrentView, onSignIn, onSignUp }: HomeProps) 
                 <p><strong className="text-white">Download &amp; verify</strong> — downloads are content-hash verified against trusted sources (Hugging Face, VantaOS Official) before they install.</p>
                 <p><strong className="text-white">Use them in Omni-AI</strong> — select <strong className="text-white">WebModel</strong> in Omni-AI Settings to chat with an in-browser model. No API key, no data leaves your device.</p>
               </div>
-            </div>
+            </motion.div>
 
             {/* Sign-in options */}
-            <div className="vanta-card overflow-hidden flex flex-col">
+            <motion.div variants={fadeUp} className="vanta-card overflow-hidden flex flex-col">
               <div className="px-7 pt-6 pb-4 border-b border-white/[0.08] flex items-center gap-3">
                 <Lock className="w-5 h-5 text-emerald-400" />
                 <h3 className="text-lg font-bold text-white">Sign in to VantaOS</h3>
@@ -635,10 +668,10 @@ export default function Home({ setCurrentView, onSignIn, onSignUp }: HomeProps) 
                 <p><strong className="text-white">Email &amp; password</strong> — create an account with your email and a password. Works everywhere, even offline.</p>
                 <p><strong className="text-white">Guest mode</strong> — try VantaOS instantly with zero setup. Sign in anytime to unlock cloud sync, GitHub, and AI features.</p>
               </div>
-            </div>
+            </motion.div>
 
             {/* Gemini AI section */}
-            <div className="vanta-card overflow-hidden flex flex-col">
+            <motion.div variants={fadeUp} className="vanta-card overflow-hidden flex flex-col">
               <div className="px-7 pt-6 pb-4 border-b border-white/[0.08] flex items-center gap-3">
                 <BrainCircuit className="w-5 h-5 text-blue-400" />
                 <h3 className="text-lg font-bold text-white">Gemini AI integration</h3>
@@ -649,8 +682,8 @@ export default function Home({ setCurrentView, onSignIn, onSignUp }: HomeProps) 
                 <p><strong className="text-white">Models available</strong> — <code className="text-[#818cf8] font-mono text-xs bg-black/30 px-1.5 py-0.5 rounded">gemini-2.5-flash</code> for fast everyday tasks, plus access to the latest Gemini family models as they release.</p>
                 <p><strong className="text-white">Privacy</strong> — your API key stays in your browser's local storage. VantaOS never stores or transmits it to our servers. Get a free key at <code className="text-[#818cf8] font-mono text-xs bg-black/30 px-1.5 py-0.5 rounded">aistudio.google.com</code>.</p>
               </div>
-            </div>
-          </div>
+            </motion.div>
+          </motion.div>
         </motion.section>
 
         {/* 7. CTA Section */}
