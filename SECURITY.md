@@ -110,7 +110,7 @@ do, the current mitigation, and its honest status.
 7. **Supply chain.** *Attacker:* a compromised dependency injected into a
    build or deploy. *Mitigation:* reproducible installs via `npm ci` and the
    committed lockfile; CI gates run lint (`tsc --noEmit`), test (Vitest,
-   1049/1049 across 65 files), build, and e2e (8 Playwright cases across 6
+   1047/1047 across 65 files), build, and e2e (9 Playwright cases across 7
    files) on every push/PR, plus a dedicated **`npm audit` job**
    (`npm audit --audit-level=high`). As of 2026-09-14 `npm audit` reports
    **0 vulnerabilities**.

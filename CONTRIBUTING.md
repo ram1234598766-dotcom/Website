@@ -73,11 +73,11 @@ pre-push gates.
 
 ### Test layout
 
-- Vitest: 1049/1049 tests across 65 files (audited Sep 2026), including
+- Vitest: 1047/1047 tests across 65 files (audited Sep 2026), including
   `tests/phase1`, `tests/phase2`, `tests/phase9`, `tests/phase-schema`
   (11 files), plus telemetry/Sentry/LogRocket audits and
   plugin/manifest/edge/operations coverage.
-- Playwright E2E: 8 `test()` cases across 6 files in `tests/e2e/flows/` —
+- Playwright E2E: 9 `test()` cases across 7 files in `tests/e2e/flows/` —
   auth (2), terminal (2), files, home, ide, omni-ai.
 - Imports: use relative imports; the `@/*` alias is **not** mapped to `src`.
 

@@ -213,7 +213,7 @@ git push
 | Tests | Vitest (1,049/1,049 across 65 files) + CI artifacts | CI artifacts |
 | Client-side errors | Sentry + LogRocket (✅ wired) | Sentry / LogRocket dashboards |
 
-> **🔵 INFO:** Monitoring coverage is currently ~85% by metric count; gaps are documented in the table above. Client-side error tracking (Sentry + LogRocket) **is wired and active** as of v2.0.0 — it is not "not yet wired". CI runs lint, test (Vitest), build, and e2e (8 Playwright cases across 6 files) on every push/PR, plus an `npm audit` job (0 vulnerabilities as of Sep 2026-09-14).
+> **🔵 INFO:** Monitoring coverage is currently ~85% by metric count; gaps are documented in the table above. Client-side error tracking (Sentry + LogRocket) **is wired and active** as of v2.0.0 — it is not "not yet wired". CI runs lint, test (Vitest), build, and e2e (9 Playwright cases across 7 files) on every push/PR, plus an `npm audit` job (0 vulnerabilities as of Sep 2026-09-14).
 
 ### ✅ Verification Gate — Section 5
 - [ ] All procedures are testable

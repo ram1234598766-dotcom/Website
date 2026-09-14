@@ -251,7 +251,7 @@ serves the static `out/` directory and intercepts `/api/*`.
 - **lint:** `npx tsc --noEmit` (Node 22).
 - **test:** `npx vitest run`.
 - **build:** `npm run build` (Next static export).
-- **e2e:** build + `playwright install` + 8 Playwright cases across 6 files.
+- **e2e:** build + `playwright install` + 9 Playwright cases across 7 files.
 - Triggered on push to `main` and pull requests.
 
 ### Deploy & rollback
@@ -268,9 +268,9 @@ serves the static `out/` directory and intercepts `/api/*`.
 <!-- AGENT: Testing -->
 ## 8. 🧪 Testing
 
-- **Unit (Vitest):** `1049/1049` passing across **65 files**
+- **Unit (Vitest):** `1047/1047` passing across **65 files**
   (`npm test`, `package.json:10`).
-- **E2E (Playwright):** **8 cases** across **6 files** in `tests/e2e/flows/`
+- **E2E (Playwright):** **9 cases** across **7 files** in `tests/e2e/flows/`
   (auth, home, files, ide, omni-ai, terminal), config at
   `tests/e2e/playwright.config.ts`.
 
@@ -348,4 +348,4 @@ Suites by directory:
 | `src/lib/slo/`, `src/lib/incident-runbooks/` | SLO checks + incident runbooks |
 | `src/lib/plugins/`, `src/lib/sync/` | Plugin registry; sync protocol/batch/conflict |
 | `src/components/` | App shell, `CloudCodeEditor`, `CloudDiffEditor`, terminal panel |
-| `tests/` | Vitest suites (65 files, 1049 tests); `tests/e2e/` Playwright (8 cases / 6 files) |
+| `tests/` | Vitest suites (65 files, 1047 tests); `tests/e2e/` Playwright (9 cases / 7 files) |

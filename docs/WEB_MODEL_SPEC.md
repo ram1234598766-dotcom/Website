@@ -372,7 +372,7 @@ The Next.js build is a **static export** — there is no Node server in the clie
 
 **Status: ✅ shipped+tested** — verification is live and green as of the Sep 2026 audit.
 
-- **Unit + schema tests (Vitest):** 1049 passed / 1049 across 65 test files.
+- **Unit + schema tests (Vitest):** 1047 passed / 1047 across 65 test files.
 - **Phase-schema suite (`tests/phase-schema/`, 11 files):** `webmodel-matrix` (screen surface matrix), `webmodel-adapter` (provider adapter behavior), `omni-ai-webmodel` (Omni-AI chat contract), `schema` (typed model validation), `sync-api` (Drive/GitHub/RTDB sync contract), `slo` (latency budgets), `runbooks` (operational guidance), `telemetry` (data-collection contract), `export` (static-build/export contract), `edge-contract` (Worker routing and auth).
 - **Schema unit tests** alongside the typed models in `src/lib/schema/`.
 - **E2E (Playwright):** 8 cases across 6 files covering the workspace, editor, terminal, Omni-AI chat, and forum/admin surfaces.
