@@ -17,8 +17,8 @@ xterm.js terminal with a virtual file system and command history. Run inline Jav
 ### 🧠 Omni-AI assistant
 Chat with cloud AI through the Worker's `/api/ai/generate` proxy, or run `@huggingface/transformers` models entirely in your browser (WebGPU/WASM) with no API key. Cloud providers OpenRouter, Gemini, and OpenAI are available via API key — called through the proxy, with a direct-call fallback for OpenRouter and Gemini when the proxy isn't deployed. Live tool commands like `calc`, `js`, `weather`, and `fetch` are available; Omni-ai uses `dompurify` to sanitize all rendered HTML.
 
-### 🤖 Local model hub
-Browse real open-source models with their actual sizes, pull them into a local Ollama daemon, and run them in one command — no cloud account required.
+### 🧠 In-browser model manager
+Browse and download WebModel packages (`@huggingface/transformers` on WebGPU/WASM) that run entirely in your browser — content-hash verified against trusted sources, no daemon or install required.
 
 ### 🔗 GitHub synchronization
 Import your repositories, edit files, and push back to the branch via blob/tree/commit/ref requests (with a 200-blob UI cap). GitHub sign-in is wired to the live Firebase project (`website-6e8b1`); the Worker-side GitHub OAuth proxy is opt-in and currently disabled in production.
@@ -49,7 +49,7 @@ serves the static bundle and proxies                           (profiles/, threa
    │
    ├── Google OAuth · GitHub OAuth (Firebase project "website-6e8b1";
    │    Worker GitHub OAuth proxy opt-in, not enabled in production)
-   └── Local Ollama (localhost:11434) — on-device model hub
+   └── In-browser WebModel (Transformers.js, WebGPU/WASM) — on-device model manager
 ```
 
 **Data tier:** Firebase Realtime Database. RTDB paths are `profiles/{uid}`, `threads/{id}`, `replies/{id}`, and `upvotes/{uid}_{tid}_{rid}`, written with `increment()` counters and streamed via `onValue`. Security rules live in `database.rules.json` and deploy with `firebase deploy --only database`. The client lives in the legacy-named module `src/lib/firestore.ts` — an obsolete filename for the same RTDB client (`isFirestoreAvailable()` is a legacy alias); don't be misled by the name.
@@ -68,7 +68,7 @@ cp .env.example .env.local     # fill in values only if you want Firebase/Gemini
 npm run dev
 ```
 
-Open the printed localhost URL. Every `NEXT_PUBLIC_FIREBASE_*` variable is optional: without them the app starts in demo mode with local accounts. No config is required for the editors, terminal, GitHub browsing, Google Drive demo, or the in-browser WebModel. A local Ollama install is only needed for the dedicated model-hub page that pulls models into an on-device daemon.
+Open the printed localhost URL. Every `NEXT_PUBLIC_FIREBASE_*` variable is optional: without them the app starts in demo mode with local accounts. No config is required for the editors, terminal, GitHub browsing, Google Drive demo, in-browser WebModel, or the model manager.
 
 ---
 

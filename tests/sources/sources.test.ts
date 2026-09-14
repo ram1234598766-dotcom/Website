@@ -61,14 +61,6 @@ describe('getTrustedSources', () => {
     expect(vanta!.verified).toBe(true);
   });
 
-  it('includes Ollama Library', () => {
-    const sources = getTrustedSources();
-    const ollama = sources.find((s) => s.name === 'Ollama Library');
-    expect(ollama).toBeDefined();
-    expect(ollama!.baseURL).toBe('https://ollama.com/library');
-    expect(ollama!.verified).toBe(true);
-  });
-
   it('each source has required fields', () => {
     const sources = getTrustedSources();
     sources.forEach((s) => {
@@ -93,11 +85,6 @@ describe('isTrustedUrl', () => {
     expect(isTrustedUrl('https://huggingface.co')).toBe(true);
   });
 
-  it('returns true for Ollama Library URLs', () => {
-    expect(isTrustedUrl('https://ollama.com/library/llama3')).toBe(true);
-    expect(isTrustedUrl('https://ollama.com/library/phi3')).toBe(true);
-  });
-
   it('returns true for subdomains of trusted sources', () => {
     expect(isTrustedUrl('https://cdn.models.vantaos.dev/file.bin')).toBe(true);
   });
@@ -105,6 +92,7 @@ describe('isTrustedUrl', () => {
   it('returns false for untrusted URLs', () => {
     expect(isTrustedUrl('https://evil.com/model.bin')).toBe(false);
     expect(isTrustedUrl('http://models.vantaos.dev/model.bin')).toBe(false);
+    expect(isTrustedUrl('https://ollama.com/library/llama3')).toBe(false);
   });
 
   it('returns false for invalid URLs', () => {
@@ -189,7 +177,7 @@ describe('verifyModelSource', () => {
       expect((err as Error).message).toContain('evil.com');
       expect((err as Error).message).toContain('HuggingFace');
       expect((err as Error).message).toContain('VantaOS');
-      expect((err as Error).message).toContain('Ollama');
+      expect((err as Error).message).not.toContain('Ollama');
     }
   });
 });

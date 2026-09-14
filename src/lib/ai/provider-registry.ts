@@ -131,7 +131,6 @@ export class ProviderRegistry {
 export const providerRegistry = new ProviderRegistry();
 
 export function registerDefaultProviders(registry: ProviderRegistry): void {
-  registry.register(new StubProvider('ollama'));
   registry.register(new StubProvider('openrouter'));
   registry.register(new StubProvider('gemini'));
   registry.register(new StubProvider('openai'));

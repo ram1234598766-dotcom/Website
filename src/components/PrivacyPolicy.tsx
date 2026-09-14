@@ -42,8 +42,8 @@ export default function PrivacyPolicy() {
             <h2 className="text-2xl font-bold text-white mb-3 tracking-tight">2. AI providers are your choice</h2>
             <p className="text-slate-400 leading-relaxed">
               When you use Omni-AI with a cloud provider (OpenRouter, Gemini, or OpenAI), your prompt is
-              sent to the provider you selected using <em>your</em> API key. With a local Ollama setup,
-              everything stays on your machine. We do not run or train any global AI models on your data.
+              sent to the provider you selected using <em>your</em> API key. With the built-in in-browser
+              WebModel, inference runs entirely on your device. We do not run or train any global AI models on your data.
             </p>
           </div>
         </div>

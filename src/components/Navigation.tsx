@@ -1,5 +1,5 @@
 import { ViewState } from '../types';
-import { Box, Menu, X, Code2, BrainCircuit, TerminalSquare, ShieldAlert, UserPlus, LogIn, LogOut, Cpu, Puzzle } from 'lucide-react';
+import { Menu, X, Code2, BrainCircuit, ShieldAlert, UserPlus, LogIn, LogOut, Cpu, Puzzle } from 'lucide-react';
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import Logo from './Logo';
 
@@ -40,8 +40,6 @@ export default function Navigation({ currentView, setCurrentView, userEmail, isS
     const items: { view: ViewState; label: string | React.ReactNode; icon: React.ReactNode }[] = [
       { view: 'ide', label: 'Cloud OS IDE', icon: <Code2 className="w-4 h-4" /> },
       { view: 'omni-ai', label: 'Omni-AI', icon: <BrainCircuit className="w-4 h-4" /> },
-      { view: 'ollama', label: 'Ollama', icon: <TerminalSquare className="w-4 h-4" /> },
-      { view: 'showcase', label: 'Models', icon: <Box className="w-4 h-4" /> },
       { view: 'models', label: 'WebModels', icon: <Cpu className="w-4 h-4" /> },
       { view: 'plugins', label: 'Plugins', icon: <Puzzle className="w-4 h-4" /> },
     ];

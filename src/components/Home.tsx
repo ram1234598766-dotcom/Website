@@ -10,7 +10,7 @@ import {
   Terminal,
   GitBranch,
   MessageSquareText,
-  Users,
+  Cpu,
   Zap,
   ArrowRight,
   LogIn,
@@ -34,7 +34,7 @@ interface HomeProps {
   onSignUp?: () => void;
 }
 
-type FeatureView = 'ide' | 'omni-ai' | 'ollama';
+type FeatureView = 'ide' | 'omni-ai' | 'models';
 
 interface Feature {
   icon: React.ReactNode;
@@ -90,7 +90,7 @@ export default function Home({ setCurrentView, onSignIn, onSignUp }: HomeProps) 
       icon: <MessageSquareText className="w-6 h-6" />,
       title: 'Omni-AI Assistant',
       description:
-        'A chat interface that connects to the AI provider of your choice — local Ollama models or cloud APIs like OpenRouter, Gemini, and OpenAI.',
+        'A chat interface that runs AI in your browser — in-browser WebModel, or cloud APIs like OpenRouter, Gemini, and OpenAI.',
       view: 'omni-ai',
     },
     {
@@ -101,11 +101,11 @@ export default function Home({ setCurrentView, onSignIn, onSignUp }: HomeProps) 
       view: 'ide',
     },
     {
-      icon: <Users className="w-6 h-6" />,
-      title: 'Local Model Hub',
+      icon: <Cpu className="w-6 h-6" />,
+      title: 'In-browser Model Manager',
       description:
-        'Browse real open-source models (Llama, Phi, Mistral, Gemma and more), pull them to your local Ollama daemon, and run them with one command.',
-      view: 'ollama',
+        'Browse, download, and manage WebModel packages that run entirely in your browser on WebGPU/WASM — no daemons, no installs, nothing leaves your device.',
+      view: 'models',
     },
     {
       icon: <Zap className="w-6 h-6" />,
@@ -412,7 +412,7 @@ export default function Home({ setCurrentView, onSignIn, onSignUp }: HomeProps) 
             </p>
           </div>
           <div className="flex flex-wrap items-center justify-center gap-3">
-            {['React 19', 'TypeScript', 'Next.js', 'CodeMirror', 'Tailwind CSS', 'Motion', 'Firebase', 'Ollama', 'Cloudflare'].map((tech, i) => (
+            {['React 19', 'TypeScript', 'Next.js', 'CodeMirror', 'Tailwind CSS', 'Motion', 'Firebase', 'Cloudflare'].map((tech, i) => (
               <motion.span
                 key={tech}
                 initial={{ opacity: 0, scale: 0.85 }}
@@ -446,7 +446,7 @@ export default function Home({ setCurrentView, onSignIn, onSignUp }: HomeProps) 
             </h2>
             <p className="text-[#9499ad] text-lg max-w-3xl mx-auto leading-relaxed">
               VantaOS is a browser-based development environment designed and architected by
-              Mrityunjay K. It combines a full web IDE, an AI assistant, a local model hub,
+              Mrityunjay K. It combines a full web IDE, an AI assistant, in-browser AI models,
               GitHub integration, and a built-in terminal into one cohesive workspace — no
               installs, no setup, just a browser tab.
             </p>
@@ -467,9 +467,9 @@ export default function Home({ setCurrentView, onSignIn, onSignUp }: HomeProps) 
               <ul className="text-sm text-[#9499ad] leading-relaxed space-y-3">
                 <li className="flex gap-2.5"><span className="text-indigo-400 font-bold mt-0.5">•</span> <span><strong className="text-white">Cloud OS IDE</strong> — edit code in a CodeMirror-based editor with 35+ languages, folder tree, tabbed files, split views, and a diff view against your saved version.</span></li>
                 <li className="flex gap-2.5"><span className="text-indigo-400 font-bold mt-0.5">•</span> <span><strong className="text-white">Built-in Terminal</strong> — a working xterm.js shell with a virtual file system, command history, and inline JavaScript execution.</span></li>
-                <li className="flex gap-2.5"><span className="text-indigo-400 font-bold mt-0.5">•</span> <span><strong className="text-white">Omni-AI Assistant</strong> — chat with local Ollama models or cloud providers (OpenRouter, Gemini, OpenAI).</span></li>
+                <li className="flex gap-2.5"><span className="text-indigo-400 font-bold mt-0.5">•</span> <span><strong className="text-white">Omni-AI Assistant</strong> — chat in-browser or via cloud providers (OpenRouter, Gemini, OpenAI).</span></li>
                 <li className="flex gap-2.5"><span className="text-indigo-400 font-bold mt-0.5">•</span> <span><strong className="text-white">GitHub Sync</strong> — clone a repo, edit, and push commits directly from the IDE using your GitHub token.</span></li>
-                <li className="flex gap-2.5"><span className="text-indigo-400 font-bold mt-0.5">•</span> <span><strong className="text-white">Model Hub</strong> — browse and pull real open-source models (Llama, Phi, Mistral, Gemma…) to your local Ollama.</span></li>
+                <li className="flex gap-2.5"><span className="text-indigo-400 font-bold mt-0.5">•</span> <span><strong className="text-white">Model Manager</strong> — browse, download, and manage WebModel packages with verified sources, running entirely on your device.</span></li>
                 <li className="flex gap-2.5"><span className="text-indigo-400 font-bold mt-0.5">•</span> <span><strong className="text-white">Offline-first data</strong> — your workspace auto-saves to your browser, and demo accounts store locally when Firebase isn't connected.</span></li>
               </ul>
             </motion.div>
@@ -613,13 +613,12 @@ export default function Home({ setCurrentView, onSignIn, onSignUp }: HomeProps) 
             <div className="vanta-card overflow-hidden flex flex-col">
               <div className="px-7 pt-6 pb-4 border-b border-white/[0.08] flex items-center gap-3">
                 <FileCode2 className="w-5 h-5 text-amber-400" />
-                <h3 className="text-lg font-bold text-white">Local model hub</h3>
+                <h3 className="text-lg font-bold text-white">In-browser model manager</h3>
               </div>
               <div className="p-7 space-y-3.5 text-sm text-[#9499ad] leading-relaxed flex-1">
-                <p><strong className="text-white">Browse models</strong> — open <strong className="text-white">Models</strong> in the navigation to explore real open-source models with their actual sizes.</p>
-                <p><strong className="text-white">Pull to Ollama</strong> — with Ollama running locally, click <strong className="text-white">Pull to Local Ollama</strong> to download a model, or copy the <code className="text-emerald-400 font-mono text-xs bg-black/30 px-1.5 py-0.5 rounded">ollama run &lt;tag&gt;</code> command.</p>
-                <p><strong className="text-white">Chat with it</strong> — once pulled, the model appears in Omni-AI's model list, ready to use.</p>
-                <p className="text-xs text-[#646a80]">Tip: for CORS, start Ollama with <code className="text-amber-400 font-mono bg-black/30 px-1.5 py-0.5 rounded">OLLAMA_ORIGINS=*</code>.</p>
+                <p><strong className="text-white">Browse models</strong> — open <strong className="text-white">WebModels</strong> in the navigation to discover model packages that run locally in your browser.</p>
+                <p><strong className="text-white">Download &amp; verify</strong> — downloads are content-hash verified against trusted sources (Hugging Face, VantaOS Official) before they install.</p>
+                <p><strong className="text-white">Use them in Omni-AI</strong> — select <strong className="text-white">WebModel</strong> in Omni-AI Settings to chat with an in-browser model. No API key, no data leaves your device.</p>
               </div>
             </div>
           </div>

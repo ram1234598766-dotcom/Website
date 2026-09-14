@@ -28,12 +28,6 @@ const TRUSTED_SOURCES: ModelSource[] = [
     verified: true,
     allowedModels: [],
   },
-  {
-    name: 'Ollama Library',
-    baseURL: 'https://ollama.com/library',
-    verified: true,
-    allowedModels: [],
-  },
 ];
 
 function getBaseHostname(source: ModelSource): string {

@@ -45,9 +45,8 @@ export default function CommandPalette({ isOpen, onClose, setCurrentView }: Comm
   const views = useMemo(() => [
     { id: 'home' as ViewState, name: 'Home', icon: Compass },
     { id: 'ide' as ViewState, name: 'CloudOS IDE', icon: Terminal },
-    { id: 'showcase' as ViewState, name: 'Models Showcase', icon: Compass },
     { id: 'omni-ai' as ViewState, name: 'Omni AI', icon: Compass },
-    { id: 'ollama' as ViewState, name: 'Ollama Local', icon: Compass },
+    { id: 'models' as ViewState, name: 'WebModels', icon: Compass },
   ], []);
 
   const actions = useMemo(() => [
