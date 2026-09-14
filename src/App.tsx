@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { AnimatePresence, motion } from 'motion/react';
+import { AnimatePresence, motion, MotionConfig } from 'motion/react';
 import { ViewState } from './types';
 import Navigation from './components/Navigation';
 import CommandPalette from './components/CommandPalette';
@@ -16,6 +16,7 @@ import OllamaLocal from './components/OllamaLocal';
 import ModelManager from './components/ModelManager';
 import PluginManager from './components/PluginManager';
 import AuthModal from './components/AuthModal';
+import PWARegister from './components/PWARegister';
 import { client } from './lib/client';
 import { WorkspaceProvider } from './lib/workspace/workspace';
 
@@ -94,68 +95,71 @@ export default function App() {
   }
 
   return (
-    <WorkspaceProvider>
-    <AnimatePresence mode="wait">
-      <motion.div
-        key="app"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        className="w-full min-h-screen bg-[#0a0a0c] text-slate-300 flex flex-col font-sans relative"
-      >
-        {sessionWarning && (
-          <div role="alert" className="bg-amber-500/20 border-b border-amber-500/50 px-4 py-2 text-center text-sm font-medium text-amber-200 z-50 relative">
-            Your session is about to expire.{' '}
-            <button onClick={handleRefreshSession} className="underline font-bold hover:text-amber-100">Click here to refresh</button>
-          </div>
-        )}
+    <MotionConfig reducedMotion="user">
+      <WorkspaceProvider>
+      <AnimatePresence mode="wait">
+        <motion.div
+          key="app"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="w-full min-h-screen bg-[#0a0a0c] text-slate-300 flex flex-col font-sans relative"
+        >
+          {sessionWarning && (
+            <div role="alert" className="bg-amber-500/20 border-b border-amber-500/50 px-4 py-2 text-center text-sm font-medium text-amber-200 z-50 relative">
+              Your session is about to expire.{' '}
+              <button onClick={handleRefreshSession} className="underline font-bold hover:text-amber-100">Click here to refresh</button>
+            </div>
+          )}
 
-        <Navigation
-          currentView={currentView}
-          setCurrentView={setCurrentView}
-          userEmail={session?.email || session?.user?.email}
-          isSynced={!!session}
-          isAdmin={isAdmin}
-          onSignIn={onSignIn}
-          onSignUp={onSignUp}
-        />
+          <Navigation
+            currentView={currentView}
+            setCurrentView={setCurrentView}
+            userEmail={session?.email || session?.user?.email}
+            isSynced={!!session}
+            isAdmin={isAdmin}
+            onSignIn={onSignIn}
+            onSignUp={onSignUp}
+          />
 
-        <main className="flex-1 flex flex-col max-w-7xl mx-auto w-full p-4 sm:p-8 relative z-10">
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={currentView}
-              initial={{ opacity: 0, y: 15, filter: 'blur(8px)' }}
-              animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
-              exit={{ opacity: 0, y: -15, filter: 'blur(8px)' }}
-              transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-              className="w-full flex-1 flex flex-col"
-            >
-              {currentView === 'home' && (
-                <Home setCurrentView={setCurrentView}
-                  onSignIn={onSignIn}
-                  onSignUp={onSignUp}
-                />
-              )}
-              {currentView === 'showcase' && <Showcase />}
-              {currentView === 'ide' && <CloudOS />}
-              {currentView === 'omni-ai' && <OmniAI />}
-              {currentView === 'admin' && <AdminPanel />}
-              {currentView === 'ollama' && <OllamaLocal />}
-              {currentView === 'models' && <ModelManager />}
-              {currentView === 'plugins' && <PluginManager onClose={() => setCurrentView('home')} />}
-            </motion.div>
-          </AnimatePresence>
-        </main>
+          <main className="flex-1 flex flex-col max-w-7xl mx-auto w-full p-4 sm:p-8 relative z-10">
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={currentView}
+                initial={{ opacity: 0, y: 15, filter: 'blur(8px)' }}
+                animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+                exit={{ opacity: 0, y: -15, filter: 'blur(8px)' }}
+                transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+                className="w-full flex-1 flex flex-col"
+              >
+                {currentView === 'home' && (
+                  <Home setCurrentView={setCurrentView}
+                    onSignIn={onSignIn}
+                    onSignUp={onSignUp}
+                  />
+                )}
+                {currentView === 'showcase' && <Showcase />}
+                {currentView === 'ide' && <CloudOS />}
+                {currentView === 'omni-ai' && <OmniAI />}
+                {currentView === 'admin' && <AdminPanel />}
+                {currentView === 'ollama' && <OllamaLocal />}
+                {currentView === 'models' && <ModelManager />}
+                {currentView === 'plugins' && <PluginManager onClose={() => setCurrentView('home')} />}
+              </motion.div>
+            </AnimatePresence>
+          </main>
 
-        <CommandPalette
-          isOpen={isCommandPaletteOpen}
-          onClose={handleCloseCommandPalette}
-          setCurrentView={setCurrentView}
-        />
+          <CommandPalette
+            isOpen={isCommandPaletteOpen}
+            onClose={handleCloseCommandPalette}
+            setCurrentView={setCurrentView}
+          />
 
-        <AuthModal isOpen={showAuthModal} onClose={handleCloseAuthModal} initialMode={authMode} />
-      </motion.div>
-    </AnimatePresence>
-    </WorkspaceProvider>
+          <AuthModal isOpen={showAuthModal} onClose={handleCloseAuthModal} initialMode={authMode} />
+        </motion.div>
+      </AnimatePresence>
+      </WorkspaceProvider>
+      <PWARegister />
+    </MotionConfig>
   );
 }
