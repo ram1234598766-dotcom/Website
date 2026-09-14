@@ -9,8 +9,8 @@
     "lint": "tsc --noEmit",
     "test": "vitest run",
     "start": "next start",
-    "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
-    "cf-preview": "opennextjs-cloudflare build && npx wrangler dev",
+    "deploy": "npx wrangler deploy",
+    "cf-preview": "npx wrangler dev",
     "firebase:setup": "bash scripts/firebase-setup.sh",
     "firebase:deploy": "firebase deploy --only database"
   },
