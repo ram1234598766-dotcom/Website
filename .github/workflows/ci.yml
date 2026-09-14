@@ -85,13 +85,43 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Cache Next.js build
+        uses: actions/cache@v4
+        with:
+          path: .next
+          key: next-${{ hashFiles('package-lock.json', 'next.config.mjs', 'src/**/*', 'app/**/*') }}
+          restore-keys: |
+            next-
+
+      - name: Cache OpenNext Worker build
+        uses: actions/cache@v4
+        with:
+          path: .open-next
+          key: opennext-${{ hashFiles('package-lock.json', 'next.config.mjs', 'src/**/*', 'app/**/*') }}
+          restore-keys: |
+            opennext-
+
       - name: Build
         run: npm run build
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: next-build
+          path: .next/
+          retention-days: 1
+
+      - name: Upload OpenNext artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: opennext-build
+          path: .open-next/
+          retention-days: 1
 
   e2e:
     needs: [build]
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 40
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -104,6 +134,18 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Download Next.js build
+        uses: actions/download-artifact@v4
+        with:
+          name: next-build
+          path: .next/
+
+      - name: Download OpenNext build
+        uses: actions/download-artifact@v4
+        with:
+          name: opennext-build
+          path: .open-next/
 
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium

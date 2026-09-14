@@ -29,7 +29,7 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'npx next build && npx next start -p 4173',
+    command: 'test -f .next/BUILD_ID && npx next start -p 4173 || (npx next build && npx next start -p 4173)',
     cwd: path.resolve(__dirname, '../..'),
     port: 4173,
     reuseExistingServer: !process.env.CI,
