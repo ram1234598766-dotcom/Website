@@ -39,9 +39,8 @@ function loadSettings(): StoredSettings {
     const d = localStorage.getItem(SETTINGS_KEY);
     if (d) {
       const parsed = JSON.parse(d) as { provider?: string; model?: string; apiKey?: string };
-      // Legacy 'local' and 'ollama' providers were removed — migrate them to
-      // the in-browser WebModel so the user keeps a working default.
-      if (parsed.provider === 'local' || parsed.provider === 'ollama') parsed.provider = 'webmodel';
+      // Legacy 'local' provider was removed — migrate it to WebModel
+      if (parsed.provider === 'local') parsed.provider = 'webmodel';
       const provider: AIProvider =
         parsed.provider === 'openrouter' || parsed.provider === 'gemini' || parsed.provider === 'openai' || parsed.provider === 'webmodel'
           ? parsed.provider
