@@ -1,0 +1,92 @@
+{
+  "run": "2026-09-14T11:34:43.348Z",
+  "baseUrl": "http://localhost:4173",
+  "summary": {
+    "pass": 19,
+    "fail": 0,
+    "consoleErrors": 0,
+    "pageErrors": 0,
+    "failedRequests": 0
+  },
+  "results": {
+    "Home page boots": {
+      "status": "PASS",
+      "note": "Title, heading, nav present"
+    },
+    "Demo-mode indicators visible": {
+      "status": "PASS",
+      "note": "Offline/Firebase text on home"
+    },
+    "Demo sign-up form visible": {
+      "status": "PASS",
+      "note": "Sign-up form has email field"
+    },
+    "Demo sign-up creates account": {
+      "status": "PASS",
+      "note": "Success message after sign-up"
+    },
+    "Demo sign-up auto-signs-in": {
+      "status": "PASS",
+      "note": "Signed-in state (memory-only in demo)"
+    },
+    "IDE loads": {
+      "status": "PASS",
+      "note": "Cloud OS IDE content"
+    },
+    "Terminal open by default": {
+      "status": "PASS",
+      "note": "Terminal visible"
+    },
+    "Terminal sandbox executes js": {
+      "status": "PASS",
+      "note": "JS command executes"
+    },
+    "Compile & Run button present": {
+      "status": "PASS",
+      "note": "Compile & Run visible"
+    },
+    "Drive drawer opens": {
+      "status": "PASS",
+      "note": "Drive button opens drawer"
+    },
+    "Omni-AI page loads": {
+      "status": "PASS",
+      "note": "Page content"
+    },
+    "Omni-AI works offline": {
+      "status": "PASS",
+      "note": "Help command responds"
+    },
+    "WebModels page loads": {
+      "status": "PASS",
+      "note": "Page loads"
+    },
+    "Device profile visible": {
+      "status": "PASS",
+      "note": "Device profile shown"
+    },
+    "Model cards rendered": {
+      "status": "PASS",
+      "note": "Model cards exist"
+    },
+    "Plugins page loads": {
+      "status": "PASS",
+      "note": "Page loads"
+    },
+    "Plugin items render": {
+      "status": "PASS",
+      "note": "Content present"
+    },
+    "GitHub drawer opens": {
+      "status": "PASS",
+      "note": "GitHub drawer opens"
+    },
+    "Admin nav hidden in demo": {
+      "status": "PASS",
+      "note": "Admin not shown"
+    }
+  },
+  "consoleErrors": [],
+  "pageErrors": [],
+  "failedRequests": []
+}
