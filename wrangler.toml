@@ -3,6 +3,11 @@ compatibility_date = "2026-07-28"
 compatibility_flags = ["nodejs_compat", "global_fetch_strictly_public"]
 main = ".open-next/worker.js"
 
+[build]
+command = "npm run build && npx opennextjs-cloudflare build"
+upload.format = "modules"
+upload.main = ".open-next/worker.js"
+
 [assets]
 directory = ".open-next/assets"
 binding = "ASSETS"
