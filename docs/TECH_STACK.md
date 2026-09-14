@@ -289,7 +289,7 @@ Suites by directory:
 | `tests/phase-schema/` (10) | Schemas, contracts, SLOs, runbooks, edge contract, telemetry |
 | `tests/contract/` (3) | Workspace / terminal / model contracts |
 | `tests/` root (12) | Telemetry (Sentry, LogRocket), sources, security, edge/manifest/migration edges |
-| `tests/e2e/flows/` (6) | Playwright end-to-end flows |
+| `tests/e2e/flows/` (7) | Playwright end-to-end flows |
 
 <!-- AGENT: Browser -->
 ## 9. 🔒 Security & privacy stack
@@ -330,7 +330,7 @@ Suites by directory:
 | `workers/worker.ts` | API routes, rate limit, static + SPA serving, `Env` surface |
 | `workers/github-proxy.ts` | GitHub OAuth service using `KvLike` token store |
 | `workers/grants.ts`, `workers/firebase-verify.ts` | Grant + Firebase ID-token verification for the proxy |
-| `.github/workflows/ci.yml` | CI: lint, test, build, e2e |
+| `.github/workflows/ci.yml` | CI: lint, test, build, e2e, audit |
 | `database.rules.json` | RTDB security rules (deploy: `firebase deploy --only database`) |
 | `src/lib/env.ts` | Capability detection: `isFirebaseConfigured()` (4 `NEXT_PUBLIC_FIREBASE_*` vars), `isGeminiConfigured()` (false by default), `DEMO_MODE` |
 | `src/lib/firestore.ts` | **Realtime Database** data layer; `isFirestoreAvailable()` legacy alias at line 43 |
