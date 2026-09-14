@@ -1,12 +1,12 @@
-﻿# VantaOS Roadmap
+# VantaOS Roadmap
 
-> **Status:** 9/9 development phases complete and tested — Vitest 1032/1032 passing across 64 files, 8 Playwright E2E cases across 6 files, CI green; last verified 2026-09-13.
+> **Status:** 9/9 development phases complete and tested — Vitest 1049/1049 passing across 65 files, 8 Playwright E2E cases across 6 files, CI green; last verified 2026-09-14.
 
 ## Purpose / How to read this doc
 
 VantaOS is a browser-based cloud OS / developer workspace: a cloud OS workspace with file manager, a CodeMirror 6 editor and xterm.js terminal, Omni-AI chat, Google Drive and GitHub sync, a forum with admin, and a plugin system. It ships as a **Next.js 15 static export** served by a single **Cloudflare Worker**, backed by **Firebase Realtime Database (RTDB)** as the data tier, with IndexedDB for local persistence and offline tolerance. Live URL: https://website.vasudevaya.workers.dev.
 
-This document records what is implemented and tested, ordered by the 9 development phases. It follows two rules: no phase is marked complete from a README claim alone — every row cites the named test suite and CI job that prove it — and the status legend below distinguishes implemented-and-tested from present-but-not-enabled. All status claims are dated 2026-09-13.
+This document records what is implemented and tested, ordered by the 9 development phases. It follows two rules: no phase is marked complete from a README claim alone — every row cites the named test suite and CI job that prove it — and the status legend below distinguishes implemented-and-tested from present-but-not-enabled. All status claims are dated 2026-09-14.
 
 **Data-tier and deploy notes:**
 
@@ -27,7 +27,7 @@ This document records what is implemented and tested, ordered by the 9 developme
 | 8 | Services | `/api/health` reflecting real Firebase + IndexedDB status; 6 SLOs with p95 targets; 4 incident runbooks; Sentry/LogRocket telemetry; plugins + models API | Vitest `tests/phase-schema`; telemetry / sentry / logrocket audit suites | ✅ |
 | 9 | Application Layer | Full Next.js 15 static-export app shell; plugin registry/manifest/loader; GitHub import/push via Worker OAuth proxy (GUI ships but is env-guarded — see legend); PWA + responsive | Vitest `tests/phase9` (plugin, manifest, edge, operations, model-adapter); Playwright `tests/e2e/flows` (auth 2, terminal 2, files 1, home 1, ide 1, omni-ai 1) | ✅ |
 
-Every phase above also lands in CI: `.github/workflows/ci.yml` runs lint (`tsc --noEmit`), test (Vitest), build (`next build`), and e2e (Playwright) on push and PR. There is currently **no** automated `npm audit` job — that check is manual (`npm audit --audit-level=moderate`; 4 high advisories as of Sep 2026) and is a backlog item below.
+Every phase above also lands in CI: `.github/workflows/ci.yml` runs lint (`tsc --noEmit`), test (Vitest), build (`next build`), and e2e (Playwright) on push and PR, plus a dedicated `npm audit` job (`npm audit --audit-level=high`; 0 vulnerabilities as of Sep 2026-09-14).
 
 ## Status legend
 
@@ -41,17 +41,16 @@ Every phase above also lands in CI: `.github/workflows/ci.yml` runs lint (`tsc -
 |---|---|
 | ✅ Implemented and tested | Core workspace + file manager (oplog, conflict resolution, IndexedDB v3); CodeMirror 6 editor (15 languages) + diff editor; xterm.js terminal with sandboxed Web Worker runner; Omni-AI chat (cloud providers + local Ollama); Firebase Google/GitHub sign-in (wired to project `website-6e8b1`, consent-screen smoke-verified); forum + admin on RTDB; Google Drive sync (`drive.readonly` / `drive.file`); IndexedDB local persistence with authenticated HLC sync; plugin system; health API + 6 SLOs + 4 incident runbooks; Sentry/LogRocket telemetry; demo auth fallback gated by `isFirebaseConfigured`; PWA + responsive |
 | ⚠️ Implemented but not enabled | GitHub OAuth proxy in production — the Worker (`workers/github-proxy.ts`, `workers/grants.ts`) and the GUI path ship, but are env-guarded: `GH_GRANT_SECRET` and `GITHUB_CLIENT_ID`/`GITHUB_CLIENT_SECRET` are unset, so the path is not active on the live Worker |
-| 🎯 Backlog / next work | Automated npm-audit job in CI; live GitHub-OAuth enablement in prod (set the three secrets + add an E2E for the proxy); AI provider quota/billing; a dedicated dependency audit job; any non-LAN federation / rendezvous so two deployments can sync |
+| 🎯 Backlog / next work | Live GitHub-OAuth enablement in prod (set the three secrets + add an E2E for the proxy); AI provider quota/billing; any non-LAN federation / rendezvous so two deployments can sync |
 
 ## Backlog / next milestones
 
 1. **Enable GitHub OAuth proxy in production** — set `GH_GRANT_SECRET` + `GITHUB_CLIENT_ID`/`GITHUB_CLIENT_SECRET` on the Worker and add an E2E that exercises the proxy in CI. Picks up the ⚠️ row above.
-2. **Add npm audit to CI and resolve the advisories** — add an audit job to `ci.yml` and clear the 4 high advisories (Sep 2026 baseline); in the same pass, correct the stale `firebase:deploy` script to `firebase deploy --only database`.
-3. **Tighten RTDB rules and add rules unit tests** — restrict database rules to the forum/admin paths and signed-in writers, and prove the rules with unit tests rather than a claim.
-4. **Optional: Sentry-aware error SLO dashboard** — surface crash / first-token / error budgets from Sentry against the existing 6 SLOs.
-5. **Optional: self-hostable single-command deploy** — ship a `wrangler.json` / GitHub Actions path so bringing up a second deployment is one command.
-6. **Optional: PWA offline mode** — full offline app shell + sync queue for the workspace (IndexedDB is already the local tier; service-worker coverage is the gap).
-7. **Far-future / optional: federation between deployments** — rendezvous so two independently deployed Cloudflare Workers can sync. Not on the critical path; revisit only after milestones 1–3.
+2. **Tighten RTDB rules and add rules unit tests** — restrict database rules to the forum/admin paths and signed-in writers, and prove the rules with structural tests. <sub>(Baseline landed: `database.rules.json` is wired in `firebase.json` and covered by `tests/phase-schema/database-rules.test.ts`. The `firebase:deploy` script targets `database:rules,firestore:rules,firestore:indexes`.)</sub>
+3. **Optional: Sentry-aware error SLO dashboard** — surface crash / first-token / error budgets from Sentry against the existing 6 SLOs.
+4. **Optional: self-hostable single-command deploy** — ship a `wrangler.json` / GitHub Actions path so bringing up a second deployment is one command.
+5. **Optional: PWA offline mode** — full offline app shell + sync queue for the workspace (IndexedDB is already the local tier; service-worker coverage is the gap).
+6. **Far-future / optional: federation between deployments** — rendezvous so two independently deployed Cloudflare Workers can sync. Not on the critical path; revisit only after milestones 1–3.
 
 ## How status is maintained
 
@@ -64,7 +63,7 @@ Every phase above also lands in CI: `.github/workflows/ci.yml` runs lint (`tsc -
 ## Master verification checklist
 
 - [x] All 9 phases have named verification suites and land in CI
-- [x] Status claims are dated (2026-09-13) and tied to executed tests
+- [x] Status claims are dated (2026-09-13/14) and tied to executed tests
 - [x] Implemented-but-not-enabled surfaces are marked ⚠️, not ✅
 - [x] Backlog items are concrete and scoped; far-future items are labeled optional
 - [x] Data tier is Firebase RTDB; Firestore references flagged as stale where present

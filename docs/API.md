@@ -16,7 +16,7 @@ VantaOS is a Next.js 15 **static export** served by a **Cloudflare Worker**, wit
 - **Data tier = Firebase Realtime Database (RTDB), not Firestore.** The client module carrying a legacy name (`src/lib/firestore.ts`) exposes the RTDB data layer via `isFirestoreAvailable()` — a legacy alias. Nothing in the product writes application data to Firestore.
 - Security boundary: the client-only app has no application server authorizing reads/writes. The server-side authorization contract is the RTDB ruleset at `database.rules.json` (see Section 2).
 
-**Test / verification status (Sep 13, 2026):** Vitest **1032/1032** passing across **64 files**; Playwright **8 cases across 6 files**. CI runs lint, test, build, and e2e. Gap: there is **no npm audit job** in CI.
+**Test / verification status (Sep 14, 2026):** Vitest **1049/1049** passing across **65 files**; Playwright **8 cases across 6 files**. CI runs lint, test, build, e2e, and an `npm audit` job (`--audit-level=high`; 0 vulnerabilities as of Sep 2026-09-14).
 
 **API surfaces at a glance:**
 
@@ -282,7 +282,7 @@ Re-verified on **2026-09-13**; current as of **2026-09-14**.
 | GitHub | `src/lib/github.ts` (≈lines 163–189) · `/api/gh/*` | Source read + unit tests | ⚠️ proxy not enabled in prod |
 | Terminal Sandbox | `src/lib/terminal/runner.ts` | Source read + Vitest | ✅ |
 
-**Suite counts:** Vitest 1032/1032 across 64 files; Playwright 8 cases across 6 files; CI covers lint / test / build / e2e. **CI gap:** no npm audit job.
+**Suite counts:** Vitest 1049/1049 across 65 files; Playwright 8 cases across 6 files; CI covers lint / test / build / e2e / npm audit (0 vulnerabilities as of Sep 2026-09-14).
 
 **Referencing discipline:** `file:line` pairs appear in this document only where cited above (drive OAuth scopes, GitHub token helpers); all other references are module-level.
 

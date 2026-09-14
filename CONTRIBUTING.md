@@ -73,9 +73,9 @@ pre-push gates.
 
 ### Test layout
 
-- Vitest: 1032/1032 tests across 64 files (audited Sep 2026), including
+- Vitest: 1049/1049 tests across 65 files (audited Sep 2026), including
   `tests/phase1`, `tests/phase2`, `tests/phase9`, `tests/phase-schema`
-  (10 files), plus telemetry/Sentry/LogRocket audits and
+  (11 files), plus telemetry/Sentry/LogRocket audits and
   plugin/manifest/edge/operations coverage.
 - Playwright E2E: 8 `test()` cases across 6 files in `tests/e2e/flows/` —
   auth (2), terminal (2), files, home, ide, omni-ai.
@@ -128,8 +128,9 @@ Follow Conventional Commits, one logical change per commit:
 - **Keep `file:line` references in docs audited and current.** Claims must
   match reality; `docs/TECH_STACK_AUDIT_REPORT.md` documents the last full
   audit (Sep 2026).
-- **CI has no `npm audit` job** — dependency vulnerabilities won't fail CI on
-  their own; review `npm audit` output in PRs that touch dependencies.
+- **Dependencies are audited in CI.** The `audit` job runs
+  `npm audit --audit-level=high` on every push/PR and fails the build on
+  high/critical advisories; keep the lockfile in sync when touching deps.
 
 ## Where to get help
 

@@ -41,7 +41,7 @@ audit.
 > | Edge (Cloudflare Worker proxy) | ✅ Verified (workers/worker.ts, live site) |
 > | GitHub OAuth proxy | 🎯/⚠️ Implemented but NOT enabled in production |
 > | CI/CD | ✅ Verified (`.github/workflows/ci.yml`) |
-> | npm audit in CI | 🔄 Missing — manual only, 4 high advisories (Sep 2026) |
+> | npm audit in CI | ✅ Implemented (`.github/workflows/ci.yml` job `audit`; `npm audit --audit-level=high`) — 0 vulnerabilities as of Sep 2026-09-14 |
 
 <!-- AGENT: Platform -->
 ## 1. 🏗️ Platform overview
@@ -261,14 +261,14 @@ serves the static `out/` directory and intercepts `/api/*`.
 - Worker deploy: `npm run deploy` (`package.json:12`), rollback with
   `npx wrangler rollback`. Live site: `https://website.vasudevaya.workers.dev`.
 
-> **🟡 WARNING — audit gap:** CI has no `npm audit` job. Dependency scanning is
-> manual; as of September 2026 a full `npm audit` reports 4 high-severity
-> advisories.
+> **🟢 INFO — dependency audit automated:** CI runs an `npm audit` job
+> (`audit` in `.github/workflows/ci.yml`, `npm audit --audit-level=high`);
+> as of 2026-09-14 a full `npm audit` reports **0 vulnerabilities**.
 
 <!-- AGENT: Testing -->
 ## 8. 🧪 Testing
 
-- **Unit (Vitest):** `1032/1032` passing across **64 files**
+- **Unit (Vitest):** `1049/1049` passing across **65 files**
   (`npm test`, `package.json:10`).
 - **E2E (Playwright):** **8 cases** across **6 files** in `tests/e2e/flows/`
   (auth, home, files, ide, omni-ai, terminal), config at
@@ -316,8 +316,8 @@ Suites by directory:
   (`package.json:52`) initialized via `src/lib/telemetry/index.ts`; prompts,
   outputs, and credentials are expected to be redacted from events.
 - **Supply chain:** overrides pin `adm-zip` 0.6.1, `sharp` 0.35.4, `postcss`
-  8.5.28 (`package.json:83-87`; first overrides block `62-64`); npm audit is
-  **manual** — ⚠️ 4 high advisories as of Sep 2026, no CI audit job yet.
+  8.5.28 (`package.json` `overrides`); `npm audit` runs in CI (job `audit`,
+  `--audit-level=high`) — ✅ 0 vulnerabilities as of Sep 2026-09-14.
 
 <!-- AGENT: Testing -->
 ## 10. 📝 Reference index
@@ -348,4 +348,4 @@ Suites by directory:
 | `src/lib/slo/`, `src/lib/incident-runbooks/` | SLO checks + incident runbooks |
 | `src/lib/plugins/`, `src/lib/sync/` | Plugin registry; sync protocol/batch/conflict |
 | `src/components/` | App shell, `CloudCodeEditor`, `CloudDiffEditor`, terminal panel |
-| `tests/` | Vitest suites (64 files, 1032 tests); `tests/e2e/` Playwright (8 cases / 6 files) |
+| `tests/` | Vitest suites (65 files, 1049 tests); `tests/e2e/` Playwright (8 cases / 6 files) |

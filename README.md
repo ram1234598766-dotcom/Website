@@ -79,7 +79,7 @@ Open the printed localhost URL. Every `NEXT_PUBLIC_FIREBASE_*` variable is optio
 | `npm run dev` | Start the dev server (`next dev`) |
 | `npm run build` | Production build → static export in `out/` (`next build`) |
 | `npm run lint` | Type-check without emitting (`tsc --noEmit`) |
-| `npm test` | Run the Vitest suite — 1032/1032 tests across 64 files |
+| `npm test` | Run the Vitest suite — 1049/1049 tests across 65 files |
 | `npm run deploy` | `npm run build && npx wrangler deploy` — one Worker unit with assets |
 | `npm run cf-preview` | Preview the Worker with the static bundle locally |
 
@@ -89,9 +89,9 @@ Open the printed localhost URL. Every `NEXT_PUBLIC_FIREBASE_*` variable is optio
 
 ## Testing
 
-- **Unit/integration** — `npm test` runs Vitest: 1032/1032 tests passing across 64 files (Sep 13, 2026).
+- **Unit/integration** — `npm test` runs Vitest: 1049/1049 tests passing across 65 files (Sep 14, 2026).
 - **E2E** — Playwright: 8 `test()` cases across 6 files in `tests/e2e/flows` (auth 2, terminal 2, files 1, home 1, ide 1, omni-ai 1), run with `npx playwright test --config=tests/e2e/playwright.config.ts`; the config's webServer serves the static `out/` build.
-- **CI** (`.github/workflows/ci.yml`) — on push/PR with Node 22: `npm ci`, lint (`tsc --noEmit`), unit tests (`vitest run`, excluding `tests/e2e/**`), build (`next build`), then Playwright E2E. There is **no npm audit job** — dependency vulnerability scanning is not part of CI.
+- **CI** (`.github/workflows/ci.yml`) — on push/PR with Node 22: `npm ci`, lint (`tsc --noEmit`), unit tests (`vitest run`, excluding `tests/e2e/**`), build (`next build`), Playwright E2E, and an **`npm audit` job** (`npm audit --audit-level=high`; 0 vulnerabilities as of Sep 14, 2026).
 
 ---
 

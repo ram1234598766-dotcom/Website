@@ -10,7 +10,7 @@ for the repository at `https://github.com/ram1234598766-dotcom/Website`.
 > architecture (not implemented) — marked [TARGET]. Section 13: Phase plan with
 > verification evidence and executed test outcomes.
 >
-> Last verified: 2026-09-13/14 — `npx vitest run` 1032/1032 across 64 files;
+> Last verified: 2026-09-13/14 — `npx vitest run` 1049/1049 across 65 files;
 > `tsc --noEmit` clean (0 errors); `npm run build` passes; Playwright E2E
 > 8 cases / 6 files; CI = lint + test + build + e2e (no audit job).
 
@@ -185,7 +185,7 @@ browser shell selects views in client state (`src/App.tsx`).
 | **IDE** | CodeMirror 6 editors. `CloudCodeEditor`, `CloudDiffEditor` wrappers. File nodes, tabs, split views, diff, search, Prettier, ZIP export. React Virtuoso for list rendering. `motion` for animations. `lucide-react` for icons. | ✅ Verified |
 | **Schema / models** | `src/lib/schema/` (validation schemas). `src/lib/models/adapter.ts` (inference). `src/lib/client.ts` (unified auth/storage facade). | ✅ Verified |
 | **CI** | `.github/workflows/ci.yml` — lint + test + build + e2e on push/PR. No audit job. | ✅ Verified |
-| **Test suite** | Vitest 1032/1032 across 64 files. Playwright E2E 8 cases / 6 files. | ✅ Verified |
+| **Test suite** | Vitest 1049/1049 across 65 files. Playwright E2E 8 cases / 6 files. | ✅ Verified |
 
 ### ✅ Verification Gate — Section 3
 - [x] All code references match actual file paths
@@ -618,7 +618,7 @@ as follows (executed commands and their outcomes):
 | GitHub OAuth proxy exists (`/api/gh/*`) with env secrets | Worker routes + env config | ⚠️ Present but not enabled (secrets unset) |
 | Production origin `website.vasudevaya.workers.dev` is an authorized domain | Identity Platform `authorizedDomains` | ✅ Present |
 | Client compiles and builds with real Firebase environment | `npx tsc --noEmit`; `npm run build` | ✅ Both pass |
-| Full test suite | `npx vitest run` (1032 tests, 64 files, all pass) | ✅ All pass |
+| Full test suite | `npx vitest run` (1049 tests, 65 files, all pass) | ✅ All pass |
 | Type check | `npm run lint` (`tsc --noEmit`) | ✅ Clean (0 errors) |
 
 > **⚠️ NOTE:** Cloudflare Pages and vantaos.dev are **stale** — do not use.
@@ -629,14 +629,14 @@ as follows (executed commands and their outcomes):
 | Phase | Name | Status | One-line evidence / gap |
 |---|---|---|---|
 | 0 | Baseline and risk closure | ✅ | `LICENSE` (Apache-2.0), `SECURITY.md`, `CONTRIBUTING.md`, `.github/workflows/ci.yml` added; `npm run lint` clean (0 errors); `npm run build` passes |
-| 1 | Workspace foundation | ✅ | 99 tests across 9 files in `tests/phase1/`: buildState, multi-tab, bulkAppendOps, loadOpsAfter, provider, operations, paths, legacy, outbox-recovery, export; full suite 1032/1032 across 64 files |
-| 2 | IDE reliability | ✅ | 1032/1032 vitest across 64 files pass; SandboxRunner in worker thread with wall-clock/output/code caps; 17 new tests in `tests/phase2/`; gaps: language-service workers, keyboard/screen-reader contracts, live E2E |
+| 1 | Workspace foundation | ✅ | 99 tests across 9 files in `tests/phase1/`: buildState, multi-tab, bulkAppendOps, loadOpsAfter, provider, operations, paths, legacy, outbox-recovery, export; full suite 1049/1049 across 65 files |
+| 2 | IDE reliability | ✅ | 1049/1049 vitest across 65 files pass; SandboxRunner in worker thread with wall-clock/output/code caps; 17 new tests in `tests/phase2/`; gaps: language-service workers, keyboard/screen-reader contracts, live E2E |
 | 3 | Omni-AI orchestration | ✅ | Provider union + Worker proxy implemented; 80 tests incl. streaming/redaction, rate limits, tool-permission prompts and enforcement; provider registry, rate-limiter, tool-permission-prompts all tested |
 | 4 | WebModel delivery | ✅ | Models API + ModelManager UI; SHA-256 verification, resumable downloads, runtime detection, trusted source enforcement (`verifyModelSource`); real inference via `generate()` with @huggingface/transformers + deterministic fallback; 17 adapter tests + trusted source tests |
-| 5 | Identity and GitHub security | ✅ | ID-token RS256 + HMAC grants + GH OAuth token-boundary + push-safety all test-proven; 64 tests in `tests/phase5/`; full suite 1032/1032 across 64 files |
+| 5 | Identity and GitHub security | ✅ | ID-token RS256 + HMAC grants + GH OAuth token-boundary + push-safety all test-proven; 64 tests in `tests/phase5/`; full suite 1049/1049 across 65 files |
 | 6 | Sync and collaboration | ✅ | 89 tests across 7 files in `tests/phase6/` incl. batch, protocol, recovery, convergence-recovery, reconnect-storm, conflict (live CRDT/mergeAll with hasConflict detection + base-text reconciliation) and sync-status |
 | 7 | Mobile/PWA experience | ✅ | 10 tests in `tests/phase7/` all pass; PWA manifest/SW/caching tested; touch targets, reduced-motion, orientation change implemented and tested |
-| 8 | Production operations | ✅ | 1032/1032 vitest, 64 files; `npm run lint` (0 errors); `npm run build` pass; LICENSE/SECURITY.md/CONTRIBUTING.md/ci.yml added; Telemetry incl. LogRocket; Trusted sources tested |
+| 8 | Production operations | ✅ | 1049/1049 vitest, 65 files; `npm run lint` (0 errors); `npm run build` pass; LICENSE/SECURITY.md/CONTRIBUTING.md/ci.yml added; Telemetry incl. LogRocket; Trusted sources tested |
 | 9 | Plugin ecosystem | ✅ | PluginRunner wired; 25/25 tests in `tests/phase9/`; sandbox escape mitigated (`self` removed from `new Function`); capability enforcement added |
 
 ### 13.2 Per-phase detail and exit gates
@@ -647,7 +647,7 @@ as follows (executed commands and their outcomes):
 - ✅ Hygiene baseline: `LICENSE` (Apache-2.0), `SECURITY.md`, `CONTRIBUTING.md`,
   `.github/workflows/ci.yml` (lint + test + build + e2e on push/PR).
 - ✅ Executed baseline: `npm run lint` (tsc --noEmit, 0 errors);
-  `npm run build` passes; `npm test` 1032/1032 across 64 test files.
+  `npm run build` passes; `npm test` 1049/1049 across 65 test files.
 - Exit gate: met — build/typecheck/lint pass.
 
 **Phase 1 — Workspace foundation**
@@ -666,7 +666,7 @@ as follows (executed commands and their outcomes):
   `maxOutputChars` output cap, and `maxCodeChars` size guard; shell and
   Omni-AI wired to it. 17 new tests in `tests/phase2/`.
 - Exit gate: sandbox quota + shell-wiring tests pass; full suite
-  `npm test` 1032/1032, `npm run lint` clean.
+  `npm test` 1049/1049, `npm run lint` clean.
 
 **Phase 3 — Omni-AI orchestration**
 
@@ -730,7 +730,7 @@ as follows (executed commands and their outcomes):
 
 - ✅ Static export served by Cloudflare Worker; `/api/health`,
   `/api/ai/generate`, `/api/gh/*` routes exist.
-- ✅ `npm test` 1032/1032 vitest, 64 files; `npm run lint` clean;
+- ✅ `npm test` 1049/1049 vitest, 65 files; `npm run lint` clean;
   `npm run build` produces a static export.
 - ✅ `LICENSE` (Apache-2.0), `SECURITY.md`, `CONTRIBUTING.md`,
   `.github/workflows/ci.yml` added.
@@ -752,7 +752,7 @@ as follows (executed commands and their outcomes):
 
 | Metric | Value |
 |---|---|
-| Vitest | 1032/1032 pass across 64 test files |
+| Vitest | 1049/1049 pass across 65 test files |
 | Playwright E2E | 8 cases / 6 files |
 | CI pipeline | lint + test + build + e2e |
 | Audit job | Not present |

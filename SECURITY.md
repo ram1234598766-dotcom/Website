@@ -110,12 +110,10 @@ do, the current mitigation, and its honest status.
 7. **Supply chain.** *Attacker:* a compromised dependency injected into a
    build or deploy. *Mitigation:* reproducible installs via `npm ci` and the
    committed lockfile; CI gates run lint (`tsc --noEmit`), test (Vitest,
-   1032/1032 across 64 files), build, and e2e (8 Playwright cases across 6
-   files) on every push/PR. *Status:* known gap — there is **no automated
-   `npm audit` job in CI**; it is run manually as `npm audit
-   --audit-level=moderate`. As of 2026-09-13 there are **4 high-severity
-   advisories pending**. Automating dependency audit/pinning in CI is the
-   top open hardening item.
+   1049/1049 across 65 files), build, and e2e (8 Playwright cases across 6
+   files) on every push/PR, plus a dedicated **`npm audit` job**
+   (`npm audit --audit-level=high`). As of 2026-09-14 `npm audit` reports
+   **0 vulnerabilities**.
 
 ## Security-related configuration checklist
 
@@ -127,7 +125,7 @@ do, the current mitigation, and its honest status.
 | `GEMINI_API_KEY` | `/api/ai/generate` in `workers/worker.ts`. | Env-only; never logged or printed. |
 | DOMPurify | All user HTML sanitized before render. | Keep DOMPurify current; never bypass for user content. |
 | Worker rate limit | `/api/ai/generate`. | 100 req/60s; raise only behind separate auth. |
-| `npm audit` | Run `npm audit --audit-level=moderate` manually. | Run before every deploy; track the 4 high-severity advisories (Sep 2026); plan to automate in CI. |
+| `npm audit` | Runs in CI as `npm audit --audit-level=high` (job `audit` in `ci.yml`). | CI must stay green; as of 2026-09-14 reports 0 vulnerabilities. |
 
 ## Incident response
 

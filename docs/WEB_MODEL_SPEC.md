@@ -1,6 +1,6 @@
 # VantaOS WebModel — Web UI Design and Screen/UX Contract
 
-> **📋 Status:** Design contract — describes the WebModel (the AI web app model) and the screen/UX contract for VantaOS. Verified against the typed schema (`src/lib/schema/`) and the phase-schema tests in `tests/phase-schema/` (10 files, as of Sep 13 2026). Some sections describe target/design behavior, not yet shipped — every section below carries an explicit status marker.
+> **📋 Status:** Design contract — describes the WebModel (the AI web app model) and the screen/UX contract for VantaOS. Verified against the typed schema (`src/lib/schema/`) and the phase-schema tests in `tests/phase-schema/` (11 files, as of Sep 14 2026). Some sections describe target/design behavior, not yet shipped — every section below carries an explicit status marker.
 
 > **🔵 INFO:** VantaOS runs as a Next.js 15 static export fronted by a Cloudflare Worker, with Firebase **Realtime Database (RTDB)** as the data tier. There is no Firestore in the current stack. "WebModel" here means the web application model — the browser UI, its data flows, and the behavior contract behind it — not a downloadable in-browser AI model.
 
@@ -372,8 +372,8 @@ The Next.js build is a **static export** — there is no Node server in the clie
 
 **Status: ✅ shipped+tested** — verification is live and green as of the Sep 2026 audit.
 
-- **Unit + schema tests (Vitest):** 1032 passed / 1032 across 64 test files.
-- **Phase-schema suite (`tests/phase-schema/`, 10 files):** `webmodel-matrix` (screen surface matrix), `webmodel-adapter` (provider adapter behavior), `omni-ai-webmodel` (Omni-AI chat contract), `schema` (typed model validation), `sync-api` (Drive/GitHub/RTDB sync contract), `slo` (latency budgets), `runbooks` (operational guidance), `telemetry` (data-collection contract), `export` (static-build/export contract), `edge-contract` (Worker routing and auth).
+- **Unit + schema tests (Vitest):** 1049 passed / 1049 across 65 test files.
+- **Phase-schema suite (`tests/phase-schema/`, 11 files):** `webmodel-matrix` (screen surface matrix), `webmodel-adapter` (provider adapter behavior), `omni-ai-webmodel` (Omni-AI chat contract), `schema` (typed model validation), `sync-api` (Drive/GitHub/RTDB sync contract), `slo` (latency budgets), `runbooks` (operational guidance), `telemetry` (data-collection contract), `export` (static-build/export contract), `edge-contract` (Worker routing and auth).
 - **Schema unit tests** alongside the typed models in `src/lib/schema/`.
 - **E2E (Playwright):** 8 cases across 6 files covering the workspace, editor, terminal, Omni-AI chat, and forum/admin surfaces.
 - **CI:** lint, test, build, and E2E run on every push/PR.

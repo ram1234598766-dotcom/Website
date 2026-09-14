@@ -75,7 +75,7 @@ downtime before the budget is exhausted. Error-rate SLO allows **0.1 errors per
 | Dependency audit completed with no high/critical findings | 🟢 Info | 👤 DevOps |
 | SLO budget reset (daily) | 🟢 Info | 👤 DevOps |
 
-> **🔵 INFO:** `npm audit` is not an automated CI job — run it manually. As of Sep 2026 there are 4 high advisories.
+> **🔵 INFO:** `npm audit` runs automatically in CI (job `audit`; `npm audit --audit-level=high`) — as of 2026-09-14 it reports 0 vulnerabilities.
 
 ### ✅ Verification Gate — Section 2
 - [ ] All procedures are testable
@@ -210,10 +210,10 @@ git push
 | Worker errors / latency | `wrangler tail` + Cloudflare dashboard (Worker) | Cloudflare Dashboard |
 | Realtime Database errors | Firebase Console → Realtime Database metrics + rules-log permission-denied rate | Firebase Console |
 | Build / deploy status | GitHub Actions | `.github/workflows/ci.yml` |
-| Tests | Vitest (1,032/1,032 across 64 files) + CI artifacts | CI artifacts |
+| Tests | Vitest (1,049/1,049 across 65 files) + CI artifacts | CI artifacts |
 | Client-side errors | Sentry + LogRocket (✅ wired) | Sentry / LogRocket dashboards |
 
-> **🔵 INFO:** Monitoring coverage is currently ~85% by metric count; gaps are documented in the table above. Client-side error tracking (Sentry + LogRocket) **is wired and active** as of v2.0.0 — it is not "not yet wired". CI runs lint, test (Vitest), build, and e2e (8 Playwright cases across 6 files) on every push/PR. `npm audit` remains manual (4 high advisories as of Sep 2026).
+> **🔵 INFO:** Monitoring coverage is currently ~85% by metric count; gaps are documented in the table above. Client-side error tracking (Sentry + LogRocket) **is wired and active** as of v2.0.0 — it is not "not yet wired". CI runs lint, test (Vitest), build, and e2e (8 Playwright cases across 6 files) on every push/PR, plus an `npm audit` job (0 vulnerabilities as of Sep 2026-09-14).
 
 ### ✅ Verification Gate — Section 5
 - [ ] All procedures are testable
