@@ -44,6 +44,51 @@ export function getTrustedSources(): ModelSource[] {
 }
 
 /**
+ * Additional hostnames the server-side model proxy may fetch that are not
+ * captured by the trusted-source base URLs. HuggingFace serves large model
+ * blobs from LFS CDN subdomains rather than huggingface.co itself.
+ */
+const PROXY_EXTRA_HOSTS: readonly string[] = [
+  'www.huggingface.co',
+  'cdn-lfs.huggingface.co',
+  'cdn-lfs-us-1.huggingface.co',
+];
+
+/**
+ * Exact hostname allowlist for the server-side model proxy
+ * (GET /api/model-proxy). Merges the verified trusted-source base
+ * hostnames (huggingface.co, models.vantaos.dev) with PROXY_EXTRA_HOSTS.
+ *
+ * Matching is exact — deliberately narrower than isTrustedUrl's subdomain
+ * wildcard — so an arbitrary subdomain of a trusted apex is never treated
+ * as proxiable.
+ */
+export const MODEL_PROXY_ALLOWED_HOSTS: readonly string[] = [
+  ...new Set([
+    ...getTrustedSources().map((s) => getBaseHostname(s)),
+    ...PROXY_EXTRA_HOSTS,
+  ]),
+];
+
+/**
+ * Checks whether an absolute http(s) URL may be fetched by the server-side
+ * model proxy. The host is matched exactly against MODEL_PROXY_ALLOWED_HOSTS
+ * after URL parsing — never by string prefix.
+ */
+export function isAllowedModelProxyUrl(url: string): boolean {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return false;
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    return false;
+  }
+  return MODEL_PROXY_ALLOWED_HOSTS.includes(parsed.hostname.toLowerCase());
+}
+
+/**
  * Checks whether a URL belongs to a verified trusted source.
  *
  * Compares the URL's hostname against the hostname of each

@@ -325,6 +325,96 @@ describe('POST /api/model-proxy forwards valid requests', () => {
   });
 });
 
+// ─── Gemini server-key fallback (POST /api/ai/generate) ─────
+
+describe('POST /api/ai/generate — Gemini server-key fallback', () => {
+  it('uses the operator-provided GEMINI_API_KEY when the client sends no apiKey', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({
+        candidates: [{ content: { parts: [{ text: 'server-byte-1' }] } }],
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const serverEnv = { GEMINI_API_KEY: 'AIza-server-key-123' };
+    const req = mockRequest('https://example.com/api/ai/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ provider: 'gemini', messages: [{ role: 'user', content: 'hi' }] }),
+    });
+    const res = await handleApiRequest(req, serverEnv);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body.text).toBe('server-byte-1');
+    const [fetchUrl] = fetchMock.mock.calls[0];
+    expect(String(fetchUrl)).toContain('key=AIza-server-key-123');
+    expect(String(fetchUrl)).toContain('gemini-2.5-flash');
+  });
+
+  it('prefers the client apiKey over the server key when both present', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({
+        candidates: [{ content: { parts: [{ text: 'client-key' }] } }],
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const serverEnv = { GEMINI_API_KEY: 'AIza-server-key-123' };
+    const req = mockRequest('https://example.com/api/ai/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        provider: 'gemini',
+        apiKey: 'AIza-client-key-456',
+        messages: [{ role: 'user', content: 'hi' }],
+      }),
+    });
+    const res = await handleApiRequest(req, serverEnv);
+    expect(res.status).toBe(200);
+    const [fetchUrl] = fetchMock.mock.calls[0];
+    expect(String(fetchUrl)).toContain('key=AIza-client-key-456');
+    expect(String(fetchUrl)).not.toContain('key=AIza-server-key');
+  });
+
+  it('returns 400 for gemini when neither a client key nor GEMINI_API_KEY is set', async () => {
+    vi.stubGlobal('fetch', vi.fn());
+    const req = mockRequest('https://example.com/api/ai/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ provider: 'gemini', messages: [{ role: 'user', content: 'hi' }] }),
+    });
+    const res = await handleApiRequest(req, env); // env = {} — no server key
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(String(body.error)).toContain('Gemini API key required');
+  });
+
+  it('rejects a placeholder GEMINI_API_KEY instead of calling the upstream', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const req = mockRequest('https://example.com/api/ai/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ provider: 'gemini', messages: [{ role: 'user', content: 'hi' }] }),
+    });
+    const res = await handleApiRequest(req, { GEMINI_API_KEY: 'MY_GEMINI_API_KEY' });
+    expect(res.status).toBe(400);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('still requires an apiKey for openai even when a server key exists', async () => {
+    vi.stubGlobal('fetch', vi.fn());
+    const serverEnv = { GEMINI_API_KEY: 'AIza-server-key-123' };
+    const req = mockRequest('https://example.com/api/ai/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ provider: 'openai', messages: [{ role: 'user', content: 'hi' }] }),
+    });
+    const res = await handleApiRequest(req, serverEnv);
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(String(body.error)).toContain('apiKey is required');
+  });
+});
+
 // ─── CORS / method handling ─────────────────────────────────
 
 describe('OPTIONS preflight', () => {

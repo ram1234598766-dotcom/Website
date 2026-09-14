@@ -16,6 +16,7 @@ import {
 import type { ModelManifest } from '../../src/lib/models/manifest';
 import { ResumableShardDownloader } from '../../src/lib/models/downloader';
 import { detectDeviceSync, meetsRequirements, requirementGaps } from '../../src/lib/models/device';
+import { isTrustedUrl } from '../../src/lib/models/sources';
 
 /* ------------------------------------------------------------------ */
 /*  Manifest validation                                                */
@@ -551,5 +552,45 @@ describe('requirementGaps', () => {
     expect(meetsRequirements({ ...caps, webgpu: false }, req)).toBe(
       requirementGaps({ ...caps, webgpu: false }, req).length === 0,
     );
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/*  Model source boundary (proxy allowlist validation)                 */
+/* ------------------------------------------------------------------ */
+
+describe('isTrustedUrl (model-proxy boundary)', () => {
+  it('accepts huggingface.co and its www subdomain', () => {
+    expect(
+      isTrustedUrl('https://huggingface.co/onnx-community/SmolLM2-135M-ONNX/resolve/main/model.onnx'),
+    ).toBe(true);
+    expect(isTrustedUrl('https://www.huggingface.co/gpt2')).toBe(true);
+  });
+
+  it('accepts the HuggingFace LFS CDN hosts used for model blobs', () => {
+    expect(isTrustedUrl('https://cdn-lfs.huggingface.co/repos/xx/yy/model.onnx?download=true')).toBe(true);
+    expect(isTrustedUrl('https://cdn-lfs-us-1.huggingface.co/repos/xx/yy/model.onnx')).toBe(true);
+  });
+
+  it('accepts models.vantaos.dev', () => {
+    expect(isTrustedUrl('https://models.vantaos.dev/smol-135m/shard-0.bin')).toBe(true);
+  });
+
+  it('rejects non-HuggingFace / non-VantaOS hosts', () => {
+    expect(isTrustedUrl('https://example.com/some/model.onnx')).toBe(false);
+    expect(isTrustedUrl('https://onnx.ai/models/gpt2.onnx')).toBe(false);
+    expect(isTrustedUrl('https://huggingface.co.evil.com/gpt2')).toBe(false);
+    expect(isTrustedUrl('https://notmodels.vantaos.dev/x')).toBe(false);
+  });
+
+  it('requires HTTPS (rejects http and scheme-less input)', () => {
+    expect(isTrustedUrl('http://huggingface.co/gpt2')).toBe(false);
+    expect(isTrustedUrl('huggingface.co/gpt2')).toBe(false);
+  });
+
+  it('matches on host only, tolerating paths, queries, and fragments', () => {
+    expect(
+      isTrustedUrl('https://huggingface.co/onnx-community/gpt-2/resolve/main/model.onnx?download=true#frag'),
+    ).toBe(true);
   });
 });

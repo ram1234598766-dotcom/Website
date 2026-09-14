@@ -12,8 +12,8 @@ const SETTINGS_KEY = 'vantaos_omni_settings';
 const HISTORY_KEY = 'vantaos_omni_history';
 
 const WEB_MODELS: { id: string; name: string }[] = [
-  { id: 'gpt2', name: 'GPT-2' },
   { id: 'tinyllama', name: 'SmolLM2-135M' },
+  { id: 'gpt2', name: 'GPT-2' },
 ];
 
 /** Shared sandbox for the inline JS / calculation tools. */
@@ -47,12 +47,12 @@ function loadSettings(): StoredSettings {
           : 'webmodel';
       return {
         provider,
-        model: parsed.model || 'gpt2',
+        model: parsed.model || 'tinyllama',
         apiKey: parsed.apiKey || '',
       };
     }
   } catch {}
-  return { provider: 'webmodel', model: 'gpt2', apiKey: '' };
+  return { provider: 'webmodel', model: 'tinyllama', apiKey: '' };
 }
 function saveSettings(s: StoredSettings) { localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)); }
 
@@ -132,6 +132,40 @@ async function webmodelQuery(prompt: string, model: string): Promise<string> {
   const modelId = model === 'tinyllama' ? 'tinyllama' : 'gpt2';
   // Generous timeout so the first-use Hugging Face model download can finish.
   return queryWebModel(prompt, modelId, 120000);
+}
+
+function webModelName(modelId: string): string {
+  const found = WEB_MODELS.find((m) => m.id === modelId);
+  return found?.name || modelId;
+}
+
+function friendlyWebModelError(err: unknown): string {
+  const raw = err instanceof Error ? err.message : typeof err === 'string' ? err : String(err ?? 'Unknown error');
+  const lower = raw.toLowerCase();
+  if (lower.includes('service unavailable') || lower.includes('load file') || lower.includes('404') || lower.includes('401') || lower.includes('model')) {
+    return "WebModel couldn't download its model (your browser was blocked from HuggingFace).";
+  }
+  return raw;
+}
+
+// ====== SERVER-SIDE GEMINI FALLBACK (uses operator's GEMINI_API_KEY, no user key needed) ======
+async function serverGeminiFallback(prompt: string): Promise<string> {
+  const res = await fetch('/api/ai/generate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      provider: 'gemini',
+      model: 'gemini-2.5-flash',
+      messages: [{ role: 'user', content: prompt }],
+    }),
+  });
+  if (!res.ok) {
+    let message = `Gemini fallback error (${res.status})`;
+    try { const err = await res.json(); if (err?.error) message = err.error; } catch {}
+    throw new Error(message);
+  }
+  const data = await res.json();
+  return data.text || 'No response.';
 }
 
 // ====== CLOUD PROVIDER ======
@@ -221,8 +255,8 @@ export default function OmniAI() {
   const PROVIDERS: { id: AIProvider; name: string; icon: React.ComponentType<{ className?: string }>; models: { id: string; name: string }[]; defaultModel: string; desc: string; }[] = [
     { id: 'webmodel' as AIProvider, name: 'WebModel', icon: Cpu,
       models: WEB_MODELS,
-      defaultModel: 'gpt2',
-      desc: 'Free, private, runs entirely in your browser with Transformers.js (WebGPU/WASM). Models download on first use.' },
+      defaultModel: 'tinyllama',
+      desc: 'Free, private, runs entirely in your browser with Transformers.js (WebGPU/WASM). Models download on first use — if HuggingFace is blocked, it auto-falls-back to the free server Gemini.' },
     { id: 'openrouter' as AIProvider, name: 'OpenRouter', icon: Globe,
       models: [{ id: 'openai/gpt-4o', name: 'GPT-4o' }, { id: 'google/gemini-2.5-flash', name: 'Gemini 2.5 Flash' }],
       defaultModel: 'openai/gpt-4o', desc: '200+ models. Get key at openrouter.ai/keys' },
@@ -250,7 +284,20 @@ export default function OmniAI() {
       if (toolResult !== null) {
         text = toolResult;
       } else if (settings.provider === 'webmodel') {
-        text = await webmodelQuery(input.trim(), settings.model);
+        try {
+          text = await webmodelQuery(input.trim(), settings.model);
+        } catch (webErr) {
+          // WebModel blocked (CORS / model download failure). Fall back to the
+          // server-side free Gemini endpoint (uses the operator's GEMINI_API_KEY).
+          try {
+            const fallbackText = await serverGeminiFallback(input.trim());
+            text = `_WebModel unavailable (HuggingFace blocked from your browser)._ _Answered via free server Gemini:_\n\n${fallbackText}`;
+          } catch (fallbackErr) {
+            throw new Error(
+              `${friendlyWebModelError(webErr)} The free Gemini fallback also failed: ${fallbackErr instanceof Error ? fallbackErr.message : 'unknown error'}`
+            );
+          }
+        }
       } else {
         if (!settings.apiKey) throw new Error('Add your API key in Settings to use this cloud provider.');
         text = await cloudQuery(settings.provider, settings.model, settings.apiKey, [{ role: 'user', content: input.trim() }]);
@@ -259,7 +306,8 @@ export default function OmniAI() {
       setMessages(finalMessages);
       localStorage.setItem(HISTORY_KEY, JSON.stringify(finalMessages.slice(-100)));
     } catch (err: any) {
-      setMessages(prev => [...prev, { role: 'assistant', content: `**Error:** ${err.message}` }]);
+      const message = err?.message ?? (settings.provider === 'webmodel' ? friendlyWebModelError(err) : 'Unknown error');
+      setMessages(prev => [...prev, { role: 'assistant', content: `**Error:** ${message}` }]);
     } finally { setIsGenerating(false); }
   };
 
@@ -304,7 +352,7 @@ export default function OmniAI() {
             <div className="flex items-center gap-2 mt-1">
               {isWebModelReady ? (
                 <><span className="w-2 h-2 rounded-full bg-emerald-500 shadow-lg"></span>
-                <span className="text-xs font-mono text-emerald-400 uppercase tracking-widest">WebModel | {settings.model || 'gpt2'}</span></>
+                <span className="text-xs font-mono text-emerald-400 uppercase tracking-widest">WebModel | {webModelName(settings.model || 'tinyllama')}</span></>
               ) : isCloudReady ? (
                 <><span className="w-2 h-2 rounded-full bg-blue-500"></span>
                 <span className="text-xs font-mono text-blue-400 uppercase tracking-widest">{provider.name}</span></>

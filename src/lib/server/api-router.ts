@@ -13,6 +13,7 @@ import { GitHubOAuthService, OAuthCallbackError, type KvLike } from './github-pr
 import { verifyFirebaseIdToken } from './firebase-verify';
 import { verifyGrant, type GrantClaims } from './grants';
 import { rateLimitCheck, rateLimitStore } from './rate-limit';
+import { MODEL_PROXY_ALLOWED_HOSTS, isAllowedModelProxyUrl } from '../models/sources';
 
 export { rateLimitCheck, rateLimitStore };
 
@@ -155,6 +156,12 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
       return json({ error: 'upstream unreachable' }, 500);
     }
 
+    // GET /api/model-proxy — server-side fetch of HuggingFace model files so
+    // the browser never hits upstream CORS (HF only allows huggingface.co).
+    if (request.method === 'GET' && path === '/api/model-proxy') {
+      return handleModelProxyGet(request);
+    }
+
     // POST /api/ai/generate
     if (request.method === 'POST' && path === '/api/ai/generate') {
       return handleAiGenerate(request, env);
@@ -201,6 +208,65 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
     console.error('Worker error:', err);
     // H3 FIX: Never leak internal error messages to clients
     return json({ error: 'Internal server error' }, 500);
+  }
+}
+
+const MODEL_PROXY_TIMEOUT_MS = 20_000;
+
+async function handleModelProxyGet(request: Request): Promise<Response> {
+  const reqOrigin = request.headers.get('origin') || undefined;
+  const targetRaw = new URL(request.url).searchParams.get('url') ?? '';
+
+  if (!isAllowedModelProxyUrl(targetRaw)) {
+    return json(
+      { error: 'blocked host', allowed: [...MODEL_PROXY_ALLOWED_HOSTS] },
+      403,
+      {},
+      reqOrigin,
+    );
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), MODEL_PROXY_TIMEOUT_MS);
+  try {
+    const upstream = await fetch(targetRaw, {
+      headers: {
+        'Accept': '*/*',
+        'User-Agent': 'VantaOS-model-proxy',
+      },
+      redirect: 'follow',
+      signal: controller.signal,
+    });
+
+    if (!upstream.ok) {
+      let message = `upstream error (${upstream.status})`;
+      try {
+        const body: any = await upstream.json();
+        if (body?.error) message = body.error;
+      } catch {
+        // upstream body is not JSON — keep the generic message
+      }
+      return json({ error: message, status: upstream.status }, upstream.status, {}, reqOrigin);
+    }
+
+    const headers: Record<string, string> = {
+      ...corsHeaders(reqOrigin),
+      'Cache-Control': 'public, max-age=86400, s-maxage=86400, immutable',
+    };
+    const contentType = upstream.headers.get('content-type');
+    if (contentType) headers['Content-Type'] = contentType;
+
+    return new Response(upstream.body, { status: 200, headers });
+  } catch (err: any) {
+    const timedOut = err?.name === 'AbortError';
+    return json(
+      { error: timedOut ? 'upstream timed out' : 'upstream request failed', status: 502 },
+      502,
+      {},
+      reqOrigin,
+    );
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
@@ -341,15 +407,18 @@ async function handleAiGenerate(request: Request, env: Env): Promise<Response> {
     const body = await request.json() as any;
     const { provider, model, apiKey, messages } = body;
 
-    if (!provider || !apiKey) {
+    if (!provider || !messages) {
       return json(
-        { error: 'Missing required fields: provider, apiKey, and messages or prompt' },
+        { error: 'Missing required fields: provider, and messages or prompt' },
         400
       );
     }
 
     switch (provider) {
       case 'openrouter': {
+        if (!apiKey) {
+          return json({ error: 'apiKey is required for provider openrouter' }, 400);
+        }
         const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
           method: 'POST',
           headers: {
@@ -370,12 +439,19 @@ async function handleAiGenerate(request: Request, env: Env): Promise<Response> {
 
       case 'gemini': {
         const geminiModel = model || 'gemini-2.5-flash';
+        const key = apiKey || env.GEMINI_API_KEY;
+        if (!key || key === 'MY_GEMINI_API_KEY') {
+          return json(
+            { error: 'Gemini API key required (add your key in Settings, or the server GEMINI_API_KEY is unset)' },
+            400
+          );
+        }
         const contents = messages.map((m: any) => ({
           role: m.role === 'user' ? 'user' : 'model',
           parts: [{ text: m.content }],
         }));
         const res = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent?key=${apiKey}`,
+          `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent?key=${key}`,
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -389,6 +465,9 @@ async function handleAiGenerate(request: Request, env: Env): Promise<Response> {
       }
 
       case 'openai': {
+        if (!apiKey) {
+          return json({ error: 'apiKey is required for provider openai' }, 400);
+        }
         const res = await fetch('https://api.openai.com/v1/chat/completions', {
           method: 'POST',
           headers: {

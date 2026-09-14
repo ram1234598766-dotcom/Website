@@ -8,7 +8,7 @@
  */
 
 import type { ModelManifest, DeviceProfile } from './manifest';
-import { verifyModelSource } from './sources';
+import { verifyModelSource, MODEL_PROXY_ALLOWED_HOSTS } from './sources';
 
 const MAX_CACHED_MODELS = 20;
 
@@ -421,7 +421,7 @@ const INFERENCE_TIMEOUT_MS = 30000;
 const SUPPORTED_MODEL_IDS = [
   'gpt2',
   'tinyllama',
-  'onnx-community/gpt-2',
+  'Xenova/gpt2',
   'onnx-community/SmolLM2-135M-ONNX',
   'onnx-community/tiny-llama',
 ] as const;
@@ -429,89 +429,107 @@ const SUPPORTED_MODEL_IDS = [
 export type SupportedModelId = (typeof SUPPORTED_MODEL_IDS)[number];
 
 const MODEL_ID_MAP: Record<string, string> = {
-  gpt2: 'onnx-community/gpt-2',
+  gpt2: 'Xenova/gpt2',
   tinyllama: 'onnx-community/SmolLM2-135M-ONNX',
   webmodel: 'onnx-community/SmolLM2-135M-ONNX',
 };
 
-function resolveHFModelId(vantaosModelId: string): string {
-  return MODEL_ID_MAP[vantaosModelId] || vantaosModelId;
+export function resolveModelRepo(modelId: string): string {
+  return MODEL_ID_MAP[modelId] || modelId;
 }
 
-const MAX_RETRIES = 2;
-const RETRY_DELAY_MS = 2000;
+// ─── Model proxy (browser) ─────────────────────────────
 
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+// Only metadata / config / tokenizer files need the CORS relay. HuggingFace
+// serves model weight binaries with `Access-Control-Allow-Origin: *` (verified
+// against cdn-lfs.huggingface.co + huggingface.co resolve), so they can be
+// fetched directly from the browser — and routing them through the Worker
+// would blow past its ~100MB response-body limit (SmolLM2's onnx_data is 540MB).
+const MODEL_METADATA_EXTENSION_RE = /\.(json|txt|model|xml)$/i;
+
+export function proxyFetchOverride(
+  url: string | URL,
+  init?: RequestInit,
+): Promise<Response> | undefined {
+  const input = url instanceof URL ? url.toString() : url;
+  let parsed: URL;
+  try {
+    parsed = new URL(input);
+  } catch {
+    return undefined;
+  }
+  if (parsed.protocol !== 'https:') return undefined;
+  if (!MODEL_PROXY_ALLOWED_HOSTS.includes(parsed.hostname.toLowerCase())) return undefined;
+  if (!MODEL_METADATA_EXTENSION_RE.test(parsed.pathname.toLowerCase())) return undefined;
+  return fetch(`/api/model-proxy?url=${encodeURIComponent(input)}`, init);
+}
+
+function proxiedFetch(url: string | URL, init?: RequestInit): Promise<Response> {
+  const proxied = proxyFetchOverride(url, init);
+  return proxied ?? fetch(url, init);
+}
+
+const DOWNLOAD_FAILURE_MARKERS =
+  /error occurred while trying to load file|Unauthorized access to file|Forbidden access to file|Could not locate file|Failed to fetch|NetworkError|Fetch failed|Service unavailable|\b50[234]\b/i;
+
+function isDownloadFailure(err: unknown): boolean {
+  if (!(err instanceof Error)) return false;
+  return DOWNLOAD_FAILURE_MARKERS.test(err.message);
 }
 
 async function runInference(prompt: string, modelId: string, timeoutMs = INFERENCE_TIMEOUT_MS): Promise<string> {
   const transformers = await import('@huggingface/transformers');
   const { pipeline, env } = transformers;
 
+  // Route Hugging Face downloads through the same-origin model proxy in the browser.
+  if (typeof self !== 'undefined') {
+    env.fetch = proxiedFetch;
+  }
+  env.allowLocalModels = false;
+
   const runtime = detectRuntime();
   const device: 'webgpu' | 'wasm' = runtime.webgpu ? 'webgpu' : 'wasm';
 
-  const hfModelId = resolveHFModelId(modelId);
+  const hfModelId = resolveModelRepo(modelId);
 
-  let lastError: Error | null = null;
+  let timeoutId: ReturnType<typeof setTimeout>;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(
+      () => reject(new Error(`Inference timed out after ${timeoutMs / 1000}s`)),
+      timeoutMs,
+    );
+  });
 
-  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-    if (attempt > 0) {
-      await delay(RETRY_DELAY_MS * attempt);
-    }
-
-    let timeoutId: ReturnType<typeof setTimeout>;
-    const timeoutPromise = new Promise<never>((_, reject) => {
-      timeoutId = setTimeout(
-        () => reject(new Error(`Inference timed out after ${timeoutMs / 1000}s`)),
-        timeoutMs,
-      );
-    });
-
-    try {
-      const inferencePromise = (async () => {
-        env.allowLocalModels = false;
-        const generator = await pipeline('text-generation', hfModelId, { device });
-        const output = await generator(prompt, { max_new_tokens: 128, return_full_text: false });
-        if (Array.isArray(output) && output.length > 0 && output[0].generated_text) {
-          return output[0].generated_text;
-        }
-        throw new Error('Empty inference output');
-      })();
-
-      const result = await Promise.race([inferencePromise, timeoutPromise]);
-      clearTimeout(timeoutId);
-      return result;
-    } catch (err) {
-      clearTimeout(timeoutId);
-      lastError = err instanceof Error ? err : new Error(String(err));
-
-      const isNetworkError = lastError.message.includes('fetch') ||
-        lastError.message.includes('NetworkError') ||
-        lastError.message.includes('503') ||
-        lastError.message.includes('502') ||
-        lastError.message.includes('Service unavailable') ||
-        lastError.message.includes('Failed to fetch');
-
-      if (!isNetworkError || attempt === MAX_RETRIES) {
-        break;
+  try {
+    const inferencePromise = (async () => {
+      const generator = await pipeline('text-generation', hfModelId, { device });
+      const output = await generator(prompt, { max_new_tokens: 128, return_full_text: false });
+      if (Array.isArray(output) && output.length > 0 && output[0].generated_text) {
+        return output[0].generated_text;
       }
-    }
-  }
+      throw new Error('Empty inference output');
+    })();
 
-  const msg = lastError?.message || 'unknown error';
-  if (msg.includes('503') || msg.includes('Service unavailable') || msg.includes('Failed to fetch')) {
-    throw new Error(
-      'Hugging Face is temporarily unavailable. The model may be loading — try again in a moment, or switch to a cloud provider (Gemini, OpenRouter) in Settings.'
-    );
+    const result = await Promise.race([inferencePromise, timeoutPromise]);
+    clearTimeout(timeoutId);
+    return result;
+  } catch (err) {
+    clearTimeout(timeoutId);
+    const lastError = err instanceof Error ? err : new Error(String(err));
+
+    // Fail fast on download/transport failures — a retry would re-run the heavy pipeline.
+    if (isDownloadFailure(lastError)) {
+      throw new Error(
+        `The ${hfModelId} model failed to download. Models load from Hugging Face on first use — check your connection, or switch to a cloud provider (Gemini, OpenRouter) in Settings.`
+      );
+    }
+    if (lastError.message.includes('timed out')) {
+      throw new Error(
+        'Model loading timed out. The model may be large for your device — try a smaller model or switch to a cloud provider in Settings.'
+      );
+    }
+    throw new Error(`WebModel error: ${lastError.message}`);
   }
-  if (msg.includes('timed out')) {
-    throw new Error(
-      'Model loading timed out. The model may be large for your device — try a smaller model or switch to a cloud provider in Settings.'
-    );
-  }
-  throw new Error(`WebModel error: ${msg}`);
 }
 
 /**
@@ -594,7 +612,7 @@ export async function load(modelPath: string): Promise<RuntimeInstance> {
  * On any failure, falls back to a deterministic placeholder with a clear
  * message explaining why real inference was unavailable.
  *
- * Supported model IDs: gpt2, tinyllama (mapped to onnx-community/gpt-2
+ * Supported model IDs: gpt2, tinyllama (mapped to Xenova/gpt2
  * and onnx-community/SmolLM2-135M-ONNX respectively). Custom model IDs
  * are passed directly to Transformers.js.
  *
