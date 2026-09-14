@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { signGrant, verifyGrant, GRANT_TTL_SECONDS } from '../../workers/grants';
-import { hmacSha256, bytesToBase64Url } from '../../workers/crypto';
+import { signGrant, verifyGrant, GRANT_TTL_SECONDS } from '../../src/lib/server/grants';
+import { hmacSha256, bytesToBase64Url } from '../../src/lib/server/crypto';
 
 const SECRET = 'test-grant-secret';
 const UID = 'user-123';

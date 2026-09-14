@@ -9,20 +9,20 @@
 
 ## Current Architecture Snapshot
 
-VantaOS is a Next.js 15 **static export** served by a **Cloudflare Worker**, with **Firebase Realtime Database (RTDB)** as its data tier.
+VantaOS is a Next.js 15 **hybrid-rendered** app — static shell pages plus dynamic server-rendered API routes — served by a **Cloudflare Worker** built with OpenNext, with **Firebase Realtime Database (RTDB)** as its data tier.
 
 - Live URL: `https://website.vasudevaya.workers.dev`
-- Backend: a single Cloudflare Worker (`workers/worker.ts`) serves the static build and the REST API in Section 1.
+- Backend: an OpenNext worker (`open nextjs-cloudflare build` output in `.open-next/worker.js`) whose routes are the Next.js route handlers in `app/api/*` (implemented in `src/lib/server/*`), serving the statically prerendered pages plus the REST API in Section 1.
 - **Data tier = Firebase Realtime Database (RTDB), not Firestore.** The client module carrying a legacy name (`src/lib/firestore.ts`) exposes the RTDB data layer via `isFirestoreAvailable()` — a legacy alias. Nothing in the product writes application data to Firestore.
 - Security boundary: the client-only app has no application server authorizing reads/writes. The server-side authorization contract is the RTDB ruleset at `database.rules.json` (see Section 2).
 
-**Test / verification status (Sep 14, 2026):** Vitest **1049/1049** passing across **65 files**; Playwright **8 cases across 6 files**. CI runs lint, test, build, e2e, and an `npm audit` job (`--audit-level=high`; 0 vulnerabilities as of Sep 2026-09-14).
+**Test / verification status (Sep 14, 2026):** Vitest **1047/1047** passing across **65 files**; Playwright **9 cases across 7 files**. CI runs lint, test, build, e2e, and an `npm audit` job (`--audit-level=high`; 0 vulnerabilities as of Sep 2026-09-14).
 
 **API surfaces at a glance:**
 
 | Surface | Module / Endpoint | Status |
 |---|---|---|
-| Backend Worker API | `workers/worker.ts` · `/api/health` · `/api/ai/generate` · `/api/gh/*` | ✅ / ✅ / ⚠️ |
+| Backend API (route handlers) | `app/api/*` · `/api/health` · `/api/ai/generate` · `/api/gh/*` · `/api/ready` · `/api/plugins` · `/api/models` | ✅ / ✅ / ⚠️ |
 | Firebase Auth + RTDB | firebase ^12.19.0 · `src/lib/firestore.ts` · `src/lib/demoAuth.ts` | ✅ |
 | Workspace Files API | `src/lib/workspace/index.ts` · `src/lib/storage.ts` · `src/lib/workspace/export.ts` | ✅ |
 | Editor / Model / AI adapter layer | `src/lib/models/adapter.ts` · `src/lib/client.ts` · `src/lib/telemetry/index.ts` | ✅ |
@@ -44,46 +44,45 @@ VantaOS is a Next.js 15 **static export** served by a **Cloudflare Worker**, wit
 
 ---
 
-## 1. Backend Worker API
+## 1. Backend API
 
-**Module:** `workers/worker.ts` (a single Cloudflare Worker that serves the static export and the REST API).
+**Module:** OpenNext worker bundle (`app/api/*` route handlers; logic in `src/lib/server/*`). Deployed via `opennextjs-cloudflare build && opennextjs-cloudflare deploy`.
 
-**Purpose:** the Worker is the only backend in the deployment. It (a) serves the statically exported Next.js build at the edge, (b) exposes a health probe, (c) proxies cloud AI generation, and (d) hosts the GitHub OAuth proxy.
+**Purpose:** the worker is the only backend in the deployment. It (a) serves the Next.js hybrid build at the edge (static pages + on-demand route handlers), (b) exposes a health probe, (c) proxies cloud AI generation, and (d) hosts the GitHub OAuth proxy.
 
-### 1.1 GET/POST `/api/health` — status probe — ✅ verified
+### 1.1 GET `/api/health` — status probe — ✅ verified
 
 - **Purpose:** liveness/status probe.
-- **Request:** `GET` or `POST`; no authentication, no body required.
-- **Response:** `200` + JSON status document (exact fields defined in `workers/worker.ts`). Sufficient for uptime monitoring and load-balancer health checks.
-- **Errors:** standard HTTP errors surfaced by the Worker runtime on misrouting.
+- **Request:** `GET`; no authentication, no body required. (OpenNext serves route handlers per-method, so this endpoint is **not** served for `HEAD` — a `HEAD /api/health` returns 404 with an `x-opennext: 1` header. Monitoring should use `GET`.)
+- **Response:** `200` + JSON status document (`{ status, firebase, ai, github, drive }`; shape defined in `src/lib/server/api-router.ts`). `firebase.configured` reflects `NEXT_PUBLIC_FIREBASE_PROJECT_ID` presence; `status` is `ok` when Firebase is configured or IndexedDB is available, else `degraded`. Cache header: `Cache-Control: no-store`. Sufficient for uptime monitoring and load-balancer health checks.
+- **Errors:** standard HTTP errors surfaced by the worker runtime on misrouting.
 
 ### 1.2 POST `/api/ai/generate` — cloud AI proxy — ✅ verified
 
 - **Purpose:** forwards a model request from the browser client to an external provider. Body carries `provider` / `model` / `prompt`. This is the cloud fallback path when the on-device WebModel adapter (§4) is unsuitable or absent, and it backs the `gemini` provider registry entry.
-- **Request (JSON):** `{ provider?, model, prompt, ... }` — field set as defined in `workers/worker.ts`.
-- **Response (JSON):** generated text; exact shape defined in `workers/worker.ts`.
-- **Auth:** gated on the `GEMINI_API_KEY` environment variable being set at deploy time. Without it, the endpoint is not served.
-- **Rate limit:** **100 requests per 60-second window per client** (`RATE_LIMIT = 100`, 60 s window; enforced via the `rateLimitCheck` / `rateLimitStore` exports of `workers/worker.ts`). Exceeding the window is rejected at the worker boundary.
+- **Request (JSON):** `{ provider?, model, prompt, ... }` — field set as defined in `src/lib/server/api-router.ts`.
+- **Response (JSON):** generated text; exact shape defined in `src/lib/server/api-router.ts`.
+- **Auth:** gated on the `GEMINI_API_KEY` secret being set at deploy time. Without it, the endpoint returns an auth error.
+- **Rate limit:** **100 requests per 60-second window per client** (`RATE_LIMIT = 100`, 60 s window; enforced via the rate-limit logic in `src/lib/server/rate-limit.ts`). Exceeding the window is rejected at the worker boundary.
 
 ### 1.3 `/api/gh/*` — GitHub OAuth proxy — ⚠️ present-but-not-enabled
 
 - **Purpose:** server-side OAuth handoff for GitHub. Operations: OAuth redirect, authorization-code → access-token exchange, and repository import. The `GitHubManager` push flow (§6) uses GitHub blob/tree/commit/ref REST calls with a **200-blob UI cap**.
-- **Auth model:** guarded by `GH_GRANT_SECRET` plus `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET`, with issued tokens held in the `GH_TOKENS` KV namespace (`KvLike`). At the token-verification boundary, `verifyFirebaseIdToken` (Firebase ID tokens) and `verifyGrant` (grant checks) are used.
+- **Auth model:** guarded by `GH_GRANT_SECRET` plus `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET`. At the token-verification boundary, `verifyFirebaseIdToken` (Firebase ID tokens) and `verifyGrant` (grant checks) are used. **There is no KV namespace binding**: OAuth-token storage is absent by design, so the grant flow fails closed unless a token store is provisioned.
 - **Presence guard ⚠️:** these secrets are **unset in the production deployment**, so this route group is not active in production. Treat it as present-but-not-enabled until the environment is provisioned; do not document it as a live feature.
 
-### 1.4 Environment variables (`Env` interface)
+### 1.4 Environment variables
 
 | Variable | Required | Purpose |
 |---|---|---|
-| `GEMINI_API_KEY` | conditionally | Gates `/api/ai/generate` |
+| `GEMINI_API_KEY` | conditionally | Gates `/api/ai/generate` (stored as a Worker secret) |
 | `GITHUB_CLIENT_ID` | no (prod: unset) | OAuth client for the `/api/gh/*` proxy |
 | `GITHUB_CLIENT_SECRET` | no (prod: unset) | OAuth secret for the `/api/gh/*` proxy |
 | `GH_GRANT_SECRET` | no (prod: unset) | Guards the GitHub grant flow |
-| `GH_TOKENS` (`KvLike`) | no (prod: unset) | KV namespace holding OAuth tokens |
 | `APP_ORIGIN` | no | Expected request origin for the API |
-| `NEXT_PUBLIC_FIREBASE_*` | passthrough | Firebase configuration forwarded to the client build |
+| `NEXT_PUBLIC_FIREBASE_*` | [vars] | Firebase configuration available to the server; the client build consumes `NEXT_PUBLIC_FIREBASE_*` from the local build env |
 
-**Errors / rate limits summary:** non-`/api/*` paths serve the static export; `/api/ai/generate` is rate-limited at 100 req/60 s/client; `/api/gh/*` is inert until env-provided.
+**Errors / rate limits summary:** non-`/api/*` paths serve the hybrid app (static pages + on-demand routes); `/api/ai/generate` is rate-limited at 100 req/60 s/client; `/api/gh/*` is inert until env-provided.
 
 ---
 
@@ -274,7 +273,7 @@ Re-verified on **2026-09-13**; current as of **2026-09-14**.
 
 | Surface | Module / endpoint | Verified basis | Status |
 |---|---|---|---|
-| Backend Worker API | `workers/worker.ts` | Source read; env gates confirmed | ✅ (health, ai/generate) · ⚠️ (`/api/gh/*` — secrets unset in prod) |
+| Backend API | `app/api/*` routes · `src/lib/server/*` | Source read + live edge smoke (deployment `1a381352-…`) | ✅ (health, ready, ai/generate) · ⚠️ (`/api/gh/*` — secrets unset in prod) |
 | Firebase Auth + RTDB | firebase ^12.19.0 · `src/lib/firestore.ts` · `src/lib/demoAuth.ts` · `database.rules.json` | Source read + e2e suites | ✅ |
 | Workspace Files API | `src/lib/workspace/index.ts` (re-verified exports) · `operations.ts` · `export.ts` · `storage.ts` | Source read + Vitest | ✅ (multi-device sync is 🎯) |
 | Editor / Model / AI | `src/lib/models/adapter.ts` · `src/lib/client.ts` · `src/lib/telemetry/index.ts` | Source read + Vitest | ✅ |
@@ -282,7 +281,7 @@ Re-verified on **2026-09-13**; current as of **2026-09-14**.
 | GitHub | `src/lib/github.ts` (≈lines 163–189) · `/api/gh/*` | Source read + unit tests | ⚠️ proxy not enabled in prod |
 | Terminal Sandbox | `src/lib/terminal/runner.ts` | Source read + Vitest | ✅ |
 
-**Suite counts:** Vitest 1049/1049 across 65 files; Playwright 8 cases across 6 files; CI covers lint / test / build / e2e / npm audit (0 vulnerabilities as of Sep 2026-09-14).
+**Suite counts:** Vitest 1047/1047 across 65 files; Playwright 9 cases across 7 files; CI covers lint / test / build / e2e / npm audit (0 vulnerabilities as of Sep 2026-09-14).
 
 **Referencing discipline:** `file:line` pairs appear in this document only where cited above (drive OAuth scopes, GitHub token helpers); all other references are module-level.
 

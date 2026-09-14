@@ -9,8 +9,8 @@ import {
   OAuthCallbackError,
   type KvLike,
   type GitHubEnvLike,
-} from '../../workers/github-proxy';
-import { verifyGrant } from '../../workers/grants';
+} from '../../src/lib/server/github-proxy';
+import { verifyGrant } from '../../src/lib/server/grants';
 
 const SECRET = 'test-grant-secret';
 const UID = 'firebase-uid-1';

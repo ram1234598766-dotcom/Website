@@ -1,17 +1,17 @@
 # VantaOS Roadmap
 
-> **Status:** 9/9 development phases complete and tested — Vitest 1049/1049 passing across 65 files, 8 Playwright E2E cases across 6 files, CI green; last verified 2026-09-14.
+> **Status:** 9/9 development phases complete and tested — Vitest 1047/1047 passing across 65 files, 9 Playwright E2E cases across 7 files, CI green; last verified 2026-09-14.
 
 ## Purpose / How to read this doc
 
-VantaOS is a browser-based cloud OS / developer workspace: a cloud OS workspace with file manager, a CodeMirror 6 editor and xterm.js terminal, Omni-AI chat, Google Drive and GitHub sync, a forum with admin, and a plugin system. It ships as a **Next.js 15 static export** served by a single **Cloudflare Worker**, backed by **Firebase Realtime Database (RTDB)** as the data tier, with IndexedDB for local persistence and offline tolerance. Live URL: https://website.vasudevaya.workers.dev.
+VantaOS is a browser-based cloud OS / developer workspace: a cloud OS workspace with file manager, a CodeMirror 6 editor and xterm.js terminal, Omni-AI chat, Google Drive and GitHub sync, a forum with admin, and a plugin system. It ships as a **Next.js 15 hybrid-rendered app** (static pages + dynamic API routes) served by a **Cloudflare Worker** via OpenNext, backed by **Firebase Realtime Database (RTDB)** as the data tier, with IndexedDB for local persistence and offline tolerance. Live URL: https://website.vasudevaya.workers.dev.
 
 This document records what is implemented and tested, ordered by the 9 development phases. It follows two rules: no phase is marked complete from a README claim alone — every row cites the named test suite and CI job that prove it — and the status legend below distinguishes implemented-and-tested from present-but-not-enabled. All status claims are dated 2026-09-14.
 
 **Data-tier and deploy notes:**
 
 - The data tier is Firebase **Realtime Database (RTDB)**, not Firestore. The `npm run firebase:deploy` script in `package.json` still targets `firestore.rules` / `firestore.indexes` and is **STALE**; the correct rules deploy is `firebase deploy --only database`. Flagged, not yet corrected.
-- Deployment is one Cloudflare Worker unit (static `out/` + Worker) via `wrangler deploy`; rollback via `wrangler rollback`. E2E's `webServer` serves `out/`, so build-first is required.
+- Deployment is one OpenNext Cloudflare Worker unit (`.open-next/worker.js` + `.open-next/assets`) via `npm run deploy` (`opennextjs-cloudflare build && opennextjs-cloudflare deploy`); rollback via `npx wrangler rollback [version-id]`. E2E's `webServer` builds and runs the app (`npm run build && npx next start -p 4173`), so build-first is required.
 
 ## Phase history
 
@@ -25,7 +25,7 @@ This document records what is implemented and tested, ordered by the 9 developme
 | 6 | Collaboration | Multi-device convergence and conflict preservation; recovery after long disconnects; bounded reconnect storms; forum + admin backed by RTDB | Vitest `tests/phase6` (7 files) | ✅ |
 | 7 | Data Layer | Signed model manifests; resumable shard downloads with SSRF protection, SHA-256 digest verification, and atomic install; device-capability detection | Vitest `tests/phase4/models.test.ts`; `tests/phase-schema` suites | ✅ |
 | 8 | Services | `/api/health` reflecting real Firebase + IndexedDB status; 6 SLOs with p95 targets; 4 incident runbooks; Sentry/LogRocket telemetry; plugins + models API | Vitest `tests/phase-schema`; telemetry / sentry / logrocket audit suites | ✅ |
-| 9 | Application Layer | Full Next.js 15 static-export app shell; plugin registry/manifest/loader; GitHub import/push via Worker OAuth proxy (GUI ships but is env-guarded — see legend); PWA + responsive | Vitest `tests/phase9` (plugin, manifest, edge, operations, model-adapter); Playwright `tests/e2e/flows` (auth 2, terminal 2, files 1, home 1, ide 1, omni-ai 1) | ✅ |
+| 9 | Application Layer | Next.js 15 hybrid app shell (static `/` + server-rendered `/api/*`); plugin registry/manifest/loader; GitHub import/push via Worker OAuth proxy (GUI ships but is env-guarded — see legend); PWA + responsive | Vitest `tests/phase9` (plugin, manifest, edge, operations, model-adapter); Playwright `tests/e2e/flows` (auth 2, terminal 2, files 1, home 1, ide 1, ide-run 1, omni-ai 1) | ✅ |
 
 Every phase above also lands in CI: `.github/workflows/ci.yml` runs lint (`tsc --noEmit`), test (Vitest), build (`next build`), and e2e (Playwright) on push and PR, plus a dedicated `npm audit` job (`npm audit --audit-level=high`; 0 vulnerabilities as of Sep 2026-09-14).
 
@@ -40,7 +40,7 @@ Every phase above also lands in CI: `.github/workflows/ci.yml` runs lint (`tsc -
 | Tier | Items |
 |---|---|
 | ✅ Implemented and tested | Core workspace + file manager (oplog, conflict resolution, IndexedDB v3); CodeMirror 6 editor (15 languages) + diff editor; xterm.js terminal with sandboxed Web Worker runner; Omni-AI chat (cloud providers + local Ollama); Firebase Google/GitHub sign-in (wired to project `website-6e8b1`, consent-screen smoke-verified); forum + admin on RTDB; Google Drive sync (`drive.readonly` / `drive.file`); IndexedDB local persistence with authenticated HLC sync; plugin system; health API + 6 SLOs + 4 incident runbooks; Sentry/LogRocket telemetry; demo auth fallback gated by `isFirebaseConfigured`; PWA + responsive |
-| ⚠️ Implemented but not enabled | GitHub OAuth proxy in production — the Worker (`workers/github-proxy.ts`, `workers/grants.ts`) and the GUI path ship, but are env-guarded: `GH_GRANT_SECRET` and `GITHUB_CLIENT_ID`/`GITHUB_CLIENT_SECRET` are unset, so the path is not active on the live Worker |
+| ⚠️ Implemented but not enabled | GitHub OAuth proxy in production — the API path (`app/api/gh/[...rest]`, implemented in `src/lib/server/github-proxy.ts` / `grants.ts`) and the GUI path ship, but are env-guarded: `GH_GRANT_SECRET` and `GITHUB_CLIENT_ID`/`GITHUB_CLIENT_SECRET` are unset, so the path is not active on the live Worker (no KV token store either — fails closed) |
 | 🎯 Backlog / next work | Live GitHub-OAuth enablement in prod (set the three secrets + add an E2E for the proxy); AI provider quota/billing; any non-LAN federation / rendezvous so two deployments can sync |
 
 ## Backlog / next milestones

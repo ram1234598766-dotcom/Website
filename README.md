@@ -2,7 +2,7 @@
 
 **The intelligent developer cloud.** Write, build, and deploy full-stack applications entirely in the browser.
 
-VantaOS (`vantaos` v2.0.0, private) is a Cloud OS web app: a browser-based workspace that ships with a file manager, a CodeMirror 6 editor spanning 15 languages, a diff editor, an xterm.js terminal, an Omni-AI chat assistant, Google Drive sync, GitHub import/push, and a Firebase forum with an admin panel. It's built as a static Next.js 15 export served by a single Cloudflare Worker, with Firebase Realtime Database as its data tier. It's for developers who want a zero-config cloud workspace that starts offline-friendly in demo mode and can also run an in-browser WebModel (Transformers.js on WebGPU/WASM) with no external service.
+VantaOS (`vantaos` v2.0.0, private) is a Cloud OS web app: a browser-based workspace that ships with a file manager, a CodeMirror 6 editor spanning 15 languages, a diff editor, an xterm.js terminal, an Omni-AI chat assistant, Google Drive sync, GitHub import/push, and a Firebase forum with an admin panel. It's built as a Next.js 15 **hybrid-rendered** app — a static `/` shell plus server-rendered API routes — served by a single Cloudflare Worker via OpenNext, with Firebase Realtime Database as its data tier. It's for developers who want a zero-config cloud workspace that starts offline-friendly in demo mode and can also run an in-browser WebModel (Transformers.js on WebGPU/WASM) with no external service.
 
 ---
 
@@ -38,15 +38,16 @@ Client (browser) — file manager, CodeMirror 6 (15 languages), diff editor,
 xterm.js terminal, Omni-AI, forum/admin
    │
    ▼
-Next.js 15 static app (React 19, TypeScript ~5.8.2, Tailwind v4) → out/ via next build
-   │
-   ├───────────────────────────────────────────────────────────────┐
-   ▼                                                               ▼
-Cloudflare Worker (workers/worker.ts)                         Firebase Realtime Database
-serves the static bundle and proxies                           (profiles/, threads/, replies/,
-/api/health, /api/ai/generate, /api/gh/*                      upvotes/ — streamed via onValue)
+Next.js 15 hybrid app (React 19, TypeScript ~5.8.2, Tailwind v4) → app/ routes
+   │  static: /, /api/models, /robots.txt, /sitemap.xml
+   │  dynamic (ƒ): /api/health, /api/ai/generate, /api/gh/*, /api/ready, ...
+   ▼
+OpenNext worker (.open-next/worker.js — app/api/* route handlers)
+serves the app shell, static assets, and the API routes
 (rate-limited: 100 req/60s)
    │
+   ├── Firebase Realtime Database
+   │    (profiles/, threads/, replies/, upvotes/ — streamed via onValue)
    ├── Google OAuth · GitHub OAuth (Firebase project "website-6e8b1";
    │    Worker GitHub OAuth proxy opt-in, not enabled in production)
    └── In-browser WebModel (Transformers.js, WebGPU/WASM) — on-device model manager
@@ -77,11 +78,11 @@ Open the printed localhost URL. Every `NEXT_PUBLIC_FIREBASE_*` variable is optio
 | Command | What it does |
 |---------|--------------|
 | `npm run dev` | Start the dev server (`next dev`) |
-| `npm run build` | Production build → static export in `out/` (`next build`) |
+| `npm run build` | Production build → `.next/` + OpenNext worker bundle in `.open-next/` |
 | `npm run lint` | Type-check without emitting (`tsc --noEmit`) |
-| `npm test` | Run the Vitest suite — 1049/1049 tests across 65 files |
-| `npm run deploy` | `npm run build && npx wrangler deploy` — one Worker unit with assets |
-| `npm run cf-preview` | Preview the Worker with the static bundle locally |
+| `npm test` | Run the Vitest suite — 1047/1047 tests across 65 files |
+| `npm run deploy` | `opennextjs-cloudflare build && opennextjs-cloudflare deploy` — one Worker unit (worker + assets) |
+| `npm run cf-preview` | Build, then preview the OpenNext worker locally via `wrangler dev` |
 
 **Stale script:** `firebase:deploy` (package.json line 15) is outdated — it still targets `firestore:rules/indexes`. RTDB is the live data tier; deploy its rules with `firebase deploy --only database` instead.
 
@@ -89,8 +90,8 @@ Open the printed localhost URL. Every `NEXT_PUBLIC_FIREBASE_*` variable is optio
 
 ## Testing
 
-- **Unit/integration** — `npm test` runs Vitest: 1049/1049 tests passing across 65 files (Sep 14, 2026).
-- **E2E** — Playwright: 8 `test()` cases across 6 files in `tests/e2e/flows` (auth 2, terminal 2, files 1, home 1, ide 1, omni-ai 1), run with `npx playwright test --config=tests/e2e/playwright.config.ts`; the config's webServer serves the static `out/` build.
+- **Unit/integration** — `npm test` runs Vitest: 1047/1047 tests passing across 65 files (Sep 14, 2026).
+- **E2E** — Playwright: 9 `test()` cases across 7 files in `tests/e2e/flows` (auth 2, terminal 2, files 1, home 1, ide 1, ide-run 1, omni-ai 1), run with `npx playwright test --config=tests/e2e/playwright.config.ts`; the config's webServer builds and serves the hybrid app (`npm run build && npx next start -p 4173`).
 - **CI** (`.github/workflows/ci.yml`) — on push/PR with Node 22: `npm ci`, lint (`tsc --noEmit`), unit tests (`vitest run`, excluding `tests/e2e/**`), build (`next build`), Playwright E2E, and an **`npm audit` job** (`npm audit --audit-level=high`; 0 vulnerabilities as of Sep 14, 2026).
 
 ---
@@ -98,13 +99,12 @@ Open the printed localhost URL. Every `NEXT_PUBLIC_FIREBASE_*` variable is optio
 ## Deployment
 
 ```bash
-npm run build          # next build → static export in out/
-npx wrangler deploy    # single Cloudflare Worker unit: Worker code + static assets
+npm run deploy           # opennextjs-cloudflare build && deploy → single Worker + assets
 ```
 
-- **Live URL:** https://website.vasudevaya.workers.dev (current Worker version `f7532256`).
-- The Worker (`workers/worker.ts`) serves the static bundle and the API routes `/api/health`, `/api/ai/generate`, and `/api/gh/*`.
-- **Rollback:** revert to a previous version with `npx wrangler rollback`.
+- **Live URL:** https://website.vasudevaya.workers.dev (current deployment `1a381352-e1f4-4de6-b2b0-4e4b6ecb4726`).
+- The OpenNext worker (built from the `app/api/*` route handlers in `src/lib/server/*`) serves the app shell, static assets, and the `/api/*` routes.
+- **Rollback:** revert to a previous version with `npx wrangler rollback [version-id]`.
 - **RTDB rules:** deploy separately with `firebase deploy --only database`.
 
 ---
@@ -112,11 +112,11 @@ npx wrangler deploy    # single Cloudflare Worker unit: Worker code + static ass
 ## Security
 
 - Keys are environment-only: `GEMINI_API_KEY`, `GITHUB_CLIENT_ID`/`GITHUB_CLIENT_SECRET`, and `GH_GRANT_SECRET` live in the Worker's env and are never printed or logged.
-- The Worker's `/api/gh/*` GitHub OAuth proxy is guarded by `GH_GRANT_SECRET` and `GitHubOAuthService`, and is presence-gated (secret unset = disabled). It is not enabled in production — an optional, opt-in surface.
+- The `/api/gh/*` GitHub OAuth proxy is guarded by `GH_GRANT_SECRET` and `GitHubOAuthService`, and is presence-gated (secret unset = disabled). It is not enabled in production — an optional, opt-in surface. There is no KV namespace: OAuth-token storage is absent by design, so the grant flow fails closed if the required secrets/token store are not provisioned.
 - API routes are rate-limited to 100 requests / 60 s.
 - All rendered HTML sourced from users is sanitized with DOMPurify.
 - The terminal executes code in a sandboxed Web Worker (`SandboxRunner`, `new Function`), never on the page thread.
-- `GH_TOKENS` (Workers KV) holds OAuth tokens for the GitHub proxy; demo mode keeps accounts local until Firebase is configured.
+- GitHub OAuth token storage is **not implemented** (no KV binding; `GH_TOKENS` is undefined at runtime, so the grant path fails closed). Demo mode keeps accounts local until Firebase is configured.
 
 ---
 

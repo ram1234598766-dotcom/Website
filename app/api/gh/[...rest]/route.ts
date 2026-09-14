@@ -7,6 +7,18 @@ export async function GET(request: Request): Promise<Response> {
   return handleApiRequest(request, serverEnv());
 }
 
+export async function POST(request: Request): Promise<Response> {
+  return handleApiRequest(request, serverEnv());
+}
+
+export async function PATCH(request: Request): Promise<Response> {
+  return handleApiRequest(request, serverEnv());
+}
+
+export async function DELETE(request: Request): Promise<Response> {
+  return handleApiRequest(request, serverEnv());
+}
+
 export async function OPTIONS(request: Request): Promise<Response> {
   return handleApiRequest(request, serverEnv());
 }

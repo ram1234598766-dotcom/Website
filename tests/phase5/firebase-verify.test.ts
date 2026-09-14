@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterEach, vi } from 'vitest';
-import { verifyFirebaseIdToken, parseMaxAge } from '../../workers/firebase-verify';
+import { verifyFirebaseIdToken, parseMaxAge } from '../../src/lib/server/firebase-verify';
 
 const PROJECT_ID = 'test-project-123';
 const JWT_URL = 'https://jwks.invalid/keys';

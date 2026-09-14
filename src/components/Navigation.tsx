@@ -1,6 +1,7 @@
 import { ViewState } from '../types';
 import { Menu, X, Code2, BrainCircuit, ShieldAlert, UserPlus, LogIn, LogOut, Cpu, Puzzle } from 'lucide-react';
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import Logo from './Logo';
 
 interface NavigationProps {
@@ -65,21 +66,34 @@ export default function Navigation({ currentView, setCurrentView, userEmail, isS
         
         {/* Desktop Nav */}
         <div className="hidden lg:flex gap-1 items-center overflow-x-auto overflow-y-auto whitespace-nowrap scroll-smooth max-w-[50vw] px-2" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none', scrollBehavior: 'smooth' }}>
-          {navItems.map((item) => (
-            <button
-              key={item.view}
-              onClick={() => handleNavClick(item.view)}
-              aria-current={currentView === item.view ? 'page' : undefined}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors shrink-0 ${
-                currentView === item.view
-                  ? 'bg-indigo-500/20 text-indigo-300'
-                  : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
-              }`}
-            >
-              {item.icon}
-              {item.label}
-            </button>
-          ))}
+          {navItems.map((item) => {
+            const isActive = currentView === item.view;
+            return (
+              <button
+                key={item.view}
+                onClick={() => handleNavClick(item.view)}
+                aria-current={isActive ? 'page' : undefined}
+                className={`relative flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors shrink-0 ${
+                  isActive
+                    ? 'text-indigo-300'
+                    : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
+                }`}
+              >
+                {isActive && (
+                  <motion.span
+                    layoutId="nav-active-pill"
+                    className="absolute inset-0 rounded-md bg-indigo-500/20"
+                    transition={{ type: 'spring', stiffness: 420, damping: 34 }}
+                    aria-hidden
+                  />
+                )}
+                <span className="relative z-10 flex items-center gap-2">
+                  {item.icon}
+                  {item.label}
+                </span>
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -131,8 +145,15 @@ export default function Navigation({ currentView, setCurrentView, userEmail, isS
       </div>
 
       {/* Mobile Nav Dropdown */}
-      {mobileMenuOpen && (
-        <div id="mobile-nav-menu" className="absolute top-16 left-0 right-0 bg-[#0a0a0c]/95 backdrop-blur-xl border-b border-white/10 shadow-2xl lg:hidden flex flex-col p-4 gap-2 max-h-[calc(100vh-4rem)] overflow-y-auto overscroll-contain scroll-smooth z-50" style={{ scrollBehavior: 'smooth' }}>
+      <AnimatePresence>
+        {mobileMenuOpen && (
+          <motion.div
+            id="mobile-nav-menu"
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+            className="absolute top-16 left-0 right-0 bg-[#0a0a0c]/95 backdrop-blur-xl border-b border-white/10 shadow-2xl lg:hidden flex flex-col p-4 gap-2 max-h-[calc(100vh-4rem)] overflow-y-auto overscroll-contain scroll-smooth z-50" style={{ scrollBehavior: 'smooth' }}>
           {navItems.map((item) => (
             <button
               key={item.view}
@@ -182,8 +203,9 @@ export default function Navigation({ currentView, setCurrentView, userEmail, isS
               </button>
             </>
           )}
-        </div>
-      )}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </nav>
   );
 }

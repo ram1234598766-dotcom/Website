@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
+import { describe, expect, it, vi, beforeAll, beforeEach, afterEach } from 'vitest';
 
 /**
  * Phase 8 — Health check endpoint tests.
@@ -6,7 +6,7 @@ import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
  * Verifies that GET /api/health returns:
  *   - HTTP 200
  *   - JSON with status, timestamp, services
- *   - Firebase config status
+ *   - Firebase config status (driven by NEXT_PUBLIC_FIREBASE_PROJECT_ID)
  *   - IndexedDB availability
  *   - No secrets in the response body
  */
@@ -21,7 +21,7 @@ async function importRoute() {
 
 async function getHealth(): Promise<{ status: number; body: any }> {
   const { GET } = await importRoute();
-  const res = await GET();
+  const res = await GET(new Request('https://example.com/api/health'));
   const text = await res.text();
   const body = JSON.parse(text);
   return { status: res.status, body };
@@ -36,17 +36,21 @@ function ok(status: number): void {
 /* ------------------------------------------------------------------ */
 
 describe('GET /api/health', () => {
+  beforeAll(async () => {
+    // Pre-warm the route + api-router module graph (one-time transform cost
+    // can exceed the default test timeout on first import).
+    await importRoute();
+  }, 30_000);
+
   afterEach(() => {
     vi.unstubAllGlobals();
-    vi.restoreAllMocks();
+    vi.unstubAllEnvs();
   });
 
   it('returns 200 with a JSON body containing status, timestamp, and services', async () => {
     vi.resetModules();
     vi.stubGlobal('indexedDB', undefined);
-    vi.doMock('@/src/lib/env', () => ({
-      isFirebaseConfigured: () => false,
-    }));
+    vi.stubEnv('NEXT_PUBLIC_FIREBASE_PROJECT_ID', '');
 
     const { status, body } = await getHealth();
     ok(status);
@@ -60,9 +64,7 @@ describe('GET /api/health', () => {
   it('includes a valid ISO-8601 timestamp', async () => {
     vi.resetModules();
     vi.stubGlobal('indexedDB', undefined);
-    vi.doMock('@/src/lib/env', () => ({
-      isFirebaseConfigured: () => false,
-    }));
+    vi.stubEnv('NEXT_PUBLIC_FIREBASE_PROJECT_ID', '');
 
     const { body } = await getHealth();
     expect(() => new Date(body.timestamp)).not.toThrow();
@@ -72,9 +74,7 @@ describe('GET /api/health', () => {
   it('reports degraded status when neither firebase nor indexeddb are available', async () => {
     vi.resetModules();
     vi.stubGlobal('indexedDB', undefined);
-    vi.doMock('@/src/lib/env', () => ({
-      isFirebaseConfigured: () => false,
-    }));
+    vi.stubEnv('NEXT_PUBLIC_FIREBASE_PROJECT_ID', '');
 
     const { body } = await getHealth();
     expect(body.services.firebase.configured).toBe(false);
@@ -85,9 +85,7 @@ describe('GET /api/health', () => {
   it('reports firebase configured: false when not configured', async () => {
     vi.resetModules();
     vi.stubGlobal('indexedDB', undefined);
-    vi.doMock('@/src/lib/env', () => ({
-      isFirebaseConfigured: () => false,
-    }));
+    vi.stubEnv('NEXT_PUBLIC_FIREBASE_PROJECT_ID', '');
 
     const { body } = await getHealth();
     expect(body.services.firebase.configured).toBe(false);
@@ -96,9 +94,7 @@ describe('GET /api/health', () => {
   it('reports firebase configured: true when env vars are present', async () => {
     vi.resetModules();
     vi.stubGlobal('indexedDB', undefined);
-    vi.doMock('@/src/lib/env', () => ({
-      isFirebaseConfigured: () => true,
-    }));
+    vi.stubEnv('NEXT_PUBLIC_FIREBASE_PROJECT_ID', 'test-project');
 
     const { body } = await getHealth();
     expect(body.services.firebase.configured).toBe(true);
@@ -107,9 +103,7 @@ describe('GET /api/health', () => {
   it('reports indexeddb available: true when IDB is supported', async () => {
     vi.resetModules();
     vi.stubGlobal('indexedDB', { open: () => ({}) } as any);
-    vi.doMock('@/src/lib/env', () => ({
-      isFirebaseConfigured: () => false,
-    }));
+    vi.stubEnv('NEXT_PUBLIC_FIREBASE_PROJECT_ID', '');
 
     const { body } = await getHealth();
     expect(body.services.indexeddb.available).toBe(true);
@@ -118,9 +112,7 @@ describe('GET /api/health', () => {
   it('reports indexeddb available: false when IDB is unavailable', async () => {
     vi.resetModules();
     vi.stubGlobal('indexedDB', undefined);
-    vi.doMock('@/src/lib/env', () => ({
-      isFirebaseConfigured: () => false,
-    }));
+    vi.stubEnv('NEXT_PUBLIC_FIREBASE_PROJECT_ID', '');
 
     const { body } = await getHealth();
     expect(body.services.indexeddb.available).toBe(false);
@@ -130,9 +122,7 @@ describe('GET /api/health', () => {
   it('returns ok when firebase is configured but indexeddb is unavailable', async () => {
     vi.resetModules();
     vi.stubGlobal('indexedDB', undefined);
-    vi.doMock('@/src/lib/env', () => ({
-      isFirebaseConfigured: () => true,
-    }));
+    vi.stubEnv('NEXT_PUBLIC_FIREBASE_PROJECT_ID', 'test-project');
 
     const { body } = await getHealth();
     expect(body.services.firebase.configured).toBe(true);
@@ -144,9 +134,7 @@ describe('GET /api/health', () => {
   it('returns ok when firebase is unavailable but indexeddb is available', async () => {
     vi.resetModules();
     vi.stubGlobal('indexedDB', { open: () => ({}) } as any);
-    vi.doMock('@/src/lib/env', () => ({
-      isFirebaseConfigured: () => false,
-    }));
+    vi.stubEnv('NEXT_PUBLIC_FIREBASE_PROJECT_ID', '');
 
     const { body } = await getHealth();
     expect(body.services.firebase.configured).toBe(false);
@@ -158,9 +146,8 @@ describe('GET /api/health', () => {
     const fakeKey = 'AIzaSyD-very-secret-api-key-12345';
     vi.resetModules();
     vi.stubGlobal('indexedDB', { open: () => ({}) } as any);
-    vi.doMock('@/src/lib/env', () => ({
-      isFirebaseConfigured: () => true,
-    }));
+    vi.stubEnv('NEXT_PUBLIC_FIREBASE_PROJECT_ID', 'test-project');
+    vi.stubEnv('NEXT_PUBLIC_FIREBASE_API_KEY', fakeKey);
 
     const { status, body } = await getHealth();
     ok(status);
@@ -172,12 +159,10 @@ describe('GET /api/health', () => {
   it('sets cache-control: no-store on the response', async () => {
     vi.resetModules();
     vi.stubGlobal('indexedDB', undefined);
-    vi.doMock('@/src/lib/env', () => ({
-      isFirebaseConfigured: () => false,
-    }));
+    vi.stubEnv('NEXT_PUBLIC_FIREBASE_PROJECT_ID', '');
 
     const { GET } = await importRoute();
-    const res = await GET();
+    const res = await GET(new Request('https://example.com/api/health'));
     const cc = res.headers.get('cache-control') || '';
     expect(cc).toContain('no-store');
   });

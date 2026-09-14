@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import worker, { rateLimitCheck, rateLimitStore } from '../../workers/worker';
+import { handleApiRequest, rateLimitCheck, rateLimitStore } from '../../src/lib/server/api-router';
 
 const env: Record<string, string | undefined> = {};
 
@@ -20,7 +20,7 @@ afterEach(() => {
 describe('GET /api/health', () => {
   it('returns status ok with ISO timestamp', async () => {
     const req = mockRequest('https://example.com/api/health');
-    const res = await worker.fetch(req, env);
+    const res = await handleApiRequest(req, env);
     expect(res.status).toBe(200);
     const body = (await res.json()) as Record<string, unknown>;
     expect(['ok', 'degraded']).toContain(body.status);
@@ -30,7 +30,7 @@ describe('GET /api/health', () => {
 
   it('returns services with ai, github, drive all ok', async () => {
     const req = mockRequest('https://example.com/api/health');
-    const res = await worker.fetch(req, env);
+    const res = await handleApiRequest(req, env);
     const body = (await res.json()) as Record<string, unknown>;
     const services = body.services as Record<string, unknown>;
     expect(services.ai).toBe('ok');
@@ -40,7 +40,7 @@ describe('GET /api/health', () => {
 
   it('has exactly the expected top-level keys', async () => {
     const req = mockRequest('https://example.com/api/health');
-    const res = await worker.fetch(req, env);
+    const res = await handleApiRequest(req, env);
     const body = (await res.json()) as Record<string, unknown>;
     expect(Object.keys(body).sort()).toEqual(['services', 'status', 'timestamp']);
   });
@@ -51,7 +51,7 @@ describe('GET /api/health', () => {
 describe('GET /api/ready', () => {
   it('returns { ready: true }', async () => {
     const req = mockRequest('https://example.com/api/ready');
-    const res = await worker.fetch(req, env);
+    const res = await handleApiRequest(req, env);
     expect(res.status).toBe(200);
     const body = (await res.json()) as Record<string, unknown>;
     expect(body.ready).toBe(true);
@@ -59,7 +59,7 @@ describe('GET /api/ready', () => {
 
   it('has no extra fields', async () => {
     const req = mockRequest('https://example.com/api/ready');
-    const res = await worker.fetch(req, env);
+    const res = await handleApiRequest(req, env);
     const body = (await res.json()) as Record<string, unknown>;
     expect(Object.keys(body)).toEqual(['ready']);
   });
@@ -74,7 +74,7 @@ describe('POST /api/rate-limit-check', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ key: 'user-1' }),
     });
-    const res = await worker.fetch(req, env);
+    const res = await handleApiRequest(req, env);
     expect(res.status).toBe(200);
     const body = (await res.json()) as Record<string, unknown>;
     expect(body.allowed).toBe(true);
@@ -91,14 +91,14 @@ describe('POST /api/rate-limit-check', () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ key }),
       });
-      await worker.fetch(req, env);
+      await handleApiRequest(req, env);
     }
     const req = mockRequest('https://example.com/api/rate-limit-check', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ key }),
     });
-    const res = await worker.fetch(req, env);
+    const res = await handleApiRequest(req, env);
     const body = (await res.json()) as Record<string, unknown>;
     expect(body.allowed).toBe(false);
     expect(body.remaining).toBe(0);
@@ -111,14 +111,14 @@ describe('POST /api/rate-limit-check', () => {
       body: JSON.stringify({ key: 'indep-key-a' }),
     });
     for (let i = 0; i < 50; i++) {
-      await worker.fetch(reqA, env);
+      await handleApiRequest(reqA, env);
     }
     const reqB = mockRequest('https://example.com/api/rate-limit-check', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ key: 'indep-key-b' }),
     });
-    const resB = await worker.fetch(reqB, env);
+    const resB = await handleApiRequest(reqB, env);
     const bodyB = (await resB.json()) as Record<string, unknown>;
     expect(bodyB.allowed).toBe(true);
     expect(bodyB.remaining).toBe(99);
@@ -130,7 +130,7 @@ describe('POST /api/rate-limit-check', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({}),
     });
-    const res = await worker.fetch(req, env);
+    const res = await handleApiRequest(req, env);
     expect(res.status).toBe(400);
     const body = (await res.json()) as Record<string, unknown>;
     expect(body.error).toBeDefined();
@@ -142,7 +142,7 @@ describe('POST /api/rate-limit-check', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ key: 123 }),
     });
-    const res = await worker.fetch(req, env);
+    const res = await handleApiRequest(req, env);
     expect(res.status).toBe(400);
   });
 });
@@ -201,7 +201,7 @@ describe('POST /api/model-proxy validation', () => {
       },
       body: largeBody,
     });
-    const res = await worker.fetch(req, env);
+    const res = await handleApiRequest(req, env);
     expect(res.status).toBe(413);
     const body = (await res.json()) as Record<string, unknown>;
     expect(body.error).toContain('1MB');
@@ -213,7 +213,7 @@ describe('POST /api/model-proxy validation', () => {
       headers: { 'Authorization': 'Bearer sk-test' },
       body: JSON.stringify({ provider: 'openai', apiKey: 'sk-test', model: 'gpt-4o', messages: [] }),
     });
-    const res = await worker.fetch(req, env);
+    const res = await handleApiRequest(req, env);
     expect(res.status).toBe(400);
     const body = (await res.json()) as Record<string, unknown>;
     expect(body.error).toContain('Content-Type');
@@ -225,7 +225,7 @@ describe('POST /api/model-proxy validation', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ provider: 'openai', apiKey: 'sk-test', model: 'gpt-4o', messages: [] }),
     });
-    const res = await worker.fetch(req, env);
+    const res = await handleApiRequest(req, env);
     expect(res.status).toBe(400);
     const body = (await res.json()) as Record<string, unknown>;
     expect(body.error).toContain('authorization');
@@ -240,7 +240,7 @@ describe('POST /api/model-proxy validation', () => {
       },
       body: '{}',
     });
-    const res = await worker.fetch(req, env);
+    const res = await handleApiRequest(req, env);
     expect(res.status).toBe(400);
     const body = (await res.json()) as Record<string, unknown>;
     expect(body.error).toContain('application/json');
@@ -255,7 +255,7 @@ describe('POST /api/model-proxy validation', () => {
       },
       body: 'not-json{{{',
     });
-    const res = await worker.fetch(req, env);
+    const res = await handleApiRequest(req, env);
     expect(res.status).toBe(400);
     const body = (await res.json()) as Record<string, unknown>;
     expect(body.error).toContain('JSON');
@@ -270,7 +270,7 @@ describe('POST /api/model-proxy validation', () => {
       },
       body: JSON.stringify({ apiKey: 'sk-test', model: 'gpt-4o', messages: [] }),
     });
-    const res = await worker.fetch(req, env);
+    const res = await handleApiRequest(req, env);
     expect(res.status).toBe(400);
     const body = (await res.json()) as Record<string, unknown>;
     expect(body.error).toBeDefined();
@@ -285,7 +285,7 @@ describe('POST /api/model-proxy validation', () => {
       },
       body: JSON.stringify({ provider: 'openai', model: 'gpt-4o', messages: [] }),
     });
-    const res = await worker.fetch(req, env);
+    const res = await handleApiRequest(req, env);
     expect(res.status).toBe(400);
   });
 });
@@ -300,7 +300,7 @@ describe('POST /api/model-proxy forwards valid requests', () => {
       },
       body: JSON.stringify({ provider: 'openai', apiKey: 'sk-test', model: 'gpt-4o', messages: [] }),
     });
-    const res = await worker.fetch(req, env);
+    const res = await handleApiRequest(req, env);
     // Validation passes; the fetch to openai fails because no real network
     // Expect either 500 (network error) or 400 (unsupported provider via body),
     // but never 400 for validation reasons
@@ -318,7 +318,7 @@ describe('POST /api/model-proxy forwards valid requests', () => {
       },
       body: JSON.stringify({ provider: 'unknown-provider', apiKey: 'sk-test', model: 'x', messages: [] }),
     });
-    const res = await worker.fetch(req, env);
+    const res = await handleApiRequest(req, env);
     expect(res.status).toBe(400);
     const body = (await res.json()) as Record<string, unknown>;
     expect(body.error).toContain('Unsupported provider');
@@ -330,7 +330,7 @@ describe('POST /api/model-proxy forwards valid requests', () => {
 describe('OPTIONS preflight', () => {
   it('returns 204 with CORS headers for all paths', async () => {
     const req = mockRequest('https://example.com/api/model-proxy', { method: 'OPTIONS' });
-    const res = await worker.fetch(req, env);
+    const res = await handleApiRequest(req, env);
     expect(res.status).toBe(200);
     expect(res.headers.get('Access-Control-Allow-Origin')).toBeDefined();
   });
@@ -339,7 +339,7 @@ describe('OPTIONS preflight', () => {
 describe('unknown API path', () => {
   it('returns 404 for unrecognized /api paths', async () => {
     const req = mockRequest('https://example.com/api/nonexistent');
-    const res = await worker.fetch(req, env);
+    const res = await handleApiRequest(req, env);
     expect(res.status).toBe(404);
   });
 });

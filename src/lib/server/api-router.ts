@@ -1,39 +1,18 @@
 /**
- * VantaOS Worker — handles API routes alongside static assets (from out/)
+ * VantaOS API router — handles API routes for the Next.js runtime.
  *
- * This Worker runs when using `npx wrangler deploy`. The [assets] config in
- * wrangler.toml serves the static export (out/) automatically. This Worker
- * only intercepts requests to /api/* paths and handles SPA fallback.
+ * This is a 1:1 port of the former Cloudflare Worker's dispatch (workers/
+ * worker.ts). Under Phase 3 hybrid rendering, Next.js serves both the static
+ * pages and these API routes from the OpenNext worker, so the router keeps
+ * byte-for-byte behavior: same path/method dispatch, same CORS rules, same
+ * error shapes. Documented deviations (trailing-slash normalization, dead
+ * import removal) live in the Phase 3 README notes.
  */
 
 import { GitHubOAuthService, OAuthCallbackError, type KvLike } from './github-proxy';
 import { verifyFirebaseIdToken } from './firebase-verify';
 import { verifyGrant, type GrantClaims } from './grants';
-
-interface RateLimitEntry {
-  count: number;
-  windowStart: number;
-}
-
-const rateLimitStore = new Map<string, RateLimitEntry>();
-
-import { isFirebaseConfigured } from '@/src/lib/env';
-const RATE_LIMIT = 100;
-const RATE_LIMIT_WINDOW = 60_000;
-
-function rateLimitCheck(key: string): { allowed: boolean; remaining: number; resetAt: string } {
-  const now = Date.now();
-  const entry = rateLimitStore.get(key);
-  if (entry && now - entry.windowStart < RATE_LIMIT_WINDOW) {
-    entry.count += 1;
-    if (entry.count > RATE_LIMIT) {
-      return { allowed: false, remaining: 0, resetAt: new Date(entry.windowStart + RATE_LIMIT_WINDOW).toISOString() };
-    }
-    return { allowed: true, remaining: RATE_LIMIT - entry.count, resetAt: new Date(entry.windowStart + RATE_LIMIT_WINDOW).toISOString() };
-  }
-  rateLimitStore.set(key, { count: 1, windowStart: now });
-  return { allowed: true, remaining: RATE_LIMIT - 1, resetAt: new Date(now + RATE_LIMIT_WINDOW).toISOString() };
-}
+import { rateLimitCheck, rateLimitStore } from './rate-limit';
 
 export { rateLimitCheck, rateLimitStore };
 
@@ -87,128 +66,143 @@ function projectId(env: Env): string {
   return pid;
 }
 
-export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
-    const url = new URL(request.url);
-    const path = url.pathname;
+/**
+ * Resolves the environment for the Next.js runtime from process.env.
+ * GH_TOKENS has no runtime source (no KV binding under OpenNext) and is
+ * always undefined — GitHub token storage is documented as fail-closed.
+ */
+export function serverEnv(): Env {
+  return {
+    GEMINI_API_KEY: process.env.GEMINI_API_KEY,
+    GITHUB_CLIENT_ID: process.env.GITHUB_CLIENT_ID,
+    GITHUB_CLIENT_SECRET: process.env.GITHUB_CLIENT_SECRET,
+    GH_GRANT_SECRET: process.env.GH_GRANT_SECRET,
+    GH_TOKENS: undefined,
+    APP_ORIGIN: process.env.APP_ORIGIN,
+    NEXT_PUBLIC_FIREBASE_PROJECT_ID: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+  };
+}
 
-    if (request.method === 'OPTIONS') {
-      return new Response(null, { headers: corsHeaders(undefined) });
+export async function handleApiRequest(request: Request, env: Env): Promise<Response> {
+  const url = new URL(request.url);
+  const path = url.pathname.replace(/\/+$/, '') || '/';
+
+  if (request.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders(undefined) });
+  }
+
+  try {
+    // GET /api/health
+    if (request.method === 'GET' && path === '/api/health') {
+      const fbConfigured = !!env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
+      const idbAvailable = typeof indexedDB !== 'undefined' && indexedDB !== null;
+      const status = fbConfigured || idbAvailable ? 'ok' : 'degraded';
+      return json(
+        {
+          status,
+          timestamp: new Date().toISOString(),
+          services: {
+            firebase: { configured: fbConfigured },
+            indexeddb: { available: idbAvailable },
+            ai: 'ok',
+            github: 'ok',
+            drive: 'ok',
+          },
+        },
+        200,
+        { 'cache-control': 'no-store' },
+      );
     }
 
-    try {
-      // GET /api/health
-      if (request.method === 'GET' && path === '/api/health') {
-        const fbConfigured = !!env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
-        const idbAvailable = typeof indexedDB !== 'undefined' && indexedDB !== null;
-        const status = fbConfigured || idbAvailable ? 'ok' : 'degraded';
+    // GET /api/ready
+    if (request.method === 'GET' && path === '/api/ready') {
+      return json({ ready: true }, 200);
+    }
+
+    // POST /api/rate-limit-check
+    if (request.method === 'POST' && path === '/api/rate-limit-check') {
+      let body: any;
+      try { body = await request.json(); } catch { body = null; }
+      if (typeof body !== 'object' || body === null || !body.key || typeof body.key !== 'string') {
+        return json({ error: 'key is required and must be a string' }, 400);
+      }
+      const result = rateLimitCheck(body.key);
+      return json(result, 200);
+    }
+
+    // POST /api/model-proxy
+    if (request.method === 'POST' && path === '/api/model-proxy') {
+      const contentLength = request.headers.get('content-length');
+      if (contentLength && parseInt(contentLength, 10) > 1_048_576) {
+        return json({ error: 'Request body exceeds 1MB limit' }, 413);
+      }
+      const ct = (request.headers.get('content-type') || '').toLowerCase();
+      if (!ct.includes('application/json')) {
+        return json({ error: 'Content-Type must be application/json' }, 400);
+      }
+      const auth = request.headers.get('authorization');
+      if (!auth) {
+        return json({ error: 'authorization is required' }, 400);
+      }
+      let body: any;
+      try { body = await request.json(); } catch { return json({ error: 'Invalid JSON body' }, 400); }
+      if (!body.provider) return json({ error: 'provider is required' }, 400);
+      if (!body.apiKey) return json({ error: 'apiKey is required' }, 400);
+      const supported = ['openai', 'anthropic', 'google', 'ollama'];
+      if (!supported.includes(body.provider)) {
+        return json({ error: `Unsupported provider: ${body.provider}` }, 400);
+      }
+      return json({ error: 'upstream unreachable' }, 500);
+    }
+
+    // POST /api/ai/generate
+    if (request.method === 'POST' && path === '/api/ai/generate') {
+      return handleAiGenerate(request, env);
+    }
+
+    // POST /api/security/scan
+    if (request.method === 'POST' && path === '/api/security/scan') {
+      return handleSecurityScan(env);
+    }
+
+    // POST /api/edge-functions/auth-sync — real server-side token verification
+    if (request.method === 'POST' && path === '/api/edge-functions/auth-sync') {
+      const auth = request.headers.get('authorization');
+      const token = auth?.startsWith('Bearer ') ? auth.slice(7) : auth;
+      const claims = await verifyFirebaseIdToken(token ?? '', {
+        projectId: projectId(env),
+        nowMs: Date.now(),
+      });
+      if (!claims) {
         return json(
-          {
-            status,
-            timestamp: new Date().toISOString(),
-            services: {
-              firebase: { configured: fbConfigured },
-              indexeddb: { available: idbAvailable },
-              ai: 'ok',
-              github: 'ok',
-              drive: 'ok',
-            },
-          },
-          200,
-          { 'cache-control': 'no-store' },
+          { success: false, error: 'Invalid or expired token.' },
+          401
         );
       }
-
-      // GET /api/ready
-      if (request.method === 'GET' && path === '/api/ready') {
-        return json({ ready: true }, 200);
-      }
-
-      // POST /api/rate-limit-check
-      if (request.method === 'POST' && path === '/api/rate-limit-check') {
-        let body: any;
-        try { body = await request.json(); } catch { body = null; }
-        if (typeof body !== 'object' || body === null || !body.key || typeof body.key !== 'string') {
-          return json({ error: 'key is required and must be a string' }, 400);
-        }
-        const result = rateLimitCheck(body.key);
-        return json(result, 200);
-      }
-
-      // POST /api/model-proxy
-      if (request.method === 'POST' && path === '/api/model-proxy') {
-        const contentLength = request.headers.get('content-length');
-        if (contentLength && parseInt(contentLength, 10) > 1_048_576) {
-          return json({ error: 'Request body exceeds 1MB limit' }, 413);
-        }
-        const ct = (request.headers.get('content-type') || '').toLowerCase();
-        if (!ct.includes('application/json')) {
-          return json({ error: 'Content-Type must be application/json' }, 400);
-        }
-        const auth = request.headers.get('authorization');
-        if (!auth) {
-          return json({ error: 'authorization is required' }, 400);
-        }
-        let body: any;
-        try { body = await request.json(); } catch { return json({ error: 'Invalid JSON body' }, 400); }
-        if (!body.provider) return json({ error: 'provider is required' }, 400);
-        if (!body.apiKey) return json({ error: 'apiKey is required' }, 400);
-        const supported = ['openai', 'anthropic', 'google', 'ollama'];
-        if (!supported.includes(body.provider)) {
-          return json({ error: `Unsupported provider: ${body.provider}` }, 400);
-        }
-        return json({ error: 'upstream unreachable' }, 500);
-      }
-
-      // POST /api/ai/generate
-      if (request.method === 'POST' && path === '/api/ai/generate') {
-        return handleAiGenerate(request, env);
-      }
-
-      // POST /api/security/scan
-      if (request.method === 'POST' && path === '/api/security/scan') {
-        return handleSecurityScan(env);
-      }
-
-      // POST /api/edge-functions/auth-sync — real server-side token verification
-      if (request.method === 'POST' && path === '/api/edge-functions/auth-sync') {
-        const auth = request.headers.get('authorization');
-        const token = auth?.startsWith('Bearer ') ? auth.slice(7) : auth;
-        const claims = await verifyFirebaseIdToken(token ?? '', {
-          projectId: projectId(env),
-          nowMs: Date.now(),
-        });
-        if (!claims) {
-          return json(
-            { success: false, error: 'Invalid or expired token.' },
-            401
-          );
-        }
-        return json({
-          success: true,
-          uid: claims.uid,
-          email: claims.email ?? null,
-          validated: true,
-          serverTime: new Date().toISOString(),
-        });
-      }
-
-      // ─── GitHub OAuth + proxy (Phase 5 token boundary) ───
-      if (path.startsWith('/api/gh')) {
-        return handleGitHubRoutes(request, env, path, url);
-      }
-
-      return json(
-        { error: 'Not found', path, message: 'The requested API endpoint does not exist.' },
-        404
-      );
-    } catch (err: any) {
-      console.error('Worker error:', err);
-      // H3 FIX: Never leak internal error messages to clients
-      return json({ error: 'Internal server error' }, 500);
+      return json({
+        success: true,
+        uid: claims.uid,
+        email: claims.email ?? null,
+        validated: true,
+        serverTime: new Date().toISOString(),
+      });
     }
-  },
-};
+
+    // ─── GitHub OAuth + proxy (Phase 5 token boundary) ───
+    if (path.startsWith('/api/gh')) {
+      return handleGitHubRoutes(request, env, path, url);
+    }
+
+    return json(
+      { error: 'Not found', path, message: 'The requested API endpoint does not exist.' },
+      404
+    );
+  } catch (err: any) {
+    console.error('Worker error:', err);
+    // H3 FIX: Never leak internal error messages to clients
+    return json({ error: 'Internal server error' }, 500);
+  }
+}
 
 async function handleGitHubRoutes(
   request: Request,

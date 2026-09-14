@@ -29,10 +29,10 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'node server.cjs',
-   
+    command: 'npm run build && npx next start -p 4173',
+    cwd: path.resolve(__dirname, '../..'),
     port: 4173,
     reuseExistingServer: !process.env.CI,
-    timeout: 15_000,
+    timeout: 300_000,
   },
 });
