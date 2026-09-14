@@ -71,7 +71,7 @@ jobs:
 
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -89,8 +89,9 @@ jobs:
         run: npm run build
 
   e2e:
+    needs: [build]
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 45
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -103,9 +104,6 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
-
-      - name: Build static export
-        run: npm run build
 
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium

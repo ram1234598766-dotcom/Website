@@ -12,7 +12,7 @@
     "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
     "cf-preview": "opennextjs-cloudflare build && npx wrangler dev",
     "firebase:setup": "bash scripts/firebase-setup.sh",
-    "firebase:deploy": "firebase deploy --only database:rules,firestore:rules,firestore:indexes"
+    "firebase:deploy": "firebase deploy --only database"
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.3",
