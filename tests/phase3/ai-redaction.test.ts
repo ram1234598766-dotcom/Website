@@ -158,9 +158,13 @@ describe('RedactedError', () => {
  * The JSON body is what travels over the wire to the browser — the
  * apiKey must never appear in it.
  */
+function redactApiKeys(str: string): string {
+  return str.replace(/key=[^'"\s]+/gi, 'key=[REDACTED]');
+}
+
 function formatWorkerError(err: unknown): string {
   const message = err instanceof Error ? err.message : String(err);
-  return JSON.stringify({ error: message || 'AI request failed' });
+  return JSON.stringify({ error: redactApiKeys(message) || 'AI request failed' });
 }
 
 describe('handleAiGenerate — error response redaction (worker proxy)', () => {
