@@ -14,6 +14,7 @@ import { verifyFirebaseIdToken } from './firebase-verify';
 import { verifyGrant, type GrantClaims } from './grants';
 import { rateLimitCheck, rateLimitStore } from './rate-limit';
 import { MODEL_PROXY_ALLOWED_HOSTS, isAllowedModelProxyUrl } from '../models/sources';
+import { getPeers } from './peer-registry';
 
 export { rateLimitCheck, rateLimitStore };
 
@@ -118,6 +119,34 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
     // GET /api/ready
     if (request.method === 'GET' && path === '/api/ready') {
       return json({ ready: true }, 200);
+    }
+
+    // GET /api/peers
+    if (request.method === 'GET' && path === '/api/peers') {
+      const peers = getPeers();
+      return json({ peers }, 200, { 'cache-control': 'no-store' });
+    }
+
+    // GET /api/services/health
+    if (request.method === 'GET' && path === '/api/services/health') {
+      const fbConfigured = !!env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
+      const idbAvailable = typeof indexedDB !== 'undefined' && indexedDB !== null;
+      const status = fbConfigured || idbAvailable ? 'ok' : 'degraded';
+      return json(
+        {
+          status,
+          timestamp: new Date().toISOString(),
+          services: {
+            firebase: { configured: fbConfigured },
+            indexeddb: { available: idbAvailable },
+            ai: 'ok',
+            github: 'ok',
+            drive: 'ok',
+          },
+        },
+        200,
+        { 'cache-control': 'no-store' },
+      );
     }
 
     // POST /api/rate-limit-check

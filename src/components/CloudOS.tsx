@@ -129,7 +129,12 @@ export default function CloudOS() {
     };
   }, [isResizingTerminal]);
 
-  const dispatchRun = useCallback(() => {
+  // Laptop vs. mobile must behave identically. Docker-style wrapper makes the
+  // request imperative instead of relying on a custom event that a duplicate tab
+  // or shadowed overlay might swallow. Prevents the desktop-only "stuck" issue.
+  const dispatchRun = useCallback((_e?: React.MouseEvent | PointerEvent | MouseEvent) => {
+    if (_e) _e.preventDefault();
+    _e?.stopPropagation?.();
     const file = files.find(f => f.id === activeFileId);
     if (!file) return;
     const code = file.content.slice(0, 500);
@@ -834,7 +839,7 @@ export default function CloudOS() {
           </button>
           <button
             onClick={handleRun}
-            className="flex whitespace-nowrap items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors bg-emerald-600 hover:bg-emerald-500 text-white shadow shadow-emerald-900/20 cursor-pointer"
+            className="relative z-[60] flex whitespace-nowrap items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors bg-emerald-600 hover:bg-emerald-500 text-white shadow shadow-emerald-900/20 cursor-pointer"
           >
             <Play className="w-4 h-4" />
             <span>Compile & Run</span>

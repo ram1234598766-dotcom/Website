@@ -370,7 +370,7 @@ export default function OmniAI() {
             <Trash2 className="w-5 h-5" />
           </button>
           <button onClick={() => { setShowSettings(!showSettings); setTempApiKey(settings.apiKey); }} aria-label="Settings"
-            className={`p-2.5 rounded-xl transition-colors cursor-pointer ${showSettings ? 'bg-indigo-500/20 text-indigo-300' : 'text-slate-400 hover:bg-white/10 hover:text-white'}`}
+            className={`relative z-[60] p-2.5 rounded-xl transition-colors cursor-pointer ${showSettings ? 'bg-indigo-500/20 text-indigo-300' : 'text-slate-400 hover:bg-white/10 hover:text-white'}`}
             title="Settings">
             <Settings className="w-5 h-5" />
           </button>
