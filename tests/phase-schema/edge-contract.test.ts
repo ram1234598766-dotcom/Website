@@ -347,7 +347,7 @@ describe('POST /api/ai/generate — Gemini server-key fallback', () => {
     expect(body.text).toBe('server-byte-1');
     const [fetchUrl] = fetchMock.mock.calls[0];
     expect(String(fetchUrl)).toContain('key=AIza-server-key-123');
-    expect(String(fetchUrl)).toContain('gemini-2.5-flash');
+    expect(String(fetchUrl)).toContain('gemini-3.6-flash');
   });
 
   it('prefers the client apiKey over the server key when both present', async () => {
