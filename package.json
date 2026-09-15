@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "next dev",
-    "build": "next build && npx opennextjs-cloudflare build --skipNextBuild && node scripts/fix-cache.mjs",
+    "build": "next build && npx opennextjs-cloudflare build --skipNextBuild",
+    "postbuild": "node scripts/fix-cache.mjs",
     "lint": "tsc --noEmit",
     "test": "vitest run",
     "start": "next start",
@@ -74,6 +75,7 @@
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^6.1.1",
+    "@vitest/coverage-v8": "^5.0.1",
     "axe-core": "^4.13.0",
     "fake-indexeddb": "^6.2.5",
     "jsdom": "^30.0.1",

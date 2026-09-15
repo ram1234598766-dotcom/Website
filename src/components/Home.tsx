@@ -188,11 +188,16 @@ export default function Home({ setCurrentView, onSignIn, onSignUp }: HomeProps) 
             </div>
           </motion.div>
 
-          <motion.div variants={fadeUp}>
+          <motion.div variants={fadeUp} className="flex flex-col items-center gap-3">
             <span className="inline-flex items-center gap-2.5 px-4 py-1.5 rounded-full glass-strong text-xs font-bold tracking-[0.18em] uppercase text-indigo-300 shadow-[0_0_20px_rgba(99,102,241,0.15)]">
               <span className="status-dot" aria-hidden />
               VantaOS is now in Public Beta
             </span>
+            <p className="flex items-center justify-center gap-3 text-[11px] font-bold uppercase tracking-[0.28em] text-[#646a80]">
+              <span className="h-px w-8 bg-gradient-to-r from-transparent to-indigo-400/60" aria-hidden />
+              <span>by <span className="text-indigo-300">Mrityunjay K</span></span>
+              <span className="h-px w-8 bg-gradient-to-l from-transparent to-indigo-400/60" aria-hidden />
+            </p>
           </motion.div>
 
           <motion.h1
@@ -203,15 +208,6 @@ export default function Home({ setCurrentView, onSignIn, onSignUp }: HomeProps) 
             <br />
             <span className="text-gradient animate-vanta-shimmer">Developer Cloud</span>
           </motion.h1>
-
-          <motion.p
-            variants={fadeUp}
-            className="mt-3 flex items-center justify-center gap-3 text-xs font-bold uppercase tracking-[0.3em] text-[#646a80]"
-          >
-            <span className="h-px w-8 bg-gradient-to-r from-transparent to-indigo-400/60" aria-hidden />
-            <span>by <span className="text-indigo-300">Mrityunjay K</span></span>
-            <span className="h-px w-8 bg-gradient-to-l from-transparent to-indigo-400/60" aria-hidden />
-          </motion.p>
 
           <motion.p
             variants={fadeUp}

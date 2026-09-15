@@ -18,10 +18,9 @@ test-results/
 # TS incremental build artifact
 *.tsbuildinfo
 
-# secrets
+# secrets — never commit
 .env*
 !.env.example
-!.env.production
 
 # system files
 .DS_Store

@@ -4,9 +4,8 @@
  */
 
 export function isGeminiConfigured(): boolean {
-  // At runtime on the client, we can't check GEMINI_API_KEY directly.
-  // We check via the health endpoint or assume it's not configured.
-  return false; // Will be detected at runtime
+  return !!(typeof process !== 'undefined' && (process as any).env?.NEXT_PUBLIC_GEMINI_API_KEY)
+    || typeof window === 'undefined';
 }
 
 export function getAppUrl(): string {

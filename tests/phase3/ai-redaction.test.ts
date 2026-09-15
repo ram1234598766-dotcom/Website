@@ -179,21 +179,16 @@ describe('handleAiGenerate — error response redaction (worker proxy)', () => {
     expect(responseBody).not.toContain('AIzaSy');
   });
 
-  it('500 response documents that err.message is forwarded verbatim — fix: redact before returning', () => {
-    // SECURITY FINDING: handleAiGenerate catch block does:
-    //   json({ error: err.message || 'AI request failed' }, 500)
-    // If a fetch TypeError includes the request URL (which may contain ?key=...),
-    // the apiKey leaks to the client. This test documents the gap.
-    // Fix: apply redact() to err.message before placing it in the response.
+  it('500 response does NOT leak apiKey from err.message', () => {
+    // SECURITY: handleAiGenerate catch block must redact err.message
+    // before placing it in the response. API keys in URLs must not leak.
     const apiKey = 'sk_live_abcdefghijklmnop';
     const fetchErr = new TypeError(
       `Failed to fetch 'https://openrouter.ai/api/v1/chat/completions?key=${apiKey}': network error`
     );
     const responseBody = formatWorkerError(fetchErr);
 
-    // Documents the current (insecure) behaviour.
-    expect(responseBody).toContain(apiKey);
-    // After fix: expect(responseBody).not.toContain(apiKey);
+    expect(responseBody).not.toContain(apiKey);
   });
 
   it('404 response from the main router does not echo auth headers', () => {

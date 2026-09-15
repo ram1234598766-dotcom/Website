@@ -396,7 +396,6 @@ export const client = {
 };
 
 export function checkAuthConfig() {
-  console.log('[VantaOS] Firebase configured:', hasFirebase);
   return { firebase: hasFirebase };
 }
 

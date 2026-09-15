@@ -229,6 +229,7 @@ html, body {
 
 .text-gradient {
   background: linear-gradient(135deg, #fff 0%, var(--brand-400) 60%, var(--accent) 100%);
+  background-size: 200% 100%;
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -301,7 +302,6 @@ html, body {
   animation: vanta-glow 3s ease-in-out infinite;
 }
 .animate-vanta-shimmer {
-  background: linear-gradient(90deg, transparent 0%, rgba(99, 102, 241, 0.1) 50%, transparent 100%);
   background-size: 200% 100%;
   animation: vanta-shimmer 3s ease-in-out infinite;
 }
