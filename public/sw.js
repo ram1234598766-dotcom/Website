@@ -1,5 +1,5 @@
-const CACHE_NAME = 'vantaos-static-v1';
-const API_CACHE_NAME = 'vantaos-api-v1';
+const CACHE_NAME = 'vantaos-static-v2';
+const API_CACHE_NAME = 'vantaos-api-v2';
 const OFFLINE_URL = '/offline.html';
 
 const STATIC_ASSETS = [
@@ -47,6 +47,11 @@ self.addEventListener('fetch', (event) => {
   }
 
   if (url.origin === self.location.origin) {
+    if (request.mode === 'navigate' || isHtmlRequest(request)) {
+      event.respondWith(networkFirst(request));
+      return;
+    }
+
     if (isStaticAsset(request)) {
       event.respondWith(cacheFirst(request));
       return;
@@ -61,11 +66,12 @@ self.addEventListener('fetch', (event) => {
   event.respondWith(networkFirst(request));
 });
 
-function isStaticAsset(request) {
+function isHtmlRequest(request) {
   const accept = request.headers.get('accept') || '';
-  if (accept.includes('text/html')) {
-    return true;
-  }
+  return accept.includes('text/html');
+}
+
+function isStaticAsset(request) {
   const url = new URL(request.url);
   return (
     url.pathname.match(/\.(css|js|woff2?|ttf|eot|svg|png|jpg|jpeg|gif|webp|avif|ico)$/) !== null ||
