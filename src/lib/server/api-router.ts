@@ -470,7 +470,7 @@ async function handleAiGenerate(request: Request, env: Env): Promise<Response> {
       }
 
       case 'gemini': {
-        const geminiModel = model || 'gemini-2.5-flash';
+        const geminiModel = model || 'gemini-3.6-flash';
         const key = apiKey || env.GEMINI_API_KEY;
         if (!key || key === 'MY_GEMINI_API_KEY') {
           return json(

@@ -155,7 +155,7 @@ async function serverGeminiFallback(prompt: string): Promise<string> {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       provider: 'gemini',
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3.6-flash',
       messages: [{ role: 'user', content: prompt }],
     }),
   });
@@ -258,10 +258,10 @@ export default function OmniAI() {
       defaultModel: 'tinyllama',
       desc: 'Free, private, runs entirely in your browser with Transformers.js (WebGPU/WASM). Models download on first use — if HuggingFace is blocked, it auto-falls-back to the free server Gemini.' },
     { id: 'openrouter' as AIProvider, name: 'OpenRouter', icon: Globe,
-      models: [{ id: 'openai/gpt-4o', name: 'GPT-4o' }, { id: 'google/gemini-2.5-flash', name: 'Gemini 2.5 Flash' }],
-      defaultModel: 'openai/gpt-4o', desc: '200+ models. Get key at openrouter.ai/keys' },
-    { id: 'gemini' as AIProvider, name: 'Gemini', icon: BrainCircuit,
-      models: [{ id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash' }], defaultModel: 'gemini-2.5-flash',
+      models: [{ id: 'openai/gpt-4o', name: 'GPT-4o' }, { id: 'google/gemini-3.6-flash', name: 'Gemini 3.6 Flash' }],
+       defaultModel: 'openai/gpt-4o', desc: '200+ models. Get key at openrouter.ai/keys' },
+     { id: 'gemini' as AIProvider, name: 'Gemini', icon: BrainCircuit,
+       models: [{ id: 'gemini-3.6-flash', name: 'Gemini 3.6 Flash' }], defaultModel: 'gemini-3.6-flash',
       desc: 'Free key at aistudio.google.com' },
     { id: 'openai' as AIProvider, name: 'OpenAI', icon: Bot,
       models: [{ id: 'gpt-4o-mini', name: 'GPT-4o Mini' }], defaultModel: 'gpt-4o-mini',

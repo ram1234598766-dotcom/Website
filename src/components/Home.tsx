@@ -675,7 +675,7 @@ export default function Home({ setCurrentView, onSignIn, onSignUp }: HomeProps) 
               <div className="p-7 space-y-3.5 text-sm text-[#9499ad] leading-relaxed flex-1">
                 <p><strong className="text-white">Google Gemini</strong> — VantaOS integrates directly with Google's Gemini AI models through the Generative Language API. Add your Gemini API key in Omni-AI Settings (<strong className="text-white">⚙️ → Gemini</strong>) to unlock cloud AI without leaving your workspace.</p>
                 <p><strong className="text-white">How it works</strong> — when you select Gemini as your provider in Omni-AI, prompts are sent to <code className="text-[#818cf8] font-mono text-xs bg-black/30 px-1.5 py-0.5 rounded">generativelanguage.googleapis.com</code> with your API key. Responses stream back into the chat panel instantly.</p>
-                <p><strong className="text-white">Models available</strong> — <code className="text-[#818cf8] font-mono text-xs bg-black/30 px-1.5 py-0.5 rounded">gemini-2.5-flash</code> for fast everyday tasks, plus access to the latest Gemini family models as they release.</p>
+                <p><strong className="text-white">Models available</strong> — <code className="text-[#818cf8] font-mono text-xs bg-black/30 px-1.5 py-0.5 rounded">gemini-3.6-flash</code> for fast everyday tasks, plus access to the latest Gemini family models as they release.</p>
                 <p><strong className="text-white">Privacy</strong> — your API key stays in your browser's local storage. VantaOS never stores or transmits it to our servers. Get a free key at <code className="text-[#818cf8] font-mono text-xs bg-black/30 px-1.5 py-0.5 rounded">aistudio.google.com</code>.</p>
               </div>
             </motion.div>
