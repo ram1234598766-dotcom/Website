@@ -131,7 +131,10 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
       return json(result, 200);
     }
 
-    // POST /api/model-proxy
+    // POST /api/model-proxy — deprecated stub.  The real proxy path is
+    // POST /api/ai/generate via handleAiGenerate.  Kept for backward
+    // compatibility; always returns 500 to avoid silently forwarding
+    // client-supplied API keys to upstream providers (security surface).
     if (request.method === 'POST' && path === '/api/model-proxy') {
       const contentLength = request.headers.get('content-length');
       if (contentLength && parseInt(contentLength, 10) > 1_048_576) {
