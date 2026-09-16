@@ -1,5 +1,5 @@
-/**
- * VantaOS API router — handles API routes for the Next.js runtime.
+﻿/**
+ * VantaOS API router â€” handles API routes for the Next.js runtime.
  *
  * This is a 1:1 port of the former Cloudflare Worker's dispatch (workers/
  * worker.ts). Under Phase 3 hybrid rendering, Next.js serves both the static
@@ -13,8 +13,8 @@ import { GitHubOAuthService, OAuthCallbackError, type KvLike } from './github-pr
 import { verifyFirebaseIdToken } from './firebase-verify';
 import { verifyGrant, type GrantClaims } from './grants';
 import { rateLimitCheck, rateLimitStore, checkServerGemini } from './rate-limit';
-import { MODEL_PROXY_ALLOWED_HOSTS, isAllowedModelProxyRedirectUrl, isAllowedModelProxyUrl } from '../models/sources';
 import { getPeers } from './peer-registry';
+import { handleModelProxyGet } from './model-proxy';
 
 export { rateLimitCheck, rateLimitStore };
 
@@ -37,13 +37,13 @@ function isSameSiteRequest(request: Request): boolean {
   if (origin && ALLOWED_ORIGINS.includes(origin)) return true;
   const referer = request.headers.get('referer');
   if (referer) {
-    // Compare the referer's origin exactly — a prefix match would let
+    // Compare the referer's origin exactly â€” a prefix match would let
     // e.g. `https://www.vantaos.org.evil.com` through the gate.
     try {
       const refOrigin = new URL(referer).origin;
       if (ALLOWED_ORIGINS.includes(refOrigin)) return true;
     } catch {
-      // malformed referer — fall through to the other signals
+      // malformed referer â€” fall through to the other signals
     }
   }
   const secFetchSite = request.headers.get('sec-fetch-site');
@@ -94,7 +94,7 @@ function projectId(env: Env): string {
 /**
  * Resolves the environment for the Next.js runtime from process.env.
  * GH_TOKENS has no runtime source (no KV binding under OpenNext) and is
- * always undefined — GitHub token storage is documented as fail-closed.
+ * always undefined â€” GitHub token storage is documented as fail-closed.
  */
 export function serverEnv(): Env {
   return {
@@ -183,7 +183,7 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
       return json(result, 200);
     }
 
-    // POST /api/model-proxy — deprecated stub.  The real proxy path is
+    // POST /api/model-proxy â€” deprecated stub.  The real proxy path is
     // POST /api/ai/generate via handleAiGenerate.  Kept for backward
     // compatibility; always returns 500 to avoid silently forwarding
     // client-supplied API keys to upstream providers (security surface).
@@ -211,7 +211,7 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
       return json({ error: 'upstream unreachable' }, 500);
     }
 
-    // GET /api/model-proxy — server-side fetch of HuggingFace model files so
+    // GET /api/model-proxy â€” server-side fetch of HuggingFace model files so
     // the browser never hits upstream CORS (HF only allows huggingface.co).
     if (request.method === 'GET' && path === '/api/model-proxy') {
       return handleModelProxyGet(request);
@@ -227,7 +227,7 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
       return handleSecurityScan(env);
     }
 
-    // POST /api/edge-functions/auth-sync — real server-side token verification
+    // POST /api/edge-functions/auth-sync â€” real server-side token verification
     if (request.method === 'POST' && path === '/api/edge-functions/auth-sync') {
       const auth = request.headers.get('authorization');
       const token = auth?.startsWith('Bearer ') ? auth.slice(7) : auth;
@@ -250,7 +250,7 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
       });
     }
 
-    // ─── GitHub OAuth + proxy (Phase 5 token boundary) ───
+    // â”€â”€â”€ GitHub OAuth + proxy (Phase 5 token boundary) â”€â”€â”€
     if (path.startsWith('/api/gh')) {
       return handleGitHubRoutes(request, env, path, url);
     }
@@ -265,98 +265,6 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
     return json({ error: 'Internal server error' }, 500);
   }
 }
-
-const MODEL_PROXY_TIMEOUT_MS = 20_000;
-
-async function handleModelProxyGet(request: Request): Promise<Response> {
-  const reqOrigin = request.headers.get('origin') || undefined;
-  const targetRaw = new URL(request.url).searchParams.get('url') ?? '';
-
-  if (!isAllowedModelProxyUrl(targetRaw)) {
-    return json(
-      { error: 'blocked host', allowed: [...MODEL_PROXY_ALLOWED_HOSTS] },
-      403,
-      {},
-      reqOrigin,
-    );
-  }
-
-  // NOTE: This route also serves `.onnx_data` weight shards (the client
-  // proxies them in parallel) — large multi-MB files rely on the Range
-  // forwarding and 206 partial-content passthrough below.
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), MODEL_PROXY_TIMEOUT_MS);
-  try {
-    const upstreamHeaders: Record<string, string> = {
-      'Accept': '*/*',
-      'User-Agent': 'VantaOS-model-proxy',
-    };
-    // Forward the client's Range header so transformers.js metadata probes
-    // (bytes=0-0) stay small instead of triggering full multi-MB transfers.
-    const rangeHeader = request.headers.get('range');
-    if (rangeHeader) upstreamHeaders['Range'] = rangeHeader;
-
-    const upstream = await fetch(targetRaw, {
-      headers: upstreamHeaders,
-      redirect: 'follow',
-      signal: controller.signal,
-    });
-
-    // SSRF HARDENING: `redirect: 'follow'` transparently follows every hop,
-    // but the allowlist above only validated the *initial* URL. Response.url
-    // is the final URL after redirects — reject if any hop left
-    // HuggingFace-owned zones (blocks HF ever redirecting us to an arbitrary
-    // host). (An empty url only occurs on hand-constructed Response objects
-    // in tests; the runtime always populates it for real fetch calls.)
-    if (upstream.url && !isAllowedModelProxyRedirectUrl(upstream.url)) {
-      return json(
-        { error: 'redirect left allowed hosts' },
-        403,
-        {},
-        reqOrigin,
-      );
-    }
-
-    if (!upstream.ok) {
-      let message = `upstream error (${upstream.status})`;
-      try {
-        const body: any = await upstream.json();
-        if (body?.error) message = body.error;
-      } catch {
-        // upstream body is not JSON — keep the generic message
-      }
-      return json({ error: message, status: upstream.status }, upstream.status, {}, reqOrigin);
-    }
-
-    const headers: Record<string, string> = {
-      ...corsHeaders(reqOrigin),
-      'Cache-Control': 'public, max-age=86400, s-maxage=86400, immutable',
-    };
-    const contentType = upstream.headers.get('content-type');
-    if (contentType) headers['Content-Type'] = contentType;
-    // Forward size/progress semantics: Content-Length for full responses,
-    // Content-Range + Content-Length for 206 partial content.
-    const contentLength = upstream.headers.get('content-length');
-    if (contentLength) headers['Content-Length'] = contentLength;
-    const contentRange = upstream.headers.get('content-range');
-    if (contentRange) headers['Content-Range'] = contentRange;
-
-    // Preserve the upstream status so 206 partial responses keep their
-    // Range-based semantics for the transformers.js client.
-    return new Response(upstream.body, { status: upstream.status, headers });
-  } catch (err: any) {
-    const timedOut = err?.name === 'AbortError';
-    return json(
-      { error: timedOut ? 'upstream timed out' : 'upstream request failed', status: 502 },
-      502,
-      {},
-      reqOrigin,
-    );
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
 async function handleGitHubRoutes(
   request: Request,
   env: Env,
@@ -365,7 +273,7 @@ async function handleGitHubRoutes(
 ): Promise<Response> {
   const service = new GitHubOAuthService(env);
 
-  // POST /api/gh/authorize — start a server-driven OAuth dance
+  // POST /api/gh/authorize â€” start a server-driven OAuth dance
   if (request.method === 'POST' && path === '/api/gh/authorize') {
     const body = await readJson(request);
     if (!body?.firebaseToken) {
@@ -382,7 +290,7 @@ async function handleGitHubRoutes(
     return json({ url: authorizeUrl });
   }
 
-  // GET /api/gh/callback — OAuth redirect landing; exchanges code, stores token, redirects
+  // GET /api/gh/callback â€” OAuth redirect landing; exchanges code, stores token, redirects
   if (request.method === 'GET' && path === '/api/gh/callback') {
     const code = url.searchParams.get('code') ?? '';
     const state = url.searchParams.get('state') ?? '';
@@ -407,7 +315,7 @@ async function handleGitHubRoutes(
     }
   }
 
-  // POST /api/gh/import — store an access token captured from the Firebase popup flow
+  // POST /api/gh/import â€” store an access token captured from the Firebase popup flow
   if (request.method === 'POST' && path === '/api/gh/import') {
     const body = await readJson(request);
     if (!body?.firebaseToken || !body?.accessToken) {
@@ -428,7 +336,7 @@ async function handleGitHubRoutes(
     }
   }
 
-  // POST /api/gh/session — mint a fresh grant if we already hold a token for this uid
+  // POST /api/gh/session â€” mint a fresh grant if we already hold a token for this uid
   if (request.method === 'POST' && path === '/api/gh/session') {
     const auth = request.headers.get('authorization');
     const token = auth?.startsWith('Bearer ') ? auth.slice(7) : auth;
@@ -449,7 +357,7 @@ async function handleGitHubRoutes(
     return json({ ok: true, gh_grant: grant, expiresIn: 15 * 60 });
   }
 
-  // POST /api/gh/revoke — delete the KV token so all grants fail closed
+  // POST /api/gh/revoke â€” delete the KV token so all grants fail closed
   if (request.method === 'POST' && path === '/api/gh/revoke') {
     const grantRes = await requireGrant(request, env);
     if (grantRes instanceof Response) return grantRes;
@@ -558,7 +466,7 @@ async function handleAiGenerate(request: Request, env: Env): Promise<Response> {
           role: m.role === 'user' ? 'user' : 'model',
           parts: [{ text: m.content }],
         }));
-        // 60s upstream budget — matches the client's AbortSignal.timeout(60000)
+        // 60s upstream budget â€” matches the client's AbortSignal.timeout(60000)
         // (OmniAI.tsx). A hung Google reply must not hold this Worker in I/O
         // wait and push the isolate into Cloudflare's resource-limit 503s.
         let res: Response;
@@ -611,7 +519,7 @@ async function handleAiGenerate(request: Request, env: Env): Promise<Response> {
         return json({ error: `Unsupported provider: ${provider}` }, 400);
     }
   } catch (err: any) {
-    // SECURITY: never relay upstream error details to the client — they can
+    // SECURITY: never relay upstream error details to the client â€” they can
     // contain partial API keys or internal endpoint information.  Log the
     // real error server-side for debugging instead.
     console.error('AI generate error:', err);
