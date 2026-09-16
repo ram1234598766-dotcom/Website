@@ -139,11 +139,32 @@ function webModelName(modelId: string): string {
   return found?.name || modelId;
 }
 
-function friendlyWebModelError(err: unknown): string {
+export function friendlyWebModelError(err: unknown): string {
   const raw = err instanceof Error ? err.message : typeof err === 'string' ? err : String(err ?? 'Unknown error');
   const lower = raw.toLowerCase();
-  if (lower.includes('service unavailable') || lower.includes('load file') || lower.includes('404') || lower.includes('401') || lower.includes('model')) {
-    return "WebModel couldn't download its model (your browser was blocked from HuggingFace).";
+  if (
+    lower.includes('service unavailable') ||
+    lower.includes('load file') ||
+    lower.includes('load model') ||
+    lower.includes('unable to locate file') ||
+    lower.includes('failed to download') ||
+    lower.includes('fetch failed') ||
+    lower.includes('networkerror') ||
+    lower.includes('404') ||
+    lower.includes('401') ||
+    lower.includes('403')
+  ) {
+    return "WebModel couldn't download its model files from HuggingFace right now. Check your connection or try again shortly.";
+  }
+  if (
+    lower.includes('webgpu') ||
+    lower.includes('gpu') ||
+    lower.includes('wasm') ||
+    lower.includes('device') ||
+    lower.includes('aborted') ||
+    lower.includes('timed out')
+  ) {
+    return `WebModel couldn't run its in-browser runtime (${raw}).`;
   }
   return raw;
 }
@@ -255,7 +276,7 @@ export default function OmniAI() {
   const PROVIDERS: { id: AIProvider; name: string; icon: React.ComponentType<{ className?: string }>; models: { id: string; name: string }[]; defaultModel: string; desc: string; }[] = [
     { id: 'webmodel' as AIProvider, name: 'WebModel', icon: Cpu,
       models: WEB_MODELS,
-      defaultModel: 'tinyllama',
+      defaultModel: 'gpt2',
       desc: 'Free, private, runs entirely in your browser with Transformers.js (WebGPU/WASM). Models download on first use — if HuggingFace is blocked, it auto-falls-back to the free server Gemini.' },
     { id: 'openrouter' as AIProvider, name: 'OpenRouter', icon: Globe,
       models: [{ id: 'openai/gpt-4o', name: 'GPT-4o' }, { id: 'google/gemini-3.6-flash', name: 'Gemini 3.6 Flash' }],
@@ -287,11 +308,12 @@ export default function OmniAI() {
         try {
           text = await webmodelQuery(input.trim(), settings.model);
         } catch (webErr) {
-          // WebModel blocked (CORS / model download failure). Fall back to the
-          // server-side free Gemini endpoint (uses the operator's GEMINI_API_KEY).
+          // WebModel failed to run or download. Explain the real cause, then
+          // fall back to the server-side free Gemini endpoint (uses the
+          // operator's GEMINI_API_KEY).
           try {
             const fallbackText = await serverGeminiFallback(input.trim());
-            text = `_WebModel unavailable (HuggingFace blocked from your browser)._ _Answered via free server Gemini:_\n\n${fallbackText}`;
+            text = `_WebModel unavailable (${friendlyWebModelError(webErr)})._ _Answered via free server Gemini:_\n\n${fallbackText}`;
           } catch (fallbackErr) {
             throw new Error(
               `${friendlyWebModelError(webErr)} The free Gemini fallback also failed: ${fallbackErr instanceof Error ? fallbackErr.message : 'unknown error'}`

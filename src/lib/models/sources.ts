@@ -45,13 +45,17 @@ export function getTrustedSources(): ModelSource[] {
 
 /**
  * Additional hostnames the server-side model proxy may fetch that are not
- * captured by the trusted-source base URLs. HuggingFace serves large model
- * blobs from LFS CDN subdomains rather than huggingface.co itself.
+ * captured by the trusted-source base URLs.
+ *
+ * NOTE: HuggingFace CDN hosts (`cdn-lfs*.huggingface.co`,
+ * `*.aws.cdn.hf.co`, etc.) are deliberately NOT listed here. Those hosts are
+ * only ever reached as *redirect targets* (HF's `resolve/` endpoints 302 to
+ * them for weight blobs), never as direct fetch targets — that churn-prone
+ * set is validated by isAllowedModelProxyRedirectUrl at redirect time
+ * instead, so CDN renames don't break the allowlist pin.
  */
 const PROXY_EXTRA_HOSTS: readonly string[] = [
   'www.huggingface.co',
-  'cdn-lfs.huggingface.co',
-  'cdn-lfs-us-1.huggingface.co',
 ];
 
 /**
@@ -86,6 +90,45 @@ export function isAllowedModelProxyUrl(url: string): boolean {
     return false;
   }
   return MODEL_PROXY_ALLOWED_HOSTS.includes(parsed.hostname.toLowerCase());
+}
+
+/**
+ * Checks whether a URL is an acceptable *post-redirect* target for the
+ * server-side model proxy.
+ *
+ * The direct-fetch allowlist (MODEL_PROXY_ALLOWED_HOSTS) is exact and tight,
+ * but HuggingFace's `resolve/` endpoints legitimately 302 weight-blob
+ * downloads (`.onnx`, `.onnx_data`, LFS payloads) to a churn-prone set of
+ * CDN subdomains (`cdn-lfs*.huggingface.co`, `*.aws.cdn.hf.co`,
+ * `xet-bridge-use-1.aws.cdn.hf.co`, ...). Pinning those exact hosts next to
+ * the apex would break whenever HF rotates CDN infrastructure.
+ *
+ * So the redirect check is a *suffix* rule over HuggingFace-owned zones
+ * only: any host under `.huggingface.co` or `.hf.co` (HF's short domain from
+ * which every CDN host descends) is accepted, and anything else — including
+ * arbitrary third-party hosts the attacker might point a repo's resolve URL
+ * at — is rejected. This blocks SSRF/open-redirect while tolerating HF CDN
+ * churn. If a future redirect target lands outside these zones, validation
+ * fails loudly rather than silently exfiltrating.
+ */
+export function isAllowedModelProxyRedirectUrl(url: string): boolean {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return false;
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    return false;
+  }
+  const hostname = parsed.hostname.toLowerCase();
+  return (
+    MODEL_PROXY_ALLOWED_HOSTS.includes(hostname) ||
+    hostname.endsWith('.huggingface.co') ||
+    hostname === 'huggingface.co' ||
+    hostname.endsWith('.hf.co') ||
+    hostname === 'hf.co'
+  );
 }
 
 /**

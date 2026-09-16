@@ -12,8 +12,8 @@
 import { GitHubOAuthService, OAuthCallbackError, type KvLike } from './github-proxy';
 import { verifyFirebaseIdToken } from './firebase-verify';
 import { verifyGrant, type GrantClaims } from './grants';
-import { rateLimitCheck, rateLimitStore } from './rate-limit';
-import { MODEL_PROXY_ALLOWED_HOSTS, isAllowedModelProxyUrl } from '../models/sources';
+import { rateLimitCheck, rateLimitStore, checkServerGemini } from './rate-limit';
+import { MODEL_PROXY_ALLOWED_HOSTS, isAllowedModelProxyRedirectUrl, isAllowedModelProxyUrl } from '../models/sources';
 import { getPeers } from './peer-registry';
 
 export { rateLimitCheck, rateLimitStore };
@@ -26,12 +26,35 @@ export interface Env {
   GH_TOKENS?: KvLike;
   APP_ORIGIN?: string;
   NEXT_PUBLIC_FIREBASE_PROJECT_ID?: string;
+  GEMINI_SERVER_KEY_DAILY_LIMIT?: string;
+}
+
+const ALLOWED_ORIGINS = ['http://localhost:3000', 'https://website.vasudevaya.workers.dev', 'https://www.vantaos.org'];
+
+/** True when the request carries a same-site / allowlisted-origin signal. */
+function isSameSiteRequest(request: Request): boolean {
+  const origin = request.headers.get('origin');
+  if (origin && ALLOWED_ORIGINS.includes(origin)) return true;
+  const referer = request.headers.get('referer');
+  if (referer) {
+    // Compare the referer's origin exactly — a prefix match would let
+    // e.g. `https://www.vantaos.org.evil.com` through the gate.
+    try {
+      const refOrigin = new URL(referer).origin;
+      if (ALLOWED_ORIGINS.includes(refOrigin)) return true;
+    } catch {
+      // malformed referer — fall through to the other signals
+    }
+  }
+  const secFetchSite = request.headers.get('sec-fetch-site');
+  if (secFetchSite === 'same-origin' || secFetchSite === 'none') return true;
+  return false;
 }
 
 function corsHeaders(origin: string | undefined): Record<string, string> {
   // H1 FIX: When origin is not allowlisted, do NOT echo it back with
   // credentials. Return null so the browser blocks cross-origin reads.
-  const allowed = ['http://localhost:3000', 'https://website.vasudevaya.workers.dev', 'https://www.vantaos.org'];
+  const allowed = ALLOWED_ORIGINS;
   const safe = (origin && allowed.includes(origin)) ? origin : null;
   const headers: Record<string, string> = {
     'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS',
@@ -258,17 +281,41 @@ async function handleModelProxyGet(request: Request): Promise<Response> {
     );
   }
 
+  // NOTE: This route also serves `.onnx_data` weight shards (the client
+  // proxies them in parallel) — large multi-MB files rely on the Range
+  // forwarding and 206 partial-content passthrough below.
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), MODEL_PROXY_TIMEOUT_MS);
   try {
+    const upstreamHeaders: Record<string, string> = {
+      'Accept': '*/*',
+      'User-Agent': 'VantaOS-model-proxy',
+    };
+    // Forward the client's Range header so transformers.js metadata probes
+    // (bytes=0-0) stay small instead of triggering full multi-MB transfers.
+    const rangeHeader = request.headers.get('range');
+    if (rangeHeader) upstreamHeaders['Range'] = rangeHeader;
+
     const upstream = await fetch(targetRaw, {
-      headers: {
-        'Accept': '*/*',
-        'User-Agent': 'VantaOS-model-proxy',
-      },
+      headers: upstreamHeaders,
       redirect: 'follow',
       signal: controller.signal,
     });
+
+    // SSRF HARDENING: `redirect: 'follow'` transparently follows every hop,
+    // but the allowlist above only validated the *initial* URL. Response.url
+    // is the final URL after redirects — reject if any hop left
+    // HuggingFace-owned zones (blocks HF ever redirecting us to an arbitrary
+    // host). (An empty url only occurs on hand-constructed Response objects
+    // in tests; the runtime always populates it for real fetch calls.)
+    if (upstream.url && !isAllowedModelProxyRedirectUrl(upstream.url)) {
+      return json(
+        { error: 'redirect left allowed hosts' },
+        403,
+        {},
+        reqOrigin,
+      );
+    }
 
     if (!upstream.ok) {
       let message = `upstream error (${upstream.status})`;
@@ -287,8 +334,16 @@ async function handleModelProxyGet(request: Request): Promise<Response> {
     };
     const contentType = upstream.headers.get('content-type');
     if (contentType) headers['Content-Type'] = contentType;
+    // Forward size/progress semantics: Content-Length for full responses,
+    // Content-Range + Content-Length for 206 partial content.
+    const contentLength = upstream.headers.get('content-length');
+    if (contentLength) headers['Content-Length'] = contentLength;
+    const contentRange = upstream.headers.get('content-range');
+    if (contentRange) headers['Content-Range'] = contentRange;
 
-    return new Response(upstream.body, { status: 200, headers });
+    // Preserve the upstream status so 206 partial responses keep their
+    // Range-based semantics for the transformers.js client.
+    return new Response(upstream.body, { status: upstream.status, headers });
   } catch (err: any) {
     const timedOut = err?.name === 'AbortError';
     return json(
@@ -478,18 +533,54 @@ async function handleAiGenerate(request: Request, env: Env): Promise<Response> {
             400
           );
         }
+        // GEMINI SERVER-KEY GATE: when the client does not provide its own
+        // apiKey, this call spends the operator's GEMINI_API_KEY. Only honor
+        // it from a same-site browser context, and cap spend per-IP + per-day
+        // so strangers cannot drain the operator's quota.
+        if (!apiKey) {
+          const ip =
+            request.headers.get('cf-connecting-ip') ||
+            request.headers.get('x-forwarded-for') ||
+            'unknown';
+          const sameSite = isSameSiteRequest(request);
+          if (!sameSite) {
+            return json(
+              { error: 'Server-key Gemini access denied: request did not come from the VantaOS site.' },
+              403
+            );
+          }
+          const gate = checkServerGemini(ip, Number(env.GEMINI_SERVER_KEY_DAILY_LIMIT ?? 200));
+          if (!gate.allowed) {
+            return json({ error: gate.error }, gate.status);
+          }
+        }
         const contents = messages.map((m: any) => ({
           role: m.role === 'user' ? 'user' : 'model',
           parts: [{ text: m.content }],
         }));
-        const res = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent?key=${key}`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ contents }),
+        // 60s upstream budget — matches the client's AbortSignal.timeout(60000)
+        // (OmniAI.tsx). A hung Google reply must not hold this Worker in I/O
+        // wait and push the isolate into Cloudflare's resource-limit 503s.
+        let res: Response;
+        try {
+          res = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent?key=${key}`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ contents }),
+              signal: AbortSignal.timeout(60_000),
+            }
+          );
+        } catch (fetchErr: any) {
+          // Translate abort/timeout errors here so a client disconnect
+          // mid-body-upload (which can also surface AbortError) is not
+          // misclassified in the outer catch as a Gemini timeout.
+          if (fetchErr?.name === 'TimeoutError' || fetchErr?.name === 'AbortError') {
+            return json({ error: 'Gemini upstream timed out after 60s' }, 500);
           }
-        );
+          throw fetchErr;
+        }
         const data = await res.json() as any;
         if (!res.ok) throw new Error(data.error?.message || `Gemini error (${res.status})`);
         const text = data?.candidates?.[0]?.content?.parts?.map((p: any) => p.text).join('') || '';
@@ -520,8 +611,12 @@ async function handleAiGenerate(request: Request, env: Env): Promise<Response> {
         return json({ error: `Unsupported provider: ${provider}` }, 400);
     }
   } catch (err: any) {
+    // SECURITY: never relay upstream error details to the client — they can
+    // contain partial API keys or internal endpoint information.  Log the
+    // real error server-side for debugging instead.
+    console.error('AI generate error:', err);
     return json(
-      { error: err.message || 'AI request failed' },
+      { error: 'AI request failed' },
       500
     );
   }

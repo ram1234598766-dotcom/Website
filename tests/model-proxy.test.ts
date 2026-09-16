@@ -3,11 +3,12 @@
  *
  * Covers:
  *  - resolveModelRepo(): pure, gated-repo-free model-id → repo mapping.
- *  - the browser fetch-routing override: rewrites CORS-blocked metadata
- *    files on trusted HF/VantaOS hosts to the same-origin
- *    `/api/model-proxy?url=...` GET endpoint, while weight binaries bypass
- *    the proxy (HuggingFace serves them with ACAO `*`, and they exceed the
- *    Worker's ~100 MB response-body limit).
+ *  - the browser fetch-routing override: rewrites CORS-blocked metadata,
+ *    config, tokenizer, and external-data weight files on trusted
+ *    HF/VantaOS hosts to the same-origin `/api/model-proxy?url=...`
+ *    GET endpoint.  Both `.onnx` and `.onnx_data` (external-data tensor
+ *    shards) are routed through the same-origin worker proxy so the
+ *    WebModel works even when HuggingFace CDN is unreachable.
  *
  * Network calls are fully mocked via globalThis.fetch — no real network.
  *
@@ -20,7 +21,7 @@
 
 import { describe, expect, it, afterEach } from 'vitest';
 import * as adapterNs from '../src/lib/models/adapter';
-import { isTrustedUrl, isAllowedModelProxyUrl, MODEL_PROXY_ALLOWED_HOSTS } from '../src/lib/models/sources';
+import { isTrustedUrl, isAllowedModelProxyUrl, isAllowedModelProxyRedirectUrl, MODEL_PROXY_ALLOWED_HOSTS } from '../src/lib/models/sources';
 
 const adapter = adapterNs as unknown as Record<string, unknown>;
 
@@ -32,8 +33,6 @@ describe('MODEL_PROXY_ALLOWED_HOSTS (exact host allowlist)', () => {
   it('pins exactly the shared proxy allowlist (no gated/extra hosts)', () => {
     expect([...MODEL_PROXY_ALLOWED_HOSTS].sort()).toEqual(
       [
-        'cdn-lfs-us-1.huggingface.co',
-        'cdn-lfs.huggingface.co',
         'huggingface.co',
         'models.vantaos.dev',
         'www.huggingface.co',
@@ -72,11 +71,36 @@ describe('isAllowedModelProxyUrl', () => {
   });
 
   it('accepts http and https for allowlisted hosts (absolute-URL boundary)', () => {
-    expect(isAllowedModelProxyUrl('http://cdn-lfs.huggingface.co/repos/x/y.onnx')).toBe(true);
+    expect(isAllowedModelProxyUrl('http://www.huggingface.co/repos/x/y.onnx')).toBe(true);
   });
 
   it('is host-case-insensitive', () => {
     expect(isAllowedModelProxyUrl('https://HUGGINGFACE.CO/gpt2')).toBe(true);
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/*  Post-redirect allowlist — HF CDN zones, not third-party hosts      */
+/* ------------------------------------------------------------------ */
+
+describe('isAllowedModelProxyRedirectUrl (post-redirect HF CDN check)', () => {
+  it('accepts HuggingFace CDN subdomains reached after redirect', () => {
+    expect(isAllowedModelProxyRedirectUrl('https://cdn-lfs.huggingface.co/repos/x/y.onnx')).toBe(true);
+    expect(isAllowedModelProxyRedirectUrl('https://cdn-lfs-us-1.huggingface.co/repos/x/y.onnx')).toBe(true);
+    expect(isAllowedModelProxyRedirectUrl('https://us.aws.cdn.hf.co/xet-bridge-us/681a5/model.onnx')).toBe(true);
+  });
+
+  it('accepts the exact initial allowlist hosts after redirect', () => {
+    for (const host of MODEL_PROXY_ALLOWED_HOSTS) {
+      expect(isAllowedModelProxyRedirectUrl(`https://${host}/x/y.onnx`)).toBe(true);
+    }
+  });
+
+  it('rejects third-party hosts even when reached via redirect', () => {
+    expect(isAllowedModelProxyRedirectUrl('https://evil.example.com/exfil.bin')).toBe(false);
+    expect(isAllowedModelProxyRedirectUrl('https://cdn.huggingface.co.evil.com/x')).toBe(false);
+    expect(isAllowedModelProxyRedirectUrl('https://amazonaws.com/private/bucket')).toBe(false);
+    expect(isAllowedModelProxyRedirectUrl('https://169.254.169.254/latest/meta-data')).toBe(false);
   });
 });
 
@@ -139,12 +163,13 @@ const fetchHelperTestsAvailable = typeof fetchHelper === 'function';
 /**
  * Fetch routing — what gets proxied vs what bypasses.
  *
- * The browser-side proxyFetchOverride only rewrites small metadata/config
- * files (json, txt, xml, model) to /api/model-proxy.  HuggingFace serves
- * weight binaries (.onnx, .onnx_data, .safetensors, .bin, …) with
- * `Access-Control-Allow-Origin: *`, so they can be fetched directly from
- * the browser — and routing them through the Worker would blow past the
- * ~100 MB response-body limit (SmolLM2 onnx_data is 540 MB).
+ * The browser-side proxyFetchOverride rewrites metadata/config/tokenizer
+ * files (json, txt, xml, model) AND weight binaries (.onnx, .onnx_data)
+ * from allowlisted hosts to /api/model-proxy.  There is no enforced
+ * Worker response-body size limit (responses are streamed), so even
+ * 128 MB+ quantized .onnx / .onnx_data files pass through the proxy
+ * safely.  Non-allowlisted hosts and non-matching extensions bypass the
+ * override (returning undefined → caller uses native fetch).
  */
 
 describe.skipIf(!fetchHelperTestsAvailable)('fetch routing override', () => {
@@ -166,17 +191,31 @@ describe.skipIf(!fetchHelperTestsAvailable)('fetch routing override', () => {
     return { calls, sentinel: result == null };
   }
 
-  /* Metadata files → proxied */
+  /* Metadata + .onnx + .onnx_data weight files → proxied through same-origin CORS relay */
   const METADATA_URLS = [
     'https://huggingface.co/onnx-community/SmolLM2-135M-ONNX/resolve/main/config.json',
     'https://www.huggingface.co/onnx-community/SmolLM2-135M-ONNX/resolve/main/tokenizer.json',
-    'https://cdn-lfs.huggingface.co/repos/xx/yy/vocab.txt',
-    'https://cdn-lfs-us-1.huggingface.co/repos/xx/yy/config.json?download=true',
+    'https://www.huggingface.co/onnx-community/SmolLM2-135M-ONNX/resolve/main/generation_config.json',
+    'https://models.vantaos.dev/smol-135m/config.json?download=true',
     'https://huggingface.co/Xenova/gpt-2/resolve/main/config.json',
+    'https://huggingface.co/Xenova/gpt2/resolve/main/onnx/decoder_model_merged_quantized.onnx',
+    'https://www.huggingface.co/onnx-community/SmolLM2-135M-ONNX/resolve/main/model_quantized.onnx?download=true',
+    'https://huggingface.co/onnx-community/SmolLM2-135M-ONNX/resolve/main/model_quantized.onnx',
+    // External-data tensor shards — .onnx_data files must also be proxied
+    'https://huggingface.co/onnx-community/SmolLM2-135M-ONNX/resolve/main/model.onnx_data',
+    'https://www.huggingface.co/onnx-community/SmolLM2-135M-ONNX/resolve/main/model_quantized.onnx_data',
+    'https://huggingface.co/onnx-community/SmolLM2-135M-ONNX/resolve/main/onnx/model.onnx_data',
+    // Remaining metadata extensions (txt / model / xml) for full coverage
+    'https://huggingface.co/onnx-community/SmolLM2-135M-ONNX/resolve/main/added_tokens.txt',
+    'https://models.vantaos.dev/smol-135m/special_tokens_map.json',
+    'https://huggingface.co/Xenova/gpt2/resolve/main/merges.txt',
+    'https://huggingface.co/onnx-community/SmolLM2-135M-ONNX/resolve/main/onnx/model.onnx',
+    'https://huggingface.co/onnx-community/SmolLM2-135M-ONNX/resolve/main/configuration.xml',
+    'https://huggingface.co/onnx-community/SmolLM2-135M-ONNX/resolve/main/vocab.model',
   ];
 
   it.each(METADATA_URLS)(
-    'rewrites allowlisted metadata URL %s to GET /api/model-proxy with the url preserved',
+    'rewrites allowlisted metadata/ONNX URL %s to GET /api/model-proxy with the url preserved',
     async (originalUrl) => {
       const { calls, sentinel } = await callHelperAndCapture(originalUrl);
       expect(sentinel).toBe(false);
@@ -188,17 +227,77 @@ describe.skipIf(!fetchHelperTestsAvailable)('fetch routing override', () => {
     },
   );
 
-  /* Weight files → bypass (sentinel = true → caller uses native fetch directly) */
+  describe('onnx_data external-data shard regression (WebModel 503 fix)', () => {
+    it('rewrites a HuggingFace model.onnx_data shard to the same-origin /api/model-proxy', async () => {
+      const originalUrl =
+        'https://huggingface.co/onnx-community/SmolLM2-135M-ONNX/resolve/main/onnx/model.onnx_data';
+      const { calls, sentinel } = await callHelperAndCapture(originalUrl);
+      expect(sentinel).toBe(false);
+      expect(calls).toHaveLength(1);
+      const rewritten = new URL(calls[0].url, 'http://localhost');
+      expect(rewritten.pathname).toBe('/api/model-proxy');
+      expect(calls[0].init?.method ?? 'GET').toBe('GET');
+      expect(rewritten.searchParams.get('url')).toBe(originalUrl);
+    });
+
+    it('rewrites model_quantized.onnx_data and model.onnx alike (both weight binaries proxied)', async () => {
+      for (const originalUrl of [
+        'https://huggingface.co/onnx-community/SmolLM2-135M-ONNX/resolve/main/model_quantized.onnx_data',
+        'https://huggingface.co/onnx-community/SmolLM2-135M-ONNX/resolve/main/model.onnx',
+        'https://www.huggingface.co/onnx-community/SmolLM2-135M-ONNX/resolve/main/model.onnx_data',
+      ]) {
+        const { calls, sentinel } = await callHelperAndCapture(originalUrl);
+        expect(sentinel).toBe(false); // must NOT fall back to native fetch
+        expect(calls).toHaveLength(1);
+        const rewritten = new URL(calls[0].url, 'http://localhost');
+        expect(rewritten.pathname).toBe('/api/model-proxy');
+        expect(rewritten.searchParams.get('url')).toBe(originalUrl);
+      }
+    });
+
+    it('is case-insensitive for the .onnx_data extension', async () => {
+      const originalUrl =
+        'https://huggingface.co/onnx-community/SmolLM2-135M-ONNX/resolve/main/MODEL.ONNX_DATA';
+      const { calls, sentinel } = await callHelperAndCapture(originalUrl);
+      expect(sentinel).toBe(false);
+      expect(calls).toHaveLength(1);
+      expect(new URL(calls[0].url, 'http://localhost').pathname).toBe('/api/model-proxy');
+    });
+
+    it('does NOT rewrite .onnx_data on a non-allowlisted host (host allowlist unchanged)', async () => {
+      const originalUrl = 'https://evil.example.com/x/weights.onnx_data';
+      const { calls, sentinel } = await callHelperAndCapture(originalUrl);
+      expect(sentinel).toBe(true);      // caller falls back to native fetch
+      expect(calls).toHaveLength(0);    // no proxy rewrite
+    });
+
+    it('does NOT rewrite .onnx_data over non-HTTPS (protocol guard unchanged)', async () => {
+      const originalUrl = 'http://huggingface.co/onnx-community/SmolLM2-135M-ONNX/resolve/main/model.onnx_data';
+      const { calls, sentinel } = await callHelperAndCapture(originalUrl);
+      expect(sentinel).toBe(true);
+      expect(calls).toHaveLength(0);
+    });
+
+    it('still bypasses .safetensors / .bin on allowlisted hosts (outside proxy extension set)', async () => {
+      for (const originalUrl of [
+        'https://huggingface.co/onnx-community/SmolLM2-135M-ONNX/resolve/main/model.safetensors',
+        'https://models.vantaos.dev/smol-135m/shard-0.bin',
+      ]) {
+        const { calls, sentinel } = await callHelperAndCapture(originalUrl);
+        expect(sentinel).toBe(true);
+        expect(calls).toHaveLength(0);
+      }
+    });
+  });
+
+  /* Non-allowlisted hosts + non-matching extensions → bypass (sentinel = true → caller uses native fetch) */
   const WEIGHT_URLS = [
-    'https://huggingface.co/onnx-community/SmolLM2-135M-ONNX/resolve/main/model.onnx?download=true',
-    'https://cdn-lfs.huggingface.co/repos/xx/yy/model.onnx',
-    'https://cdn-lfs-us-1.huggingface.co/repos/xx/yy/model.onnx?download=true',
+    'https://us.aws.cdn.hf.co/xet-bridge-us/prod/blobs/abc123def456/model.onnx_data',
     'https://models.vantaos.dev/smol-135m/shard-0.bin',
-    'https://huggingface.co/onnx-community/SmolLM2-135M-ONNX/resolve/main/model.onnx_data',
   ];
 
   it.each(WEIGHT_URLS)(
-    'bypasses proxy for weight file %s (sentinel = undefined)',
+    'bypasses proxy for non-allowlisted host or non-matching extension %s (sentinel = undefined)',
     async (originalUrl) => {
       const { calls, sentinel } = await callHelperAndCapture(originalUrl);
       expect(sentinel).toBe(true);   // returned undefined → caller uses native fetch

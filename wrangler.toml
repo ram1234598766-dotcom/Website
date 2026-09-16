@@ -14,9 +14,17 @@ binding = "ASSETS"
 binding = "WORKER_SELF_REFERENCE"
 service = "website"
 
+# [[r2_buckets]]
+# binding = "R2_BUCKET"
+# bucket_name = "website-bucket"
+# R2 not enabled on free plan — uncomment when upgraded
+
 [env]
 # Environment variables for the Worker
 # Set GEMINI_API_KEY via: wrangler secret put GEMINI_API_KEY
+CLOUDFLARE_ACCOUNT_ID = "14b2a75797c9e9e4da1c1b11a81a0b7a"
+# WRANGLER AUTH: NEVER put CLOUDFLARE_API_TOKEN here — it is read from the
+# CLOUDFLARE_API_TOKEN environment variable at deploy time instead.
 
 [vars]
 NEXT_PUBLIC_FIREBASE_API_KEY = "AIzaSyD550yrhM0--Q4qEhN0fWD6GmOeAjoCKxE"
@@ -26,3 +34,4 @@ NEXT_PUBLIC_FIREBASE_APP_ID = "1:545509873123:web:e100fdee71cdc833e4bcd6"
 NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET = "website-6e8b1.firebasestorage.app"
 NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID = "545509873123"
 # GEMINI_API_KEY: set via `wrangler secret put GEMINI_API_KEY` (not in [vars] for security)
+R2_S3_ENDPOINT = "https://14b2a75797c9e9e4da1c1b11a81a0b7a.r2.cloudflarestorage.com"

@@ -180,3 +180,56 @@ describe('Query fallback chain', () => {
     expect(typeof localQuery).toBe('function');
   }, 30000);
 });
+
+// ─── 7. friendlyWebModelError — truthful error classification ─────────────
+
+describe('friendlyWebModelError', () => {
+  async function loadFriendly() {
+    const mod = await import('../../src/components/OmniAI');
+    return mod.friendlyWebModelError as (err: unknown) => string;
+  }
+
+  it('classifies download failures as a download problem, not "blocked"', async () => {
+    const friendly = await loadFriendly();
+    for (const msg of [
+      'The onnx-community/SmolLM2-135M-ONNX model failed to download: 404 Not Found',
+      'unable to locate file https://huggingface.co/.../config.json',
+      'Service Unavailable',
+      'load file failed',
+      'Failed to download model file (403 Forbidden)',
+      'fetch failed',
+      'NetworkError: connection refused',
+      // Exact transformers.js message seen in production when HuggingFace
+      // CDN 503s a proxied .onnx_data shard
+      'Service unavailable error occurred while trying to load file: "https://huggingface.co/onnx-community/SmolLM2-135M-ONNX/resolve/main/onnx/model.onnx_data"',
+    ]) {
+      expect(friendly(new Error(msg))).toContain("couldn't download its model files");
+    }
+  });
+
+  it('does not claim a HuggingFace block for ordinary model failures', async () => {
+    const friendly = await loadFriendly();
+    const out = friendly(
+      new Error('The onnx-community/SmolLM2-135M-ONNX model failed to download: 404 Not Found'),
+    );
+    expect(out.toLowerCase()).not.toContain('blocked');
+  });
+
+  it('classifies runtime failures (WebGPU / device / timeout) with the raw cause', async () => {
+    const friendly = await loadFriendly();
+    expect(friendly(new Error('WebGPU is not supported by this browser'))).toContain("couldn't run its in-browser runtime");
+    expect(friendly(new Error('Execution timed out while loading model weights'))).toContain("couldn't run its in-browser runtime");
+  });
+
+  it('returns the raw message when it does not match a known failure', async () => {
+    const friendly = await loadFriendly();
+    const raw = 'Something unprecedented happened while parsing';
+    expect(friendly(new Error(raw))).toBe(raw);
+  });
+
+  it('coerces non-Error values and undefined', async () => {
+    const friendly = await loadFriendly();
+    expect(friendly('failed to download weights')).toContain("couldn't download its model files");
+    expect(friendly(undefined)).toBe('Unknown error');
+  });
+});

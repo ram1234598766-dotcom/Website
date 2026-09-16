@@ -440,12 +440,13 @@ export function resolveModelRepo(modelId: string): string {
 
 // ─── Model proxy (browser) ─────────────────────────────
 
-// Only metadata / config / tokenizer files need the CORS relay. HuggingFace
-// serves model weight binaries with `Access-Control-Allow-Origin: *` (verified
-// against cdn-lfs.huggingface.co + huggingface.co resolve), so they can be
-// fetched directly from the browser — and routing them through the Worker
-// would blow past its ~100MB response-body limit (SmolLM2's onnx_data is 540MB).
-const MODEL_METADATA_EXTENSION_RE = /\.(json|txt|model|xml)$/i;
+// Metadata, tokenizer, .onnx weight files, and .onnx_data external-data
+// tensor shards are all routed through the same-origin CORS proxy so the
+// WebModel works even when HuggingFace CDN is unreachable from the
+// browser.  Cloudflare Workers have no enforced response-body size limit
+// (streamed), so even 128 MB+ quantized ONNX / ONNX_DATA files pass
+// through safely.
+const MODEL_METADATA_EXTENSION_RE = /\.(json|txt|model|xml|onnx|onnx_data)$/i;
 
 export function proxyFetchOverride(
   url: string | URL,

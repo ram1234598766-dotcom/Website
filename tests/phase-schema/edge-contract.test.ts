@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { handleApiRequest, rateLimitCheck, rateLimitStore } from '../../src/lib/server/api-router';
+import { resetServerGeminiLimits } from '../../src/lib/server/rate-limit';
 
 const env: Record<string, string | undefined> = {};
 
@@ -7,12 +8,20 @@ function mockRequest(url: string, init?: RequestInit): Request {
   return new Request(url, init);
 }
 
+const SAME_SITE_HEADERS = {
+  'Origin': 'https://website.vasudevaya.workers.dev',
+  'Sec-Fetch-Site': 'same-origin',
+  'Content-Type': 'application/json',
+};
+
 beforeEach(() => {
   vi.useRealTimers();
+  resetServerGeminiLimits();
 });
 
 afterEach(() => {
   vi.restoreAllMocks();
+  resetServerGeminiLimits();
 });
 
 // ─── Health endpoint ────────────────────────────────────────
@@ -338,7 +347,7 @@ describe('POST /api/ai/generate — Gemini server-key fallback', () => {
     const serverEnv = { GEMINI_API_KEY: 'AIza-server-key-123' };
     const req = mockRequest('https://example.com/api/ai/generate', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { ...SAME_SITE_HEADERS, 'cf-connecting-ip': '198.51.100.1' },
       body: JSON.stringify({ provider: 'gemini', messages: [{ role: 'user', content: 'hi' }] }),
     });
     const res = await handleApiRequest(req, serverEnv);
@@ -360,7 +369,7 @@ describe('POST /api/ai/generate — Gemini server-key fallback', () => {
     const serverEnv = { GEMINI_API_KEY: 'AIza-server-key-123' };
     const req = mockRequest('https://example.com/api/ai/generate', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { ...SAME_SITE_HEADERS, 'cf-connecting-ip': '198.51.100.2' },
       body: JSON.stringify({
         provider: 'gemini',
         apiKey: 'AIza-client-key-456',
@@ -378,7 +387,7 @@ describe('POST /api/ai/generate — Gemini server-key fallback', () => {
     vi.stubGlobal('fetch', vi.fn());
     const req = mockRequest('https://example.com/api/ai/generate', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { ...SAME_SITE_HEADERS },
       body: JSON.stringify({ provider: 'gemini', messages: [{ role: 'user', content: 'hi' }] }),
     });
     const res = await handleApiRequest(req, env); // env = {} — no server key
@@ -392,7 +401,7 @@ describe('POST /api/ai/generate — Gemini server-key fallback', () => {
     vi.stubGlobal('fetch', fetchMock);
     const req = mockRequest('https://example.com/api/ai/generate', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { ...SAME_SITE_HEADERS },
       body: JSON.stringify({ provider: 'gemini', messages: [{ role: 'user', content: 'hi' }] }),
     });
     const res = await handleApiRequest(req, { GEMINI_API_KEY: 'MY_GEMINI_API_KEY' });
@@ -405,13 +414,147 @@ describe('POST /api/ai/generate — Gemini server-key fallback', () => {
     const serverEnv = { GEMINI_API_KEY: 'AIza-server-key-123' };
     const req = mockRequest('https://example.com/api/ai/generate', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { ...SAME_SITE_HEADERS },
       body: JSON.stringify({ provider: 'openai', messages: [{ role: 'user', content: 'hi' }] }),
     });
     const res = await handleApiRequest(req, serverEnv);
     expect(res.status).toBe(400);
     const body = (await res.json()) as Record<string, unknown>;
     expect(String(body.error)).toContain('apiKey is required');
+  });
+
+  // ─── Server-key gate (H1): same-site + rate limiting ─────
+
+  it('rejects server-key Gemini usage from a non-allowlisted origin', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const serverEnv = { GEMINI_API_KEY: 'AIza-server-key-123' };
+    const req = mockRequest('https://example.com/api/ai/generate', {
+      method: 'POST',
+      headers: {
+        'Origin': 'https://evil.example.com',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ provider: 'gemini', messages: [{ role: 'user', content: 'hi' }] }),
+    });
+    const res = await handleApiRequest(req, serverEnv);
+    expect(res.status).toBe(403);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects server-key Gemini usage with only a spoofed-in-appearing Origin via empty-site demand', async () => {
+    // No Origin/Referer/Sec-Fetch-Site at all — a bare curl-style request
+    // must NOT be able to spend the server key.
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const serverEnv = { GEMINI_API_KEY: 'AIza-server-key-123' };
+    const req = mockRequest('https://example.com/api/ai/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ provider: 'gemini', messages: [{ role: 'user', content: 'hi' }] }),
+    });
+    const res = await handleApiRequest(req, serverEnv);
+    expect(res.status).toBe(403);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('accepts server-key Gemini from an allowlisted Referer without Origin', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({
+        candidates: [{ content: { parts: [{ text: 'referer-ok' }] } }],
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const serverEnv = { GEMINI_API_KEY: 'AIza-server-key-123' };
+    const req = mockRequest('https://example.com/api/ai/generate', {
+      method: 'POST',
+      headers: {
+        'Referer': 'https://website.vasudevaya.workers.dev/foo',
+        'Content-Type': 'application/json',
+        'cf-connecting-ip': '198.51.100.3',
+      },
+      body: JSON.stringify({ provider: 'gemini', messages: [{ role: 'user', content: 'hi' }] }),
+    });
+    const res = await handleApiRequest(req, serverEnv);
+    expect(res.status).toBe(200);
+  });
+
+  it('rate-limits server-key Gemini per IP (429 after the per-IP budget)', async () => {
+    const ok = () => new Response(JSON.stringify({
+      candidates: [{ content: { parts: [{ text: 'ok' }] } }],
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    const fetchMock = vi.fn().mockImplementation(() => ok());
+    vi.stubGlobal('fetch', fetchMock);
+    const serverEnv = { GEMINI_API_KEY: 'AIza-server-key-123' };
+    const ip = '198.51.100.77';
+    for (let i = 0; i < 20; i++) {
+      const req = mockRequest('https://example.com/api/ai/generate', {
+        method: 'POST',
+        headers: { ...SAME_SITE_HEADERS, 'cf-connecting-ip': ip },
+        body: JSON.stringify({ provider: 'gemini', messages: [{ role: 'user', content: 'hi' }] }),
+      });
+      const res = await handleApiRequest(req, serverEnv);
+      expect(res.status).toBe(200);
+    }
+    const overflow = mockRequest('https://example.com/api/ai/generate', {
+      method: 'POST',
+      headers: { ...SAME_SITE_HEADERS, 'cf-connecting-ip': ip },
+      body: JSON.stringify({ provider: 'gemini', messages: [{ role: 'user', content: 'hi' }] }),
+    });
+    const res = await handleApiRequest(overflow, serverEnv);
+    expect(res.status).toBe(429);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(String(body.error)).toContain('Too many requests');
+  });
+
+  it('enforces the daily server-key cap even across different IPs', async () => {
+    const ok = () => new Response(JSON.stringify({
+      candidates: [{ content: { parts: [{ text: 'ok' }] } }],
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    const fetchMock = vi.fn().mockImplementation(() => ok());
+    vi.stubGlobal('fetch', fetchMock);
+    const serverEnv = { GEMINI_API_KEY: 'AIza-server-key-123', GEMINI_SERVER_KEY_DAILY_LIMIT: '3' };
+    for (let i = 1; i <= 3; i++) {
+      const req = mockRequest('https://example.com/api/ai/generate', {
+        method: 'POST',
+        headers: { ...SAME_SITE_HEADERS, 'cf-connecting-ip': `203.0.113.${i}` },
+        body: JSON.stringify({ provider: 'gemini', messages: [{ role: 'user', content: 'hi' }] }),
+      });
+      const res = await handleApiRequest(req, serverEnv);
+      expect(res.status).toBe(200);
+    }
+    const overflow = mockRequest('https://example.com/api/ai/generate', {
+      method: 'POST',
+      headers: { ...SAME_SITE_HEADERS, 'cf-connecting-ip': '203.0.113.99' },
+      body: JSON.stringify({ provider: 'gemini', messages: [{ role: 'user', content: 'hi' }] }),
+    });
+    const res = await handleApiRequest(overflow, serverEnv);
+    expect(res.status).toBe(429);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(String(body.error)).toContain('Daily server-key');
+  });
+
+  it('lets a client-provided apiKey bypass the same-site + rate-limit gate', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({
+        candidates: [{ content: { parts: [{ text: 'own-key' }] } }],
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const serverEnv = { GEMINI_API_KEY: 'AIza-server-key-123', GEMINI_SERVER_KEY_DAILY_LIMIT: '0' };
+    const req = mockRequest('https://example.com/api/ai/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Origin': 'https://evil.example.com' },
+      body: JSON.stringify({
+        provider: 'gemini',
+        apiKey: 'AIza-own-key-789',
+        messages: [{ role: 'user', content: 'hi' }],
+      }),
+    });
+    const res = await handleApiRequest(req, serverEnv);
+    expect(res.status).toBe(200);
+    const [fetchUrl] = fetchMock.mock.calls[0];
+    expect(String(fetchUrl)).toContain('key=AIza-own-key-789');
   });
 });
 
