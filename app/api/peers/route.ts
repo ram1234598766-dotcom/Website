@@ -1,4 +1,5 @@
 import { handleApiRequest, serverEnv } from '@/src/lib/server/api-router';
+import type { ApiResponse, PeerInfo } from '@/src/lib/server/types';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';

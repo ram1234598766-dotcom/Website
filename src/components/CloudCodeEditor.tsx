@@ -13,7 +13,7 @@
 
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, memo } from 'react';
 import { EditorView } from '@codemirror/view';
 import { EditorState } from '@codemirror/state';
 
@@ -41,7 +41,7 @@ interface CloudCodeEditorProps {
   className?: string;
 }
 
-export default function CloudCodeEditor({
+function CloudCodeEditor({
   value,
   language,
   theme,
@@ -57,8 +57,6 @@ export default function CloudCodeEditor({
   onChangeRef.current = onChange;
   const lastEmittedRef = useRef(value);
 
-  // Mount exactly once. CloudOS remounts the editor per active file (the
-  // tab area carries a key), so a fresh CodeMirror state per file is fine.
   useEffect(() => {
     const parent = parentRef.current;
     if (!parent) return;
@@ -91,7 +89,6 @@ export default function CloudCodeEditor({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Keep the editor in step with prop changes (value, language, theme, size).
   useEffect(() => {
     const view = viewRef.current;
     const com = comRef.current;
@@ -115,3 +112,5 @@ export default function CloudCodeEditor({
 
   return <div ref={parentRef} className={className} style={{ height: '100%' }} />;
 }
+
+export default memo(CloudCodeEditor);

@@ -30,6 +30,21 @@ function rateLimitCheck(key: string): { allowed: boolean; remaining: number; res
   return { allowed: true, remaining: RATE_LIMIT - 1, resetAt: new Date(now + RATE_LIMIT_WINDOW).toISOString() };
 }
 
+function rateLimitCheckAtomic(key: string): { allowed: boolean; remaining: number; resetAt: string } {
+  const now = Date.now();
+  const windowStart = now - (now % RATE_LIMIT_WINDOW);
+  const entry = rateLimitStore.get(key);
+  if (entry && entry.windowStart === windowStart) {
+    entry.count += 1;
+    if (entry.count > RATE_LIMIT) {
+      return { allowed: false, remaining: 0, resetAt: new Date(entry.windowStart + RATE_LIMIT_WINDOW).toISOString() };
+    }
+    return { allowed: true, remaining: RATE_LIMIT - entry.count, resetAt: new Date(entry.windowStart + RATE_LIMIT_WINDOW).toISOString() };
+  }
+  rateLimitStore.set(key, { count: 1, windowStart });
+  return { allowed: true, remaining: RATE_LIMIT - 1, resetAt: new Date(windowStart + RATE_LIMIT_WINDOW).toISOString() };
+}
+
 function rateLimitSlide(key: string): void {
   const entry = rateLimitStore.get(key);
   if (!entry) return;
@@ -116,4 +131,4 @@ function resetServerGeminiLimits(): void {
   serverGeminiDailyStore.clear();
 }
 
-export { rateLimitCheck, rateLimitSlide, rateLimitStore, checkServerGemini, resetServerGeminiLimits };
+export { rateLimitCheck, rateLimitCheckAtomic, rateLimitSlide, rateLimitStore, checkServerGemini, resetServerGeminiLimits };

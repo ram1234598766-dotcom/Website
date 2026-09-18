@@ -49,13 +49,21 @@ export async function verifyManifestSignature(
   const payload = manifestToSign(manifest);
   if (manifest.signatureAlgorithm === 'hmac-sha256') {
     if (!publicKey) return false;
-    const expected = await hmacSha256(publicKey, payload);
-    const actual = base64UrlToBytes(manifest.signature);
-    return timingSafeEqual(expected, actual);
+    try {
+      const expected = await hmacSha256(publicKey, payload);
+      const actual = base64UrlToBytes(manifest.signature);
+      return timingSafeEqual(expected, actual);
+    } catch {
+      return false;
+    }
   }
   if (manifest.signatureAlgorithm === 'ed25519') {
     if (!publicKey) return false;
-    return verifyEd25519(publicKey, payload, manifest.signature);
+    try {
+      return verifyEd25519(publicKey, payload, manifest.signature);
+    } catch {
+      return false;
+    }
   }
   return false;
 }
@@ -226,7 +234,16 @@ export async function loadPlugin(manifest: PluginManifest, publicKey?: string): 
     capabilities: Array.from(manifest.capabilities),
   });
 
+  const READY_TIMEOUT_MS = 30_000;
+  const readyTimeout = setTimeout(() => {
+    if (readyResolver) {
+      readyResolver();
+      readyResolver = null;
+    }
+  }, READY_TIMEOUT_MS);
+
   await readyPromise;
+  clearTimeout(readyTimeout);
 
   URL.revokeObjectURL(workerUrl);
 
@@ -236,9 +253,20 @@ export async function loadPlugin(manifest: PluginManifest, publicKey?: string): 
 }
 
 async function fetchAndExtractScript(url: string): Promise<string> {
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`Failed to fetch plugin entry point: ${res.status}`);
-  return await res.text();
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 30_000);
+  try {
+    const res = await fetch(url, { signal: controller.signal });
+    if (!res.ok) throw new Error(`Failed to fetch plugin entry point: ${res.status}`);
+    return await res.text();
+  } catch (err: any) {
+    if (err?.name === 'AbortError') {
+      throw new Error(`Fetching plugin entry point timed out after 30s`);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 // ─── Runner ──────────────────────────────────────────────────────────────────
@@ -256,7 +284,8 @@ export class PluginRunner {
     this.maxRunMs = maxRunMs;
     this.onApiRequest = onApiRequest ?? (async () => { throw new Error('No API handler'); });
     this.worker.onmessage = (e) => this.handleMessage(e.data);
-    this.worker.onerror = (err) => {
+    this.worker.onerror = () => {
+      this.terminated = true;
       for (const call of this.pending.values()) {
         clearTimeout(call.timer);
         call.resolve({
@@ -293,7 +322,20 @@ export class PluginRunner {
       this.pending.set(id, { resolve, timer, outputs });
     });
 
-    this.worker.postMessage({ type: 'run', id, script });
+    try {
+      this.worker.postMessage({ type: 'run', id, script });
+    } catch {
+      if (!this.pending.has(id)) {
+        return { runId: id, result, cancel: () => this.cancel(id) };
+      }
+      clearTimeout(this.pending.get(id)?.timer);
+      const call = this.pending.get(id);
+      if (call) {
+        call.resolve(result.catch(() => {}) as any);
+      }
+      return { runId: id, result, cancel: () => this.cancel(id) };
+    }
+
     return { runId: id, result, cancel: () => this.cancel(id) };
   }
 

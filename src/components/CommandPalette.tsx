@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback, memo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, Compass, Puzzle, File, Folder, Plus, Save, LogOut, Settings as SettingsIcon, Terminal } from 'lucide-react';
+import { Search, Compass, Puzzle, File, Folder, Plus, Save, LogOut, Settings as SettingsIcon, Terminal, History, MousePointerClick } from 'lucide-react';
 import { ViewState } from '../types';
 import { client } from '../lib/client';
 
@@ -19,23 +19,48 @@ interface PaletteItem {
   description?: string;
   icon: any;
   onSelect: () => void;
+  isRecent?: boolean;
 }
 
-export default function CommandPalette({ isOpen, onClose, setCurrentView }: CommandPaletteProps) {
+const RECENT_COMMANDS_KEY = 'vantaos_recent_commands';
+const MAX_RECENT = 8;
+
+function loadRecentCommands(): string[] {
+  try {
+    const raw = localStorage.getItem(RECENT_COMMANDS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveRecentCommands(names: string[]) {
+  try {
+    localStorage.setItem(RECENT_COMMANDS_KEY, JSON.stringify(names));
+  } catch {
+    /* ignore */
+  }
+}
+
+const CommandPalette = memo(function CommandPalette({ isOpen, onClose, setCurrentView }: CommandPaletteProps) {
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [recentNames, setRecentNames] = useState<string[]>([]);
   const listRef = useRef<HTMLDivElement>(null);
   const restoreFocusRef = useRef<HTMLElement | null>(null);
 
-  // Get IDE state if available
   const ideState = (window as any).vantaosIDE;
 
-  // Capture the previously focused element on open; restore it on close.
+  useEffect(() => {
+    setRecentNames(loadRecentCommands());
+  }, []);
+
   useEffect(() => {
     if (isOpen) {
       restoreFocusRef.current = document.activeElement as HTMLElement;
       setQuery('');
       setSelectedIndex(0);
+      setRecentNames(loadRecentCommands());
     } else if (restoreFocusRef.current) {
       restoreFocusRef.current.focus?.();
       restoreFocusRef.current = null;
@@ -80,6 +105,13 @@ export default function CommandPalette({ isOpen, onClose, setCurrentView }: Comm
     return j === p.length;
   }, []);
 
+  const recentItems = useMemo<PaletteItem[]>(() => {
+    return recentNames
+      .map(name => items.find(item => item.name === name))
+      .filter((item): item is PaletteItem => item !== undefined)
+      .map(item => ({ ...item, isRecent: true }));
+  }, [recentNames, items]);
+
   const filteredItems = useMemo<PaletteItem[]>(() => {
     let result: PaletteItem[];
     if (query) {
@@ -98,17 +130,25 @@ export default function CommandPalette({ isOpen, onClose, setCurrentView }: Comm
     return Array.from(unique.values());
   }, [items, query, fuzzyMatch]);
 
-  // Refs so the keydown listener subscribes only once per open.
+  const displayItems = useMemo<PaletteItem[]>(() => {
+    if (query) return filteredItems;
+    const recentSet = new Set(recentItems.map(r => r.id));
+    const recent = recentItems.filter(r => recentSet.has(r.id) || filteredItems.includes(r));
+    const rest = filteredItems.filter(item => !recent.find(r => r.id === item.id));
+    return [...recent, ...rest];
+  }, [query, filteredItems, recentItems]);
+
   const filteredItemsRef = useRef(filteredItems);
   filteredItemsRef.current = filteredItems;
+  const displayItemsRef = useRef(displayItems);
+  displayItemsRef.current = displayItems;
   const selectedIndexRef = useRef(selectedIndex);
   selectedIndexRef.current = selectedIndex;
 
-  // Handle keyboard navigation
   useEffect(() => {
     if (!isOpen) return;
     const handleKeyDown = (e: KeyboardEvent) => {
-      const list = filteredItemsRef.current;
+      const list = displayItemsRef.current;
       if (e.key === 'ArrowDown') {
         e.preventDefault();
         setSelectedIndex(prev => (list.length === 0 ? 0 : (prev + 1) % list.length));
@@ -118,7 +158,14 @@ export default function CommandPalette({ isOpen, onClose, setCurrentView }: Comm
       } else if (e.key === 'Enter') {
         e.preventDefault();
         const item = list[selectedIndexRef.current];
-        if (item) item.onSelect();
+        if (item) {
+          item.onSelect();
+          if (!recentNames.includes(item.name)) {
+            const updated = [item.name, ...recentNames].slice(0, MAX_RECENT);
+            setRecentNames(updated);
+            saveRecentCommands(updated);
+          }
+        }
       } else if (e.key === 'Escape') {
         e.preventDefault();
         onClose();
@@ -126,14 +173,12 @@ export default function CommandPalette({ isOpen, onClose, setCurrentView }: Comm
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose]);
+  }, [isOpen, onClose, recentNames]);
 
-  // Reset selection when query changes
   useEffect(() => {
     setSelectedIndex(0);
   }, [query]);
 
-  // Auto-scroll to selected item
   useEffect(() => {
     if (listRef.current) {
       const selectedEl = listRef.current.children[selectedIndex] as HTMLElement;
@@ -143,7 +188,16 @@ export default function CommandPalette({ isOpen, onClose, setCurrentView }: Comm
     }
   }, [selectedIndex]);
 
-  const selectedItem = filteredItems[selectedIndex];
+  const selectedItem = displayItems[selectedIndex];
+
+  const handleSelect = useCallback((item: PaletteItem) => {
+    item.onSelect();
+    if (!recentNames.includes(item.name)) {
+      const updated = [item.name, ...recentNames].slice(0, MAX_RECENT);
+      setRecentNames(updated);
+      saveRecentCommands(updated);
+    }
+  }, [recentNames]);
 
   return (
     <AnimatePresence>
@@ -185,9 +239,30 @@ export default function CommandPalette({ isOpen, onClose, setCurrentView }: Comm
               </button>
             </div>
 
-            <div id="command-palette-list" role="listbox" className="max-h-[60vh] overflow-y-auto p-2" ref={listRef}>
-              {filteredItems.length > 0 ? (
-                filteredItems.map((item, index) => {
+            <div className="px-4 py-1.5 border-b border-white/5 flex items-center gap-4 text-[10px] text-slate-500 font-mono uppercase tracking-wider">
+              <span className="flex items-center gap-1">
+                <span className="inline-block w-4 h-3.5 border border-slate-600 rounded-sm text-[8px] leading-[11px] text-center">↑↓</span>
+                Navigate
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="inline-block w-8 h-3.5 border border-slate-600 rounded-sm text-[8px] leading-[11px] text-center">Enter</span>
+                Select
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="inline-block w-8 h-3.5 border border-slate-600 rounded-sm text-[8px] leading-[11px] text-center">Esc</span>
+                Close
+              </span>
+              {recentItems.length > 0 && !query && (
+                <span className="ml-auto flex items-center gap-1">
+                  <History size={10} />
+                  Recent
+                </span>
+              )}
+            </div>
+
+            <div id="command-palette-list" role="listbox" className="max-h-[50vh] overflow-y-auto p-2" ref={listRef}>
+              {displayItems.length > 0 ? (
+                displayItems.map((item, index) => {
                   const isSelected = index === selectedIndex;
                   return (
                     <button
@@ -195,13 +270,14 @@ export default function CommandPalette({ isOpen, onClose, setCurrentView }: Comm
                       id={`palette-item-${item.id}`}
                       role="option"
                       aria-selected={isSelected}
-                      onClick={item.onSelect}
+                      onClick={() => handleSelect(item)}
                       onMouseEnter={() => setSelectedIndex(index)}
                       className={`w-full flex items-center justify-between px-3 py-3 rounded-lg text-left transition-colors ${
                         isSelected ? 'bg-indigo-500/20 text-indigo-300' : 'hover:bg-white/5 text-slate-300'
                       }`}
                     >
                       <div className="flex items-center gap-3">
+                        {item.isRecent && <History size={12} className="text-slate-600 shrink-0" aria-hidden />}
                         <item.icon className={`w-4 h-4 ${isSelected ? 'text-indigo-400' : 'text-slate-400'}`} />
                         <span>{item.name}</span>
                       </div>
@@ -212,7 +288,11 @@ export default function CommandPalette({ isOpen, onClose, setCurrentView }: Comm
                   );
                 })
               ) : (
-                <div className="px-3 py-4 text-center text-sm text-slate-500">No results found</div>
+                <div className="px-3 py-8 text-center">
+                  <MousePointerClick className="w-8 h-8 mx-auto mb-3 text-slate-600" aria-hidden />
+                  <div className="text-sm text-slate-400 font-medium">No results found</div>
+                  <div className="text-xs text-slate-600 mt-1">Try a different keyword or browse commands above</div>
+                </div>
               )}
             </div>
           </motion.div>
@@ -220,4 +300,5 @@ export default function CommandPalette({ isOpen, onClose, setCurrentView }: Comm
       )}
     </AnimatePresence>
   );
-}
+});
+export default CommandPalette;

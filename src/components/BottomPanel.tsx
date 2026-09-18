@@ -1,11 +1,14 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { Terminal, Archive, Code2, X, Plus, ChevronDown, ChevronUp } from 'lucide-react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { Terminal, Archive, Code2, X, Plus, ChevronDown, ChevronUp, Pin, PinOff, PanelLeft } from 'lucide-react';
 import TerminalPanel from './TerminalPanel';
 
 export type BottomPanelTab = 'terminal' | 'output' | 'console';
 
 interface BottomPanelProps {
   defaultTab?: BottomPanelTab;
+  isOpen?: boolean;
+  onToggleOpen?: () => void;
+  onClose?: () => void;
 }
 
 const TABS: { id: BottomPanelTab; label: string; icon: React.ReactNode }[] = [
@@ -14,16 +17,51 @@ const TABS: { id: BottomPanelTab; label: string; icon: React.ReactNode }[] = [
   { id: 'console', label: 'Console', icon: <Code2 size={13} /> },
 ];
 
-export default function BottomPanel({ defaultTab = 'terminal' }: BottomPanelProps) {
-  const [activeTab, setActiveTab] = useState<BottomPanelTab>(defaultTab);
-  const [isOpen, setIsOpen] = useState(true);
+export default function BottomPanel({ defaultTab = 'terminal', isOpen: isOpenProp, onToggleOpen, onClose }: BottomPanelProps) {
+  const savedTab = (() => { try { return localStorage.getItem('vantaos-bottom-panel-tab') as BottomPanelTab || null; } catch { return null; } })();
+  const [activeTab, setActiveTab] = useState<BottomPanelTab>(savedTab ?? defaultTab);
+  const [isOpen, setIsOpen] = useState(isOpenProp ?? true);
   const [height, setHeight] = useState(200);
+  const [isPinned, setIsPinned] = useState(false);
+  const [showSplit, setShowSplit] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const [isResizing, setIsResizing] = useState(false);
   const outputRef = useRef<HTMLDivElement>(null);
   const [outputLines, setOutputLines] = useState<string[]>([]);
   const [consoleOutput, setConsoleOutput] = useState<string[]>([]);
   const [consoleInput, setConsoleInput] = useState('');
+
+  const handleTabChange = useCallback((tab: BottomPanelTab) => {
+    setActiveTab(tab);
+    try { localStorage.setItem('vantaos-bottom-panel-tab', tab); } catch { /* ignore */ }
+  }, []);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'j' && (e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey) {
+        e.preventDefault();
+        const ta = document.querySelector('.xterm-helper-textarea') as HTMLElement | null;
+        if (ta) ta.focus();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === 'terminal') {
+      setTimeout(() => {
+        const ta = document.querySelector('.xterm-helper-textarea') as HTMLElement | null;
+        if (ta) ta.focus();
+      }, 200);
+    }
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (isOpenProp !== undefined) {
+      setIsOpen(isOpenProp);
+    }
+  }, [isOpenProp]);
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -96,7 +134,7 @@ export default function BottomPanel({ defaultTab = 'terminal' }: BottomPanelProp
         {TABS.map((tab) => (
           <button
             key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
+            onClick={() => handleTabChange(tab.id)}
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -107,10 +145,11 @@ export default function BottomPanel({ defaultTab = 'terminal' }: BottomPanelProp
               color: activeTab === tab.id ? '#fff' : '#aaa',
               border: 'none',
               borderRight: '1px solid #333',
-              borderTop: activeTab === tab.id ? 'none' : 'none',
+              borderTop: activeTab === tab.id ? '2px solid #007acc' : '2px solid transparent',
               cursor: 'pointer',
               fontSize: 12,
               fontFamily: 'Segoe UI, sans-serif',
+              transition: 'color 0.15s, background 0.15s',
             }}
           >
             {tab.icon}
@@ -120,7 +159,7 @@ export default function BottomPanel({ defaultTab = 'terminal' }: BottomPanelProp
               onClick={(e) => {
                 e.stopPropagation();
                 if (activeTab === tab.id && TABS.length > 1) {
-                  setIsOpen(false);
+                  if (onClose) onClose();
                 }
               }}
               style={{ cursor: 'pointer', opacity: 0.6, padding: 2 }}
@@ -128,7 +167,37 @@ export default function BottomPanel({ defaultTab = 'terminal' }: BottomPanelProp
           </button>
         ))}
         <button
-          onClick={() => setIsOpen(!isOpen)}
+          onClick={() => setIsPinned(!isPinned)}
+          title={isPinned ? 'Unpin panel' : 'Pin panel (keep open)'}
+          style={{
+            background: 'transparent',
+            border: 'none',
+            color: isPinned ? '#007acc' : '#aaa',
+            cursor: 'pointer',
+            padding: '0 6px',
+            display: 'flex',
+            alignItems: 'center',
+          }}
+        >
+          {isPinned ? <Pin size={13} fill="#007acc" /> : <Pin size={13} />}
+        </button>
+        <button
+          onClick={() => setShowSplit(!showSplit)}
+          title="Split Terminal"
+          style={{
+            background: 'transparent',
+            border: 'none',
+            color: showSplit ? '#007acc' : '#aaa',
+            cursor: 'pointer',
+            padding: '0 6px',
+            display: 'flex',
+            alignItems: 'center',
+          }}
+        >
+          <PanelLeft size={13} />
+        </button>
+        <button
+          onClick={() => { if (onToggleOpen) onToggleOpen(); else setIsOpen(!isOpen); }}
           style={{
             marginLeft: 'auto',
             background: 'transparent',
@@ -143,7 +212,7 @@ export default function BottomPanel({ defaultTab = 'terminal' }: BottomPanelProp
           {isOpen ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
         </button>
         <button
-          onClick={() => setIsOpen(!isOpen)}
+          onClick={() => { if (onToggleOpen) onToggleOpen(); else setIsOpen(!isOpen); }}
           style={{
             background: 'transparent',
             border: 'none',
@@ -263,6 +332,27 @@ export default function BottomPanel({ defaultTab = 'terminal' }: BottomPanelProp
               </div>
             </div>
           )}
+        </div>
+      )}
+      {!isOpen && (
+        <div
+          onClick={() => setIsOpen(true)}
+          style={{
+            height: 24,
+            background: '#1e1e1e',
+            borderTop: '1px solid #333',
+            display: 'flex',
+            alignItems: 'center',
+            padding: '0 12px',
+            cursor: 'pointer',
+            fontSize: 11,
+            color: '#aaa',
+            gap: 6,
+          }}
+        >
+          <Terminal size={11} />
+          <span>Click to show panel</span>
+          {isPinned && <span style={{ color: '#007acc', marginLeft: 8 }}>📌 pinned</span>}
         </div>
       )}
     </div>

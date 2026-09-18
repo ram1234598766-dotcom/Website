@@ -48,9 +48,64 @@ const ITEMS: { id: ActivityView; icon: React.ReactNode; label: string }[] = [
   { id: 'help', icon: <CircleHelp size={22} />, label: 'Help' },
 ];
 
-export default function ActivityBar({ active, onChange }: ActivityBarProps) {
+const ActivityBarItem = React.memo(function ActivityBarItem({
+  item,
+  isActive,
+  onChange,
+}: {
+  item: (typeof ITEMS)[number];
+  isActive: boolean;
+  onChange: (view: ActivityView) => void;
+}) {
+  return (
+    <button
+      key={item.id}
+      title={item.label}
+      onClick={() => onChange(item.id)}
+      aria-label={item.label}
+      aria-current={isActive ? 'true' : undefined}
+      style={{
+        position: 'relative',
+        width: 48,
+        height: 48,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: isActive ? '#2d2d2d' : 'transparent',
+        color: isActive ? '#fff' : '#888',
+        border: 'none',
+        borderLeft: isActive ? '3px solid #007acc' : '3px solid transparent',
+        cursor: 'pointer',
+        borderRadius: 0,
+        transition: 'all 0.1s',
+        minWidth: 44,
+        minHeight: 44,
+      }}
+    >
+      {item.icon}
+      {isActive && (
+        <span
+          style={{
+            position: 'absolute',
+            top: 4,
+            right: 4,
+            width: 6,
+            height: 6,
+            borderRadius: '50%',
+            background: '#007acc',
+          }}
+          aria-hidden
+        />
+      )}
+    </button>
+  );
+});
+
+const ActivityBar = React.memo(function ActivityBar({ active, onChange }: ActivityBarProps) {
   return (
     <div
+      role="toolbar"
+      aria-label="Activity bar"
       className="flex flex-col items-center py-2 gap-1 select-none"
       style={{
         width: 48,
@@ -60,44 +115,10 @@ export default function ActivityBar({ active, onChange }: ActivityBarProps) {
     >
       {ITEMS.map((item) => {
         const isActive = item.id === active;
-        return (
-          <button
-            key={item.id}
-            title={item.label}
-            onClick={() => onChange(item.id)}
-            style={{
-              position: 'relative',
-              width: 48,
-              height: 48,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              background: isActive ? '#2d2d2d' : 'transparent',
-              color: isActive ? '#fff' : '#888',
-              border: 'none',
-              borderLeft: isActive ? '3px solid #007acc' : '3px solid transparent',
-              cursor: 'pointer',
-              borderRadius: 0,
-              transition: 'all 0.1s',
-            }}
-          >
-            {item.icon}
-            {isActive && (
-              <span
-                style={{
-                  position: 'absolute',
-                  top: 4,
-                  right: 4,
-                  width: 6,
-                  height: 6,
-                  borderRadius: '50%',
-                  background: '#007acc',
-                }}
-              />
-            )}
-          </button>
-        );
+        return <ActivityBarItem key={item.id} item={item} isActive={isActive} onChange={onChange} />;
       })}
     </div>
   );
-}
+});
+
+export default ActivityBar;

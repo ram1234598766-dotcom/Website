@@ -107,9 +107,9 @@ async function getWeather(city: string): Promise<string> {
 // ====== FANCY FORMATTING SYSTEM ======
 
 const FG = {
-  reset: '\x1b[0m', bold: '\x1b[1m', dim: '\x1b[2m',
-  red: '\x1b[31m', green: '\x1b[32m', yellow: '\x1b[33m',
-  blue: '\x1b[34m', magenta: '\x1b[35m', cyan: '\x1b[36m', white: '\x1b[37m',
+  reset: '', bold: '', dim: '',
+  red: '', green: '', yellow: '',
+  blue: '', magenta: '', cyan: '', white: '',
 };
 
 function card(title: string, icon: string, lines: string[], accent = 'cyan'): string {
@@ -181,10 +181,10 @@ function fancyHelp(): string {
     'Ask anything — questions, knowledge, explanations',
     '📐 calc <expr> — Math calculation',
     '🟨 js <code> — JavaScript sandbox',
-    '🌤️ weather <city> — Weather forecast',
+    '🌤️ weather in <city> — Weather forecast',
     '🌐 fetch <url> — Fetch web content',
     '🔍 search <query> — Web search',
-    '🕐 time — Current time',
+    '🕐 time — Current time & date',
     '📝 read/write/list — File operations',
     '💻 term-execute — Run in terminal',
     '',
@@ -351,7 +351,8 @@ export async function localQuery(msg: string, settings: StoredSettings, workspac
     } catch { return statusCard('Fetch Failed', 'Could not reach that URL.', false); }
   }
   if (ql.includes('time') && (ql.includes('what') || ql.includes('current') || ql.includes('now'))) {
-    return fancyTime();
+    const now = new Date();
+    return `🕐 **Current Time**\n\n${now.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}\n${now.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZoneName: 'short' })}`;
   }
 
   // Search — explicit web search command
@@ -415,6 +416,13 @@ export async function localQuery(msg: string, settings: StoredSettings, workspac
   // Auto-trigger: scan tool registry for keyword match
   const triggered = detectAutoTrigger(msg);
   if (triggered && triggered.id !== 'ai-chat') {
+    // Give natural-language queries a helpful response instead of pending
+    if (triggered.id === 'sys-temperature' || triggered.id === 'sys-info' || triggered.id === 'sys-cpu' ||
+        triggered.id === 'sys-memory' || triggered.id === 'sys-disk' || triggered.id === 'sys-network' ||
+        triggered.id === 'sys-process' || triggered.id === 'sys-battery' || triggered.id === 'sys-users' ||
+        triggered.id === 'sys-services') {
+      return `🔧 **${triggered.name}**\n\nThis tool requires system-level access and is not available in the browser environment. Run this command in a local terminal for system information.`;
+    }
     try {
       return await executeTool(triggered.id, q, workspaceApi);
     } catch (err) {

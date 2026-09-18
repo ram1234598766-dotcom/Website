@@ -106,7 +106,7 @@ describe('CloudOS accessibility', () => {
     });
 
     const terminalBtn = Array.from(container.querySelectorAll('button')).find(
-      (btn) => (btn.textContent ?? '').includes('Terminal')
+      (btn) => (btn.textContent ?? '').includes('Terminal') || btn.getAttribute('aria-label') === 'Terminal'
     );
     expect(terminalBtn).toBeTruthy();
 

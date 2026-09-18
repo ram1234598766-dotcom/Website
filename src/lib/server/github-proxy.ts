@@ -103,11 +103,20 @@ export async function exchangeCodeForToken(
     },
     body: body.toString(),
   });
-  const data = (await res.json()) as {
+  let data: {
     access_token?: string;
     error_description?: string;
     error?: string;
   };
+  try {
+    data = (await res.json()) as {
+      access_token?: string;
+      error_description?: string;
+      error?: string;
+    };
+  } catch {
+    throw new OAuthCallbackError(`GitHub token exchange failed: status ${res.status}`);
+  }
   if (!res.ok || !data.access_token) {
     const detail = data.error_description || data.error || `status ${res.status}`;
     throw new OAuthCallbackError(`GitHub token exchange failed: ${detail}`);

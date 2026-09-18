@@ -9,9 +9,8 @@ const CloudDiffEditor = dynamic(() => import('./CloudDiffEditor'), {
 });
 import { formatWithPrettier, isPrettierFormattable } from '../lib/editor/prettier';
 import { EDITOR_THEMES, type EditorTheme } from '../lib/editor/settings';
-import { Play, Terminal, Code2, FolderTree, Settings, FileJson, FileType, CheckCircle2, Plus, Trash2, Edit2, File as FileIcon, Archive, ChevronDown, ChevronRight, Folder, FolderOpen, ArrowRight, X, Activity, Columns, Rows, FileCode2, FileTerminal, Database } from 'lucide-react';
+import { Play, Terminal, Code2, FolderTree, FileJson, FileType, CheckCircle2, Plus, Trash2, Edit2, File as FileIcon, Archive, ChevronDown, ChevronRight, Folder, FolderOpen, ArrowRight, X, Activity, Columns, Rows, FileCode2, FileTerminal, Database } from 'lucide-react';
 import { Keyboard, Github, HardDrive, Store } from 'lucide-react';
-import TerminalPanel from './TerminalPanel';
 import GitHubManager from './GitHubManager';
 import DriveManager from './DriveManager';
 import { saveAs } from 'file-saver';
@@ -22,6 +21,8 @@ import SubAgentPanel from './SubAgentPanel';
 import WebPluginRegistry from './WebPluginRegistry';
 import SearchPanel from './SearchPanel';
 import Statusbar from './Statusbar';
+import ErrorBoundary from './ErrorBoundary';
+import { useToast } from '../lib/useToast';
 
 interface PluginMeta {
   name: string;
@@ -96,77 +97,48 @@ export default function CloudOS() {
   const [activeFileId, setActiveFileId] = useState<string>('0');
   const [activeView, setActiveView] = useState<ActivityView>('explorer');
 
-  const [isTerminalOpen, setIsTerminalOpen] = useState(true);
-    const [terminalHeight, setTerminalHeight] = useState(256);
-  const [terminalTheme, setTerminalTheme] = useState<any>('dark');
-  const [terminalFontSize, setTerminalFontSize] = useState<number>(13);
-  const [showTerminalSettings, setShowTerminalSettings] = useState(false);
-  const [isResizingTerminal, setIsResizingTerminal] = useState(false);
+  const [bottomPanelOpen, setBottomPanelOpen] = useState(true);
+  const [runPending, setRunPending] = useState(false);
   const terminalReadyRef = useRef(false);
 
-  useEffect(() => {
-    const onReady = () => { terminalReadyRef.current = true; };
-    const onDisposed = () => { terminalReadyRef.current = false; };
-    window.addEventListener('terminal-ready', onReady);
-    window.addEventListener('terminal-disposed', onDisposed);
-    return () => {
-      window.removeEventListener('terminal-ready', onReady);
-      window.removeEventListener('terminal-disposed', onDisposed);
-    };
-  }, []);
-
-  useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!isResizingTerminal) return;
-      const container = document.querySelector('.cloudos-editor-area');
-      if (!container) return;
-      const rect = container.getBoundingClientRect();
-      const newHeight = rect.bottom - e.clientY;
-      if (newHeight > 80 && newHeight < window.innerHeight - 150) {
-        setTerminalHeight(newHeight);
-      }
-    };
-    const handleMouseUp = () => setIsResizingTerminal(false);
-    if (isResizingTerminal) {
-      document.addEventListener('mousemove', handleMouseMove);
-      document.addEventListener('mouseup', handleMouseUp);
-    }
-    return () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-    };
-  }, [isResizingTerminal]);
-
-  // Laptop vs. mobile must behave identically. Docker-style wrapper makes the
-  // request imperative instead of relying on a custom event that a duplicate tab
-  // or shadowed overlay might swallow. Prevents the desktop-only "stuck" issue.
-  const dispatchRun = useCallback((_e?: React.MouseEvent | PointerEvent | MouseEvent) => {
-    if (_e) _e.preventDefault();
-    _e?.stopPropagation?.();
+  const dispatchRun = useCallback(() => {
     const file = files.find(f => f.id === activeFileId);
     if (!file) return;
     const code = file.content.slice(0, 500);
-    // Send the raw code (not JSON.stringify) — the terminal's `js` command
-    // takes everything after the command verbatim, so quotes/newlines survive.
     window.dispatchEvent(new CustomEvent("terminal-send", { detail: { detail: "js " + code, __src: "vantaos" } }));
   }, [files, activeFileId]);
 
+  const [isRunning, setIsRunning] = useState(false);
+  const { toasts, show, dismiss } = useToast();
+
   const handleRun = useCallback(() => {
-    setIsTerminalOpen(true);
-    // The terminal is mounted on demand — wait for it to signal it is ready
-    // before sending the command so a run is never silently dropped. The
-    // ready ref is cleared on dispose (terminal unmount), so a closed-and-
-    // reopened terminal never runs against a stale "ready" flag.
+    setActiveView('terminal');
+    setBottomPanelOpen(true);
+    setRunPending(true);
+    setIsRunning(true);
+    show('Running file...', 'info');
+  }, [setActiveView, setBottomPanelOpen, setRunPending, setIsRunning]);
+
+  useEffect(() => {
+    if (activeView !== 'terminal' || !runPending) return;
     if (terminalReadyRef.current) {
       dispatchRun();
-    } else {
-      const onReady = () => {
-        dispatchRun();
-        window.removeEventListener('terminal-ready', onReady);
-      };
-      window.addEventListener('terminal-ready', onReady);
+      setRunPending(false);
+      setIsRunning(false);
+      show('Execution complete', 'success');
+      return;
     }
-  }, [dispatchRun])
+    const onReady = () => {
+      dispatchRun();
+      setRunPending(false);
+      setIsRunning(false);
+      show('Execution complete', 'success');
+    };
+    window.addEventListener('terminal-ready', onReady, { once: true });
+    return () => {
+      window.removeEventListener('terminal-ready', onReady);
+    };
+  }, [activeView, runPending, dispatchRun, show]);
 
   const [dirtyTabs, setDirtyTabs] = useState<string[]>([]);
   const [splitMode, setSplitMode] = useState<'none' | 'side-by-side' | 'stacked'>('none');
@@ -247,12 +219,24 @@ export default function CloudOS() {
 
   useEffect(() => {
     const handleKeyDown = async (e: KeyboardEvent) => {
+      const isEditorFocused = document.activeElement?.closest('.cm-editor') !== null;
+
       if ((e.ctrlKey || e.metaKey) && (e.key === 'p' || e.key === 'P')) {
         e.preventDefault();
         setIsSearchOpen(true);
       } else if ((e.ctrlKey || e.metaKey) && e.key === '/') {
         e.preventDefault();
-        setShowShortcuts(prev => !prev);
+        if (isEditorFocused) {
+          // Let CodeMirror handle commenting in editor
+          document.dispatchEvent(new KeyboardEvent('keydown', {
+            key: '/',
+            ctrlKey: e.ctrlKey,
+            metaKey: e.metaKey,
+            bubbles: true,
+          }));
+        } else {
+          setShowShortcuts(prev => !prev);
+        }
       } else if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S')) {
         e.preventDefault();
 
@@ -275,9 +259,23 @@ export default function CloudOS() {
         }
 
         window.dispatchEvent(new CustomEvent('save-active-file'));
+        show('File saved', 'success');
+      } else if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+        e.preventDefault();
+        if (isEditorFocused) {
+          // Let CodeMirror handle find in editor
+          document.dispatchEvent(new KeyboardEvent('keydown', {
+            key: 'f',
+            ctrlKey: e.ctrlKey,
+            metaKey: e.metaKey,
+            bubbles: true,
+          }));
+        } else {
+          setIsSearchOpen(true);
+        }
       } else if ((e.ctrlKey || e.metaKey) && e.key === '`') {
         e.preventDefault();
-        setIsTerminalOpen(prev => !prev);
+        setBottomPanelOpen(prev => !prev);
       } else if (e.key === 'Escape' && isSearchOpen) {
         setIsSearchOpen(false);
       }
@@ -285,6 +283,23 @@ export default function CloudOS() {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isSearchOpen, activeFileId, files]);
+
+  // Auto-open terminal panel when switching to terminal view
+  useEffect(() => {
+    if (activeView === 'terminal') {
+      setBottomPanelOpen(true);
+    }
+  }, [activeView]);
+
+  // Listen for TerminalPanel readiness signal
+  useEffect(() => {
+    const handler = () => { terminalReadyRef.current = true; };
+    window.addEventListener('terminal-ready', handler);
+    return () => {
+      window.removeEventListener('terminal-ready', handler);
+      terminalReadyRef.current = false;
+    };
+  }, []);
 
   
   useEffect(() => {
@@ -570,24 +585,25 @@ export default function CloudOS() {
   }, [ws])
 
   
-    const handleFormat = async () => {
-    try {
-      const file = files.find(f => f.id === activeFileId);
-      if (!file) return;
-      let formatted = file.content;
-      if (file.language === "json") {
-        formatted = JSON.stringify(JSON.parse(file.content), null, 2);
-      } else if (isPrettierFormattable(file.language)) {
-        formatted = await formatWithPrettier(file.content, file.language);
-      }
+    const handleFormat = useCallback(async () => {
+      try {
+        const file = files.find(f => f.id === activeFileId);
+        if (!file) return;
+        let formatted = file.content;
+        if (file.language === "json") {
+          formatted = JSON.stringify(JSON.parse(file.content), null, 2);
+        } else if (isPrettierFormattable(file.language)) {
+          formatted = await formatWithPrettier(file.content, file.language);
+        }
       if (formatted !== file.content) {
         setFiles(prev => prev.map(f => f.id === activeFileId ? { ...f, content: formatted } : f));
         ws.updateContent(activeFileId, formatted).catch(console.error);
+        show('File formatted', 'success');
       }
     } catch (e) {
       console.warn("Format error:", e);
     }
-  };
+  }, [files, activeFileId, ws]);
 
   
   const handleExportProject = useCallback(async () => {
@@ -704,6 +720,20 @@ export default function CloudOS() {
   }, [files, openTabs, activeFileId, setOpenTabs, setActiveFileId, setCreatingType, setCreatingParentId]);
 
 
+  if (!ws.ready) {
+    return (
+      <div role="status" aria-live="polite" style={{ position: 'fixed', inset: 0, background: '#07070b', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 24, zIndex: 9999 }}>
+        <div style={{ position: 'relative', width: 80, height: 80 }} aria-hidden>
+          <div style={{ position: 'absolute', inset: 0, border: '2px solid transparent', borderTopColor: '#6366f1', borderRadius: '50%', animation: 'spin 1.2s cubic-bezier(0.5,0,0.5,1) infinite' }} />
+          <div style={{ position: 'absolute', inset: 10, border: '2px solid transparent', borderRightColor: '#818cf8', borderRadius: '50%', animation: 'spin 1.8s cubic-bezier(0.5,0,0.5,1) infinite reverse' }} />
+          <div style={{ position: 'absolute', inset: 20, border: '2px solid transparent', borderBottomColor: '#a5b4fc', borderRadius: '50%', animation: 'spin 2.4s cubic-bezier(0.5,0,0.5,1) infinite' }} />
+        </div>
+        <div style={{ color: '#818cf8', fontFamily: 'system-ui, sans-serif', fontWeight: 900, letterSpacing: 6, fontSize: 14 }}>VANTA.OS</div>
+        <div style={{ color: '#646a80', fontFamily: 'system-ui, sans-serif', fontSize: 12, letterSpacing: 2 }}>Connecting to workspace…</div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col h-screen w-screen rounded-none bg-slate-900 animate-in fade-in duration-500 relative overflow-hidden">
       
@@ -790,6 +820,7 @@ export default function CloudOS() {
           <button 
             onClick={() => setIsSearchOpen(!isSearchOpen)}
             className="flex whitespace-nowrap items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border bg-slate-800/50 text-slate-400 border-slate-700/50 hover:bg-slate-800 hover:text-slate-300 cursor-pointer"
+            aria-label="Search files (Ctrl+P)"
           >
             Search <span className="opacity-50 text-xs">Ctrl+P</span>
           </button>
@@ -797,13 +828,15 @@ export default function CloudOS() {
           <button 
             onClick={() => setShowShortcuts(!showShortcuts)}
             className="flex whitespace-nowrap items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border bg-slate-800/50 text-slate-400 border-slate-700/50 hover:bg-slate-800 hover:text-slate-300 cursor-pointer"
+            aria-label="Keyboard shortcuts (Ctrl+/)"
           >
             <Keyboard className="w-4 h-4" />
             <span>Shortcuts</span>
           </button>
-<button 
+ <button 
             onClick={() => setShowGithub(!showGithub)}
             className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border ${showGithub ? 'bg-emerald-600/20 text-emerald-400 border-emerald-500/20' : 'bg-slate-800/50 text-slate-400 border-slate-700/50 hover:bg-slate-800 hover:text-slate-300'}`}
+            aria-label="Toggle GitHub manager"
           >
             <Github className="w-4 h-4" />
             GitHub
@@ -812,6 +845,7 @@ export default function CloudOS() {
           <button 
             onClick={() => setShowDrive(!showDrive)}
             className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border ${showDrive ? 'bg-indigo-600/20 text-indigo-400 border-indigo-500/20' : 'bg-slate-800/50 text-slate-400 border-slate-700/50 hover:bg-slate-800 hover:text-slate-300'}`}
+            aria-label="Toggle Drive manager"
           >
             <HardDrive className="w-4 h-4" />
             Drive
@@ -825,32 +859,37 @@ export default function CloudOS() {
           <button
             onClick={handleExportProject}
             disabled={isExporting}
+            aria-label="Export project as ZIP"
             className="flex whitespace-nowrap items-center gap-2 px-3 py-1.5 bg-indigo-600/20 text-indigo-400 hover:bg-indigo-600/30 hover:text-indigo-300 rounded-lg text-sm font-medium transition-colors border border-indigo-500/20 cursor-pointer"
           >
-            {isExporting ? <CheckCircle2 className="w-4 h-4" /> : <Archive className="w-4 h-4" />}
+            {isExporting ? <CheckCircle2 className="w-4 h-4" aria-hidden /> : <Archive className="w-4 h-4" aria-hidden />}
             {isExporting ? 'Exported!' : 'Export Project'}
           </button>
           <button
-              onClick={() => setShowDiff(!showDiff)}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border cursor-pointer ${showDiff ? 'bg-indigo-600/20 text-indigo-400 border-indigo-500/50' : 'bg-slate-800/50 text-slate-400 border-slate-700/50 hover:bg-slate-800 hover:text-slate-300'}`}
-            >
-              <Code2 className="w-4 h-4" />
-              <span>Diff</span>
-            </button>
-          
+            onClick={() => setShowDiff(!showDiff)}
+            aria-label="Toggle diff view"
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border cursor-pointer ${showDiff ? 'bg-indigo-600/20 text-indigo-400 border-indigo-500/50' : 'bg-slate-800/50 text-slate-400 border-slate-700/50 hover:bg-slate-800 hover:text-slate-300'}`}
+          >
+            <Code2 className="w-4 h-4" aria-hidden />
+            <span>Diff</span>
+          </button>
           <button
             onClick={handleFormat}
+            aria-label="Format active file"
             className="flex whitespace-nowrap items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border bg-slate-800/50 text-slate-400 border-slate-700/50 hover:bg-slate-800 hover:text-slate-300 cursor-pointer"
           >
-            <Code2 className="w-4 h-4" />
+            <Code2 className="w-4 h-4" aria-hidden />
             <span>Format</span>
           </button>
           <button
             onClick={handleRun}
-            className="relative z-[60] flex whitespace-nowrap items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors bg-emerald-600 hover:bg-emerald-500 text-white shadow shadow-emerald-900/20 cursor-pointer"
+            disabled={isRunning}
+            aria-label="Compile and run active file"
+            aria-busy={isRunning}
+            className="relative z-[60] flex whitespace-nowrap items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors bg-emerald-600 hover:bg-emerald-500 disabled:bg-emerald-600/50 disabled:cursor-not-allowed text-white shadow shadow-emerald-900/20 cursor-pointer"
           >
-            <Play className="w-4 h-4" />
-            <span>Compile & Run</span>
+            <Play className="w-4 h-4" aria-hidden />
+            <span>{isRunning ? 'Running…' : 'Compile & Run'}</span>
           </button>
                   </div>
       </div>
@@ -866,41 +905,41 @@ export default function CloudOS() {
                 Workspace
               </div>
               <div className="flex items-center gap-1">
-                <button
-                  onClick={() => {
-                    window.dispatchEvent(new CustomEvent('vantaos:open-plugins', { detail: { tab: 'marketplace' } }));
-                  }}
-                  className="flex items-center gap-1 px-2 py-1 rounded text-slate-400 hover:text-indigo-400 hover:bg-indigo-500/10 transition-colors cursor-pointer"
-                  title="Browse Extensions"
-                  aria-label="Browse Extensions"
-                >
-                  <Store className="w-3.5 h-3.5" />
-                  <span className="text-[10px]">Browse</span>
-                </button>
-                <button 
-                  onClick={() => {
-                    setCreatingParentId(null);
-                    setCreatingType('file');
-                    setIsCreating(true);
-                  }}
-                   className="p-1 rounded text-slate-400 hover:text-indigo-400 hover:bg-indigo-500/10 transition-colors cursor-pointer"
-                   title="New File"
-                   aria-label="New File"
-                 >
-                   <Plus className="w-4 h-4" />
-                 </button>
-                 <button 
-                   onClick={() => {
-                     setCreatingParentId(null);
-                     setCreatingType('folder');
-                     setIsCreating(true);
-                   }}
-                   className="p-1 rounded text-slate-400 hover:text-amber-400 hover:bg-amber-500/10 transition-colors cursor-pointer"
-                   title="New Folder"
-                   aria-label="New Folder"
-                 >
-                   <Folder className="w-4 h-4" />
-                 </button>
+              <button
+                onClick={() => {
+                  window.dispatchEvent(new CustomEvent('vantaos:open-plugins', { detail: { tab: 'marketplace' } }));
+                }}
+                className="flex items-center gap-1 px-2 py-1 rounded text-slate-400 hover:text-indigo-400 hover:bg-indigo-500/10 transition-colors cursor-pointer"
+                title="Browse Extensions"
+                aria-label="Browse Extensions in marketplace"
+              >
+                <Store className="w-3.5 h-3.5" aria-hidden />
+                <span className="text-[10px]">Browse</span>
+              </button>
+              <button 
+                onClick={() => {
+                  setCreatingParentId(null);
+                  setCreatingType('file');
+                  setIsCreating(true);
+                }}
+                 className="p-1 rounded text-slate-400 hover:text-indigo-400 hover:bg-indigo-500/10 transition-colors cursor-pointer"
+                 title="New File"
+                 aria-label="Create new file"
+              >
+                <Plus className="w-4 h-4" aria-hidden />
+              </button>
+              <button 
+                onClick={() => {
+                  setCreatingParentId(null);
+                  setCreatingType('folder');
+                  setIsCreating(true);
+                }}
+                className="p-2 rounded text-slate-400 hover:text-amber-400 hover:bg-amber-500/10 transition-colors cursor-pointer min-w-[44px] min-h-[44px]"
+                title="New Folder"
+                aria-label="Create new folder"
+              >
+                <Folder className="w-4 h-4" aria-hidden />
+              </button>
               </div>
             </div>
             
@@ -1390,86 +1429,16 @@ export default function CloudOS() {
               </AnimatePresence>
             </div>
 
-            {/* VS Code like Terminal Panel */}
-            {isTerminalOpen && (
-              <div style={{ height: terminalHeight }} className="bg-[#1e1e1e] border-t border-slate-800 flex flex-col shrink-0 relative">
-                {/* Resizer */}
-                <div 
-                  className="absolute top-0 left-0 right-0 h-1 cursor-row-resize hover:bg-indigo-500/50 z-10"
-                  onMouseDown={() => setIsResizingTerminal(true)}
-                />
-                <div className="flex items-center justify-between px-4 py-2 bg-[#252526] border-b border-slate-800">
-                  <div className="flex items-center gap-4 text-xs font-medium uppercase tracking-wider text-slate-400">
-                    <button className="text-slate-200 border-b border-blue-500 pb-1 cursor-pointer">Terminal</button>
-                    
-                  </div>
-                  <div className="flex items-center gap-2 relative">
-                    
-                    <button onClick={() => setShowTerminalSettings(!showTerminalSettings)} className="p-1 hover:bg-slate-700 rounded text-slate-400 hover:text-slate-200 cursor-pointer" title="Terminal Settings">
-                      <Settings className="w-3.5 h-3.5" />
-                    </button>
-                    
-                    {showTerminalSettings && (
-                      <div className="absolute bottom-full right-0 mb-2 w-48 bg-slate-900 border border-slate-700 rounded-lg shadow-xl p-3 z-50">
-                        <div className="flex items-center justify-between mb-3">
-                          <span className="text-xs font-semibold text-slate-200">Terminal Settings</span>
-                          <button onClick={() => setShowTerminalSettings(false)} className="text-slate-400 hover:text-slate-200 cursor-pointer"><X className="w-3 h-3" /></button>
-                        </div>
-                        
-                        <div className="mb-3">
-                          <label className="block text-xs text-slate-400 mb-1">Font Size</label>
-                          <div className="flex items-center gap-2">
-                            <input 
-                              type="range" 
-                              min="10" 
-                              max="24" 
-                              value={terminalFontSize} 
-                              onChange={(e) => setTerminalFontSize(parseInt(e.target.value))}
-                              className="w-full accent-blue-500"
-                            />
-                            <span className="text-xs text-slate-300 min-w-[20px]">{terminalFontSize}</span>
-                          </div>
-                        </div>
-                        
-                        <div>
-                          <label className="block text-xs text-slate-400 mb-1">Theme</label>
-                          <select 
-                            value={terminalTheme} 
-                            onChange={(e) => setTerminalTheme(e.target.value)}
-                            className="w-full bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded px-2 py-1 outline-none focus:border-blue-500"
-                          >
-                            <option value="dark">Dark</option>
-                            <option value="light">Light</option>
-                            <option value="dracula">Dracula</option>
-                            <option value="monokai">Monokai</option>
-                            <option value="ubuntu">Ubuntu</option>
-                          </select>
-                        </div>
-                      </div>
-                    )}
 
-                    <button onClick={() => window.dispatchEvent(new CustomEvent('terminal-send', { detail: { detail: 'clear\n', __src: 'vantaos' } }))} className="p-1 hover:bg-slate-700 rounded text-slate-400 hover:text-slate-200 cursor-pointer" title="Clear Console">
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                    <button onClick={() => setIsTerminalOpen(false)} className="p-1 hover:bg-slate-700 rounded text-slate-400 hover:text-slate-200 cursor-pointer" title="Close Panel">
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-                <div className="flex-1 overflow-hidden relative">
-                  <TerminalPanel theme={terminalTheme} fontSize={terminalFontSize} />
-                </div>
-              </div>
-            )}
           </div>
         </div>
       </div>
-      {activeView === 'terminal' && (
+      {activeView === 'terminal' && bottomPanelOpen && (
         <div style={{ height: 200, flexShrink: 0, display: 'flex', flexDirection: 'column' }}>
-          <BottomPanel />
+          <BottomPanel isOpen={bottomPanelOpen} onToggleOpen={() => setBottomPanelOpen(prev => !prev)} />
         </div>
       )}
-      <Statusbar />
+      <Statusbar fileCount={files.filter(f => !f.isFolder).length} gitBranch="main" gitChanged={false} encoding="UTF-8" cursorPos="Ln 1, Col 1" indentType="spaces" indentSize={2} />
       
       {/* Plugin Modal */}
       <AnimatePresence>
@@ -1518,15 +1487,29 @@ export default function CloudOS() {
             <div className="p-4 bg-slate-900">
               <div className="space-y-3">
                 <div className="flex justify-between items-center text-sm">
-                  <span className="text-slate-400">Search Files</span>
+                  <span className="text-slate-400">Command Palette</span>
                   <span className="font-mono bg-slate-800 text-slate-300 px-2 py-1 rounded border border-slate-700">Ctrl + K</span>
                 </div>
                 <div className="flex justify-between items-center text-sm">
-                  <span className="text-slate-400">Save & Format</span>
+                  <span className="text-slate-400">Save</span>
                   <span className="font-mono bg-slate-800 text-slate-300 px-2 py-1 rounded border border-slate-700">Ctrl + S</span>
                 </div>
-
-                
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-slate-400">Find in File</span>
+                  <span className="font-mono bg-slate-800 text-slate-300 px-2 py-1 rounded border border-slate-700">Ctrl + F</span>
+                </div>
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-slate-400">Search Files</span>
+                  <span className="font-mono bg-slate-800 text-slate-300 px-2 py-1 rounded border border-slate-700">Ctrl + P</span>
+                </div>
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-slate-400">Focus Terminal</span>
+                  <span className="font-mono bg-slate-800 text-slate-300 px-2 py-1 rounded border border-slate-700">Ctrl + J</span>
+                </div>
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-slate-400">Toggle Terminal</span>
+                  <span className="font-mono bg-slate-800 text-slate-300 px-2 py-1 rounded border border-slate-700">Ctrl + `</span>
+                </div>
                 <div className="flex justify-between items-center text-sm">
                   <span className="text-slate-400">Toggle Shortcuts</span>
                   <span className="font-mono bg-slate-800 text-slate-300 px-2 py-1 rounded border border-slate-700">Ctrl + /</span>
@@ -1536,7 +1519,37 @@ export default function CloudOS() {
           </motion.div>
         )}
       </AnimatePresence>
-    </div>
+    {/* Toast notifications */}
+    <AnimatePresence>
+      {toasts.map((t) => (
+        <motion.div
+          key={t.id}
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: 20 }}
+          role="alert"
+          aria-live="polite"
+          className="fixed bottom-6 right-6 z-[200] bg-slate-900 border border-slate-700 rounded-xl shadow-2xl px-4 py-3 flex items-center gap-3"
+          style={{
+            background: '#0c0c12',
+            border: `1px solid ${t.type === 'success' ? 'rgba(16, 185, 129, 0.3)' : t.type === 'error' ? 'rgba(244, 63, 94, 0.3)' : 'rgba(99, 102, 241, 0.3)'}`,
+          }}
+        >
+          <div
+            style={{
+              width: 8,
+              height: 8,
+              borderRadius: '50%',
+              background: t.type === 'success' ? '#10b981' : t.type === 'error' ? '#f43f5e' : '#6366f1',
+              flexShrink: 0,
+            }}
+            aria-hidden
+          />
+          <span className="text-sm text-slate-200">{t.message}</span>
+        </motion.div>
+      ))}
+    </AnimatePresence>
+  </div>
   );
 }
 

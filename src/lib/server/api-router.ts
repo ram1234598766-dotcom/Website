@@ -12,11 +12,11 @@
 import { GitHubOAuthService, OAuthCallbackError, type KvLike } from './github-proxy';
 import { verifyFirebaseIdToken } from './firebase-verify';
 import { verifyGrant, type GrantClaims } from './grants';
-import { rateLimitCheck, rateLimitSlide, rateLimitStore, checkServerGemini } from './rate-limit';
+import { rateLimitCheck, rateLimitSlide, rateLimitStore, rateLimitCheckAtomic, checkServerGemini, resetServerGeminiLimits } from './rate-limit';
 import { getPeers } from './peer-registry';
 import { handleModelProxyGet } from './model-proxy';
 
-export { rateLimitCheck, rateLimitStore };
+export { rateLimitCheck, rateLimitSlide, rateLimitStore, rateLimitCheckAtomic, checkServerGemini, resetServerGeminiLimits };
 
 export interface Env {
   GEMINI_API_KEY?: string;
@@ -30,6 +30,20 @@ export interface Env {
 }
 
 const ALLOWED_ORIGINS = ['http://localhost:3000', 'https://website.vasudevaya.workers.dev', 'https://www.vantaos.org'];
+
+function bytesToBase64Url(bytes: Uint8Array): string {
+  let str = '';
+  for (let i = 0; i < bytes.length; i++) {
+    str += String.fromCharCode(bytes[i]);
+  }
+  return btoa(str).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+function generateRequestId(): string {
+  const bytes = new Uint8Array(8);
+  crypto.getRandomValues(bytes);
+  return bytesToBase64Url(bytes);
+}
 
 /** True when the request carries a same-site / allowlisted-origin signal. */
 function isSameSiteRequest(request: Request): boolean {
@@ -68,11 +82,14 @@ function corsHeaders(origin: string | undefined): Record<string, string> {
   return headers;
 }
 
-function json(data: unknown, status = 200, extra: Record<string, string> = {}, origin?: string): Response {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: { ...corsHeaders(origin), 'Content-Type': 'application/json', ...extra },
-  });
+function json(data: unknown, status = 200, extra: Record<string, string> = {}, origin?: string, requestId?: string): Response {
+  const headers: Record<string, string> = {
+    ...corsHeaders(origin),
+    'Content-Type': 'application/json',
+    ...extra,
+  };
+  if (requestId) headers['X-Request-ID'] = requestId;
+  return new Response(JSON.stringify(data), { status, headers });
 }
 
 async function readJson(request: Request): Promise<any> {
@@ -111,10 +128,13 @@ export function serverEnv(): Env {
 export async function handleApiRequest(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
   const path = url.pathname.replace(/\/+$/, '') || '/';
+  const requestId = generateRequestId();
 
   if (request.method === 'OPTIONS') {
     const reqOrigin = request.headers.get('origin');
-    return new Response(null, { headers: corsHeaders(reqOrigin ?? undefined) });
+    const resp = new Response(null, { headers: corsHeaders(reqOrigin ?? undefined) });
+    resp.headers.set('X-Request-ID', requestId);
+    return resp;
   }
 
   try {
@@ -137,18 +157,20 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
         },
         200,
         { 'cache-control': 'no-store' },
+        undefined,
+        requestId,
       );
     }
 
     // GET /api/ready
     if (request.method === 'GET' && path === '/api/ready') {
-      return json({ ready: true }, 200);
+      return json({ ready: true }, 200, {}, undefined, requestId);
     }
 
     // GET /api/peers
     if (request.method === 'GET' && path === '/api/peers') {
       const peers = getPeers();
-      return json({ peers }, 200, { 'cache-control': 'no-store' });
+      return json({ peers }, 200, { 'cache-control': 'no-store' }, undefined, requestId);
     }
 
     // GET /api/services/health
@@ -170,6 +192,8 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
         },
         200,
         { 'cache-control': 'no-store' },
+        undefined,
+        requestId,
       );
     }
 
@@ -178,10 +202,10 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
       let body: any;
       try { body = await request.json(); } catch { body = null; }
       if (typeof body !== 'object' || body === null || !body.key || typeof body.key !== 'string') {
-        return json({ error: 'key is required and must be a string' }, 400);
+        return json({ error: 'key is required and must be a string' }, 400, {}, undefined, requestId);
       }
       const result = rateLimitCheck(body.key);
-      return json(result, 200);
+      return json(result, 200, {}, undefined, requestId);
     }
 
     // POST /api/model-proxy â€” deprecated stub.  The real proxy path is
@@ -191,25 +215,25 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
     if (request.method === 'POST' && path === '/api/model-proxy') {
       const contentLength = request.headers.get('content-length');
       if (contentLength && parseInt(contentLength, 10) > 1_048_576) {
-        return json({ error: 'Request body exceeds 1MB limit' }, 413);
+        return json({ error: 'Request body exceeds 1MB limit' }, 413, {}, undefined, requestId);
       }
       const ct = (request.headers.get('content-type') || '').toLowerCase();
       if (!ct.includes('application/json')) {
-        return json({ error: 'Content-Type must be application/json' }, 400);
+        return json({ error: 'Content-Type must be application/json' }, 400, {}, undefined, requestId);
       }
       const auth = request.headers.get('authorization');
       if (!auth) {
-        return json({ error: 'authorization is required' }, 400);
+        return json({ error: 'authorization is required' }, 400, {}, undefined, requestId);
       }
       let body: any;
-      try { body = await request.json(); } catch { return json({ error: 'Invalid JSON body' }, 400); }
-      if (!body.provider) return json({ error: 'provider is required' }, 400);
-      if (!body.apiKey) return json({ error: 'apiKey is required' }, 400);
+      try { body = await request.json(); } catch { return json({ error: 'Invalid JSON body' }, 400, {}, undefined, requestId); }
+      if (!body.provider) return json({ error: 'provider is required' }, 400, {}, undefined, requestId);
+      if (!body.apiKey) return json({ error: 'apiKey is required' }, 400, {}, undefined, requestId);
       const supported = ['openai', 'anthropic', 'google'];
       if (!supported.includes(body.provider)) {
-        return json({ error: `Unsupported provider: ${body.provider}` }, 400);
+        return json({ error: `Unsupported provider: ${body.provider}` }, 400, {}, undefined, requestId);
       }
-      return json({ error: 'upstream unreachable' }, 500);
+      return json({ error: 'upstream unreachable' }, 500, {}, undefined, requestId);
     }
 
     // GET /api/model-proxy â€” server-side fetch of HuggingFace model files so
@@ -220,16 +244,21 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
 
     // POST /api/ai/generate
     if (request.method === 'POST' && path === '/api/ai/generate') {
+      const limiterKey = `ai:${request.headers.get('cf-connecting-ip') || request.headers.get('x-forwarded-for') || 'unknown'}`;
+      const rl = rateLimitCheckAtomic(limiterKey);
+      if (!rl.allowed) {
+        return json({ error: 'Rate limit exceeded' }, 429, {}, undefined, requestId);
+      }
       const url = new URL(request.url);
       if (url.searchParams.get('stream') === '1' || request.headers.get('Accept') === 'text/event-stream') {
-        return handleAiGenerateStream(request, env);
+        return handleAiGenerateStream(request, env, requestId);
       }
-      return handleAiGenerate(request, env);
+      return handleAiGenerate(request, env, requestId);
     }
 
     // POST /api/security/scan
     if (request.method === 'POST' && path === '/api/security/scan') {
-      return handleSecurityScan(env);
+      return handleSecurityScan(env, requestId);
     }
 
     // POST /api/edge-functions/auth-sync â€” real server-side token verification
@@ -243,7 +272,10 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
       if (!claims) {
         return json(
           { success: false, error: 'Invalid or expired token.' },
-          401
+          401,
+          {},
+          undefined,
+          requestId,
         );
       }
       return json({
@@ -252,29 +284,33 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
         email: claims.email ?? null,
         validated: true,
         serverTime: new Date().toISOString(),
-      });
+      }, 200, {}, undefined, requestId);
     }
 
     // â”€â”€â”€ GitHub OAuth + proxy (Phase 5 token boundary) â”€â”€â”€
     if (path.startsWith('/api/gh')) {
-      return handleGitHubRoutes(request, env, path, url);
+      return handleGitHubRoutes(request, env, path, url, requestId);
     }
 
     return json(
-      { error: 'Not found', path, message: 'The requested API endpoint does not exist.' },
-      404
+      { error: 'Not found' },
+      404,
+      {},
+      undefined,
+      requestId,
     );
   } catch (err: any) {
-    console.error('Worker error:', err);
+    console.error(`Worker error [${requestId}]:`, err);
     // H3 FIX: Never leak internal error messages to clients
-    return json({ error: 'Internal server error' }, 500);
+    return json({ error: 'Internal server error' }, 500, {}, undefined, requestId);
   }
 }
 async function handleGitHubRoutes(
   request: Request,
   env: Env,
   path: string,
-  url: URL
+  url: URL,
+  requestId: string,
 ): Promise<Response> {
   const service = new GitHubOAuthService(env);
 
@@ -282,17 +318,17 @@ async function handleGitHubRoutes(
   if (request.method === 'POST' && path === '/api/gh/authorize') {
     const body = await readJson(request);
     if (!body?.firebaseToken) {
-      return json({ error: 'Missing firebaseToken.' }, 401);
+      return json({ error: 'Missing firebaseToken.' }, 401, {}, undefined, requestId);
     }
     const claims = await verifyFirebaseIdToken(body.firebaseToken, {
       projectId: projectId(env),
       nowMs: Date.now(),
     });
     if (!claims) {
-      return json({ error: 'Unauthorized', message: 'Expired Firebase session.' }, 401);
+      return json({ error: 'Unauthorized', message: 'Expired Firebase session.' }, 401, {}, undefined, requestId);
     }
     const { url: authorizeUrl } = await service.startAuthorize(claims.uid);
-    return json({ url: authorizeUrl });
+    return json({ url: authorizeUrl }, 200, {}, undefined, requestId);
   }
 
   // GET /api/gh/callback â€” OAuth redirect landing; exchanges code, stores token, redirects
@@ -309,6 +345,7 @@ async function handleGitHubRoutes(
       if (cbOrigin && ALLOWED_ORIGINS.includes(cbOrigin)) {
         res.headers.set('Access-Control-Allow-Origin', cbOrigin);
       }
+      res.headers.set('X-Request-ID', requestId);
       return res;
     } catch (err) {
       if (err instanceof OAuthCallbackError) {
@@ -320,6 +357,7 @@ async function handleGitHubRoutes(
         if (cbOrigin && ALLOWED_ORIGINS.includes(cbOrigin)) {
           res.headers.set('Access-Control-Allow-Origin', cbOrigin);
         }
+        res.headers.set('X-Request-ID', requestId);
         return res;
       }
       throw err;
@@ -328,23 +366,22 @@ async function handleGitHubRoutes(
 
     // POST /api/gh/import â€” store an access token captured from the Firebase popup flow
     if (request.method === 'POST' && path === '/api/gh/import') {
-      void 0;
-    const body = await readJson(request);
+      const body = await readJson(request);
     if (!body?.firebaseToken || !body?.accessToken) {
-      return json({ error: 'Missing firebaseToken or accessToken.' }, 400);
+      return json({ error: 'Missing firebaseToken or accessToken.' }, 400, {}, undefined, requestId);
     }
     const claims = await verifyFirebaseIdToken(body.firebaseToken, {
       projectId: projectId(env),
       nowMs: Date.now(),
     });
     if (!claims) {
-      return json({ error: 'Unauthorized', message: 'Expired Firebase session.' }, 401);
+      return json({ error: 'Unauthorized', message: 'Expired Firebase session.' }, 401, {}, undefined, requestId);
     }
     try {
       const grant = await service.importToken(claims.uid, body.accessToken);
-      return json({ ok: true, gh_grant: grant, expiresIn: 15 * 60 });
+      return json({ ok: true, gh_grant: grant, expiresIn: 15 * 60 }, 200, {}, undefined, requestId);
     } catch {
-      return json({ error: 'Import failed.' }, 400);
+      return json({ error: 'Import failed.' }, 400, {}, undefined, requestId);
     }
   }
 
@@ -357,49 +394,59 @@ async function handleGitHubRoutes(
       nowMs: Date.now(),
     });
     if (!claims) {
-      return json({ error: 'Unauthorized', message: 'Expired Firebase session.' }, 401);
+      return json({ error: 'Unauthorized', message: 'Expired Firebase session.' }, 401, {}, undefined, requestId);
     }
     const grant = await service.createGrant(claims.uid);
     if (!grant) {
       return json(
         { error: 'GitHub is not connected.', needsConnect: true },
-        404
+        404,
+        {},
+        undefined,
+        requestId,
       );
     }
     if (env.GH_GRANT_SECRET === '' || env.GH_GRANT_SECRET === 'MY_GEMINI_API_KEY') {
       return json(
         { error: 'Server grant secret not configured.', needsConnect: true },
-        500
+        500,
+        {},
+        undefined,
+        requestId,
       );
     }
-    return json({ ok: true, gh_grant: grant, expiresIn: 15 * 60 });
+    return json({ ok: true, gh_grant: grant, expiresIn: 15 * 60 }, 200, {}, undefined, requestId);
   }
 
   // POST /api/gh/revoke â€” delete the KV token so all grants fail closed
   if (request.method === 'POST' && path === '/api/gh/revoke') {
-    const grantRes = await requireGrant(request, env);
+    const grantRes = await requireGrant(request, env, requestId);
     if (grantRes instanceof Response) return grantRes;
     await service.revoke(grantRes.claims.uid);
-    return json({ ok: true, revoked: true });
+    return json({ ok: true, revoked: true }, 200, {}, undefined, requestId);
   }
 
   // Everything else under /api/gh/* is a proxied GitHub API call
-  const grantRes = await requireGrant(request, env);
+  const grantRes = await requireGrant(request, env, requestId);
   if (grantRes instanceof Response) return grantRes;
 
   const pathAfterPrefix = path.replace(/^\/api\/gh/, '') || '/';
   const upstream = await service.proxy(pathAfterPrefix, request, grantRes.claims);
   const out = new Response(upstream.body, upstream);
   const reqOrigin = request.headers.get('origin') || undefined;
-  const allowedOrigins = ['http://localhost:3000', 'https://website.vasudevaya.workers.dev', 'https://www.vantaos.org'];
-  out.headers.set('Access-Control-Allow-Origin', (reqOrigin && allowedOrigins.includes(reqOrigin)) ? reqOrigin : 'http://localhost:3000');
+  if (reqOrigin && ALLOWED_ORIGINS.includes(reqOrigin)) {
+    out.headers.set('Access-Control-Allow-Origin', reqOrigin);
+    out.headers.set('Access-Control-Allow-Credentials', 'true');
+  }
+  out.headers.set('X-Request-ID', requestId);
   return out;
 }
 
 /** Extracts and verifies the grant bound to the request; fails closed. */
 async function requireGrant(
   request: Request,
-  env: Env
+  env: Env,
+  requestId: string,
 ): Promise<{ claims: GrantClaims } | Response> {
   const auth = request.headers.get('authorization');
   const grant = auth?.startsWith('Bearer ') ? auth.slice(7) : auth;
@@ -409,28 +456,31 @@ async function requireGrant(
   if (!claims) {
     return json(
       { error: 'Unauthorized', message: 'GitHub session expired. Re-connect.' },
-      401
+      401,
+      {},
+      undefined,
+      requestId,
     );
   }
   return { claims };
 }
 
-async function handleAiGenerate(request: Request, env: Env): Promise<Response> {
+async function handleAiGenerate(request: Request, env: Env, requestId?: string): Promise<Response> {
+  const j = (data: unknown, status = 200, extra: Record<string, string> = {}): Response =>
+    json(data, status, extra, undefined, requestId);
+
   try {
     const body = await request.json() as any;
     const { provider, model, apiKey, messages } = body;
 
     if (!provider || !messages) {
-      return json(
-        { error: 'Missing required fields: provider, and messages or prompt' },
-        400
-      );
+      return j({ error: 'Missing required fields: provider, and messages or prompt' }, 400);
     }
 
     switch (provider) {
       case 'openrouter': {
         if (!apiKey) {
-          return json({ error: 'apiKey is required for provider openrouter' }, 400);
+          return j({ error: 'apiKey is required for provider openrouter' }, 400);
         }
         const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
           method: 'POST',
@@ -448,17 +498,17 @@ async function handleAiGenerate(request: Request, env: Env): Promise<Response> {
         });
         const data = await res.json() as any;
         if (!res.ok) throw new Error(`OpenRouter error (${res.status})`);
-        return json({ text: data.choices?.[0]?.message?.content || '', model });
+        return j({ text: data.choices?.[0]?.message?.content || '', model });
       }
 
       case 'gemini': {
         const geminiModel = model || 'gemini-3.6-flash';
         if (!/^[a-z0-9.\-_]{3,64}$/.test(geminiModel)) {
-          return json({ error: 'Invalid model name' }, 400);
+          return j({ error: 'Invalid model name' }, 400);
         }
         const key = apiKey || env.GEMINI_API_KEY;
         if (!key || key === 'MY_GEMINI_API_KEY') {
-          return json(
+          return j(
             { error: 'Gemini API key required (add your key in Settings, or the server GEMINI_API_KEY is unset)' },
             400
           );
@@ -474,14 +524,14 @@ async function handleAiGenerate(request: Request, env: Env): Promise<Response> {
             'unknown';
           const sameSite = isSameSiteRequest(request);
           if (!sameSite) {
-            return json(
+            return j(
               { error: 'Server-key Gemini access denied: request did not come from the VantaOS site.' },
               403
             );
           }
           const gate = checkServerGemini(ip, Number(env.GEMINI_SERVER_KEY_DAILY_LIMIT ?? 200));
           if (!gate.allowed) {
-            return json({ error: gate.error }, gate.status);
+            return j({ error: gate.error }, gate.status);
           }
         }
         const contents = messages.map((m: any) => ({
@@ -504,19 +554,19 @@ async function handleAiGenerate(request: Request, env: Env): Promise<Response> {
           );
         } catch (fetchErr: any) {
           if (fetchErr?.name === 'TimeoutError' || fetchErr?.name === 'AbortError') {
-            return json({ error: 'Gemini upstream timed out after 60s' }, 500);
+            return j({ error: 'Gemini upstream timed out after 60s' }, 500);
           }
           throw fetchErr;
         }
         const data = await res.json() as any;
         if (!res.ok) throw new Error(`Gemini error (${res.status})`);
         const text = data?.candidates?.[0]?.content?.parts?.map((p: any) => p.text).join('') || '';
-        return json({ text, model: geminiModel });
+        return j({ text, model: geminiModel });
       }
 
       case 'openai': {
         if (!apiKey) {
-          return json({ error: 'apiKey is required for provider openai' }, 400);
+          return j({ error: 'apiKey is required for provider openai' }, 400);
         }
         const res = await fetch('https://api.openai.com/v1/chat/completions', {
           method: 'POST',
@@ -532,11 +582,11 @@ async function handleAiGenerate(request: Request, env: Env): Promise<Response> {
         });
         const data = await res.json() as any;
         if (!res.ok) throw new Error(`OpenAI error (${res.status})`);
-        return json({ text: data.choices?.[0]?.message?.content || '', model });
+        return j({ text: data.choices?.[0]?.message?.content || '', model });
       }
 
       default:
-        return json({ error: `Unsupported provider: ${provider}` }, 400);
+        return j({ error: `Unsupported provider: ${provider}` }, 400);
     }
   } catch (err: any) {
     // SECURITY: never relay upstream error details to the client â€” they can
@@ -545,18 +595,24 @@ async function handleAiGenerate(request: Request, env: Env): Promise<Response> {
     console.error('AI generate error:', err);
     return json(
       { error: 'AI request failed' },
-      500
+      500,
+      {},
+      undefined,
+      requestId,
     );
   }
 }
 
-async function handleAiGenerateStream(request: Request, env: Env): Promise<Response> {
+async function handleAiGenerateStream(request: Request, env: Env, requestId?: string): Promise<Response> {
+  const j = (data: unknown, status = 200, extra: Record<string, string> = {}): Response =>
+    json(data, status, extra, undefined, requestId);
+
   try {
     const body = await request.json().catch(() => null) as any;
     const { provider, model, apiKey, messages } = body ?? {};
 
     if (!provider || !messages) {
-      return json({ error: 'Missing required fields: provider, and messages or prompt' }, 400);
+      return j({ error: 'Missing required fields: provider, and messages or prompt' }, 400);
     }
 
     const stream = new ReadableStream({
@@ -568,7 +624,8 @@ async function handleAiGenerateStream(request: Request, env: Env): Promise<Respo
             controller.enqueue(encoder.encode(chunk));
           }
         } catch (err: any) {
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: String(err?.message || 'upstream error') })}\n\n`));
+          console.error('AI stream error:', err);
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: 'AI stream failed' })}\n\n`));
         } finally {
           controller.close();
         }
@@ -579,10 +636,11 @@ async function handleAiGenerateStream(request: Request, env: Env): Promise<Respo
       headers: {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
+        'X-Request-ID': requestId ?? '',
       },
     });
   } catch (err: any) {
-    return json({ error: 'AI request failed' }, 500);
+    return j({ error: 'AI request failed' }, 500);
   }
 }
 
@@ -730,7 +788,7 @@ function extractSseContent(raw: string): string[] {
   return chunks;
 }
 
-async function handleSecurityScan(env: Env): Promise<Response> {
+async function handleSecurityScan(env: Env, requestId?: string): Promise<Response> {
   const geminiKey = env.GEMINI_API_KEY;
   const findings: { severity: string; message: string }[] = [];
 
@@ -745,11 +803,17 @@ async function handleSecurityScan(env: Env): Promise<Response> {
     (f) => f.severity === 'high' || f.severity === 'medium'
   );
 
-  return json({
-    status: threatsFound ? 'threat' : 'secure',
-    threatsFound,
-    scannedAt: new Date().toISOString(),
-    environment: 'cloudflare-worker',
-    findings,
-  });
+  return json(
+    {
+      status: threatsFound ? 'threat' : 'secure',
+      threatsFound,
+      scannedAt: new Date().toISOString(),
+      environment: 'cloudflare-worker',
+      findings,
+    },
+    200,
+    {},
+    undefined,
+    requestId,
+  );
 }

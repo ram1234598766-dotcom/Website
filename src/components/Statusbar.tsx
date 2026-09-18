@@ -1,7 +1,29 @@
-import React, { useState, useEffect } from 'react';
-import { GitBranch, Wifi, WifiOff, Clock } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { GitBranch, Wifi, WifiOff, Clock, AlertCircle, ArrowLeftRight, ChevronDown } from 'lucide-react';
 
-export default function Statusbar() {
+const StatusBarItem = React.memo(function StatusBarItem({ children }: { children: React.ReactNode }) {
+  return <span className="flex items-center gap-1.5">{children}</span>;
+});
+
+interface StatusbarProps {
+  fileCount?: number;
+  gitBranch?: string;
+  gitChanged?: boolean;
+  encoding?: string;
+  cursorPos?: string;
+  indentType?: 'spaces' | 'tabs';
+  indentSize?: number;
+}
+
+const Statusbar = React.memo(function Statusbar({
+  fileCount = 0,
+  gitBranch = 'main',
+  gitChanged = false,
+  encoding = 'UTF-8',
+  cursorPos = 'Ln 1, Col 1',
+  indentType = 'spaces',
+  indentSize = 2,
+}: StatusbarProps) {
   const [time, setTime] = useState(new Date());
   const [isOnline, setIsOnline] = useState(true);
 
@@ -23,14 +45,20 @@ export default function Statusbar() {
     };
   }, []);
 
-  const formattedTime = time.toLocaleTimeString('en-US', {
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  });
+  const formattedTime = useMemo(
+    () =>
+      time.toLocaleTimeString('en-US', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      }),
+    [time]
+  );
 
   return (
     <div
+      role="status"
+      aria-label="Status bar"
       style={{
         height: 40,
         minHeight: 40,
@@ -47,28 +75,43 @@ export default function Statusbar() {
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-          <GitBranch size={12} />
-          main
-        </span>
-        <span>
+        <StatusBarItem>
+          <GitBranch size={12} aria-hidden />
+          {gitBranch}
+          {gitChanged && (
+            <span className="inline-flex items-center justify-center ml-1 w-2 h-2 bg-white rounded-full" aria-label="Uncommitted changes" title="Uncommitted changes" />
+          )}
+        </StatusBarItem>
+        <StatusBarItem>
           {isOnline ? (
-            <Wifi size={12} style={{ marginRight: 4, verticalAlign: 'middle' }} />
+            <Wifi size={12} aria-hidden style={{ marginRight: 4, verticalAlign: 'middle' }} />
           ) : (
-            <WifiOff size={12} style={{ marginRight: 4, verticalAlign: 'middle' }} />
+            <WifiOff size={12} aria-hidden style={{ marginRight: 4, verticalAlign: 'middle' }} />
           )}
           {isOnline ? 'Online' : 'Offline'}
-        </span>
-        <span>{formattedTime}</span>
+        </StatusBarItem>
+        <StatusBarItem>{formattedTime}</StatusBarItem>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-        <span>0 files</span>
+        <StatusBarItem>
+          {encoding}
+        </StatusBarItem>
+        <StatusBarItem>
+          {cursorPos}
+        </StatusBarItem>
+        <StatusBarItem>
+          <ArrowLeftRight size={12} aria-hidden />
+          {indentType === 'spaces' ? `${indentSize} spaces` : 'Tab'}
+        </StatusBarItem>
+        <span>{fileCount} files</span>
         <span style={{ opacity: 0.9 }}>Synced</span>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-          <Clock size={12} />
+        <StatusBarItem>
+          <Clock size={12} aria-hidden />
           {formattedTime}
-        </span>
+        </StatusBarItem>
       </div>
     </div>
   );
-}
+});
+
+export default Statusbar;

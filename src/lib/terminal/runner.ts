@@ -81,7 +81,7 @@ const DEFAULT_CONFIG: SandboxRunnerConfig = {
 export function buildSandboxWorkerSource(): string {
   return `
 const _G = globalThis;
-const BLOCKED = new Set(['fetch', 'XMLHttpRequest', 'WebSocket', 'importScripts', 'localStorage', 'sessionStorage', 'indexedDB', 'open', 'alert', 'confirm', 'prompt', 'print', 'eval', 'Function', 'constructor', 'getPrototypeOf', 'prototype', 'window', 'document', 'navigator', 'location', 'history', 'frames', 'self', 'top', 'parent', 'global', 'globalThis']);
+const BLOCKED = new Set(['fetch', 'XMLHttpRequest', 'WebSocket', 'importScripts', 'localStorage', 'sessionStorage', 'indexedDB', 'open', 'alert', 'confirm', 'prompt', 'print', 'eval', 'Function', 'constructor', 'getPrototypeOf', 'prototype', 'window', 'document', 'navigator', 'location', 'history', 'frames', 'self', 'top', 'parent', 'global', 'globalThis', 'SharedWorker', 'BroadcastChannel', 'AudioContext', 'RTCPeerConnection', 'webkitRTCPeerConnection', 'mozRTCPeerConnection']);
 const SBOX = new Proxy(_G, {
   get(t, p) {
     if (typeof p === 'string' && BLOCKED.has(p)) return undefined;

@@ -8,7 +8,11 @@
 const enc = new TextEncoder();
 
 export function bytesToBase64Url(bytes: Uint8Array): string {
-  const bin = String.fromCharCode(...new Uint8Array(bytes));
+  const CHUNK = 0x8000;
+  let bin = '';
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    bin += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
+  }
   return btoa(bin)
     .replace(/\+/g, '-')
     .replace(/\//g, '_')
@@ -29,15 +33,19 @@ export async function hmacSha256(
   secret: string,
   message: string
 ): Promise<Uint8Array> {
-  const key = await crypto.subtle.importKey(
-    'raw',
-    enc.encode(secret),
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign']
-  );
-  const sig = await crypto.subtle.sign('HMAC', key, enc.encode(message));
-  return new Uint8Array(sig);
+  try {
+    const key = await crypto.subtle.importKey(
+      'raw',
+      enc.encode(secret),
+      { name: 'HMAC', hash: 'SHA-256' },
+      false,
+      ['sign']
+    );
+    const sig = await crypto.subtle.sign('HMAC', key, enc.encode(message));
+    return new Uint8Array(sig);
+  } catch (err: any) {
+    throw new Error(`HMAC-SHA256 failed: ${err?.message ?? 'unknown error'}`);
+  }
 }
 
 /** Constant-time byte comparison. */

@@ -18,11 +18,11 @@ const mockFs = (paths: Record<string, TerminalFsEntry[]>, content: Record<string
 };
 
 describe('ShellSession — PowerShell Edition', () => {
-  it('prompt is PowerShell-style', () => {
+  it('prompt is shell-style', () => {
     const shell = new ShellSession(mockFs({}));
     const prompt = shell.getPrompt();
-    expect(prompt).toContain('PS');
-    expect(prompt).toMatch(/PS.*>/);
+    expect(prompt).toContain('vantaos@workspace');
+    expect(prompt).toMatch(/vantaos@workspace.*\$\s/);
   });
 
   it('normalizes paths correctly', () => {
@@ -66,6 +66,44 @@ describe('ShellSession — PowerShell Edition', () => {
     const shell = new ShellSession(mockFs({}));
     const result = await shell.execute('nonexistent-cmd-xyz');
     expect(result.some((l) => l.toLowerCase().includes('command not found'))).toBe(true);
+  });
+});
+
+describe('ShellSession — system commands', () => {
+  it('uname returns Linux', async () => {
+    const shell = new ShellSession(mockFs({}));
+    const result = await shell.execute('uname');
+    expect(result.some((l) => l.includes('Linux'))).toBe(true);
+  });
+
+  it('uname -s returns just the kernel name', async () => {
+    const shell = new ShellSession(mockFs({}));
+    const result = await shell.execute('uname -s');
+    expect(result).toHaveLength(1);
+    expect(result[0]).toBe('Linux');
+  });
+
+  it('env shows safe environment variables', async () => {
+    const shell = new ShellSession(mockFs({}));
+    const result = await shell.execute('env');
+    expect(result.some((l) => l.includes('HOME'))).toBe(true);
+    expect(result.some((l) => l.includes('USER'))).toBe(true);
+    expect(result.some((l) => l.includes('SHELL'))).toBe(true);
+  });
+
+  it('env <var> shows specific variable', async () => {
+    const shell = new ShellSession(mockFs({}));
+    const result = await shell.execute('env HOME');
+    expect(result.some((l) => l.includes('HOME='))).toBe(true);
+  });
+
+  it('history shows numbered commands', async () => {
+    const shell = new ShellSession(mockFs({}));
+    await shell.execute('ls');
+    await shell.execute('pwd');
+    const result = await shell.execute('history');
+    expect(result.some((l) => l.includes('ls'))).toBe(true);
+    expect(result.some((l) => l.includes('pwd'))).toBe(true);
   });
 });
 

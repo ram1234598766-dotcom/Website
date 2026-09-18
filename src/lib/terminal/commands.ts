@@ -97,7 +97,7 @@ export class ShellSession {
   }
 
   getPrompt(): string {
-    return `${GREEN}PS${RESET} ${BLUE}${toPsPath(this.cwd)}${RESET}> `;
+    return `${GREEN}vantaos@workspace${RESET}:${CYAN}~${this.cwd}${RESET}$ `;
   }
 
   historyPrev(): string | null {
@@ -167,8 +167,10 @@ export class ShellSession {
         lines.push(`  ${GREEN}mv, move, ren, rename${RESET}         Move / rename         ${GREEN}find${RESET}                     Search files`);
         lines.push('');
         lines.push(`${YELLOW}System:${RESET}`);
-        lines.push(`  ${GREEN}hostname, whoami, ver, systeminfo${RESET}  System info        ${GREEN}date, time${RESET}                   Date / time`);
+        lines.push(`  ${GREEN}hostname, whoami, ver, systeminfo${RESET}  System info        ${GREEN}uname${RESET}                   OS info`);
+        lines.push(`  ${GREEN}date, time${RESET}                   Date / time        ${GREEN}env${RESET}                        Env variables`);
         lines.push(`  ${GREEN}set, path${RESET}                         Environment vars   ${GREEN}clear, cls, clr, clear-host${RESET}  Clear screen`);
+        lines.push(`  ${GREEN}history${RESET}                          Command history`);
         lines.push('');
         lines.push(`${YELLOW}Network:${RESET}`);
         lines.push(`  ${GREEN}ipconfig, ping, nslookup${RESET}          Network tools      ${GREEN}netstat, tracert${RESET}             Connections`);
@@ -236,6 +238,37 @@ export class ShellSession {
 
       case 'time': {
         lines.push(new Date().toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+        break;
+      }
+
+      case 'uname': {
+        const flag = args[0] ?? '';
+        const sysInfo: Record<string, string> = {
+          '-s': 'Linux', '-n': 'vantaos-pc', '-r': '6.5.0-vantaos #1 SMP PREEMPT',
+          '-v': '#1 SMP Mon Sep 18 12:00:00 UTC 2026', '-m': 'x86_64',
+          '-p': 'x86_64', '-i': 'x86_64', '-o': 'GNU/Linux',
+        };
+        if (flag && sysInfo[flag]) {
+          lines.push(sysInfo[flag]);
+        } else {
+          lines.push('Linux vantaos-pc 6.5.0-vantaos #1 SMP PREEMPT Mon Sep 18 12:00:00 UTC 2026 x86_64 GNU/Linux');
+        }
+        break;
+      }
+
+      case 'env': {
+        const safe: Record<string, string> = {
+          HOME: '/home/vantaos-user', USER: 'vantaos-user', SHELL: '/bin/bash',
+          PATH: '/usr/local/bin:/usr/bin:/bin', NODE_ENV: 'development',
+          TERM: 'xterm-256color', LANG: 'en_US.UTF-8', HOSTNAME: 'VANTAOS-PC',
+          EDITOR: 'code', VANTAOS_VERSION: '2.5.0',
+        };
+        if (args[0]) {
+          const key = args[0].toUpperCase();
+          lines.push(safe[key] ? `${key}=${safe[key]}` : `${RED}env: ${key}: variable not found${RESET}`);
+        } else {
+          for (const [k, v] of Object.entries(safe)) lines.push(`${k}=${v}`);
+        }
         break;
       }
 
@@ -557,6 +590,66 @@ export class ShellSession {
         const fileContent = fileTok ? this.fs.readFile(filePath) : undefined;
         const code = fileContent !== undefined && rest.trim() === fileTok ? fileContent : rest;
         lines.push(...this.sandboxLines(await this.runner.run(code).result));
+        break;
+      }
+
+      case 'mkdir': {
+        if (!args[0]) { lines.push(`${RED}mkdir: missing operand${RESET}`); break; }
+        const result = await this.fs.createFolder(resolve(this.cwd, args[0]));
+        if (result === '') { lines.push(`${GREEN}mkdir: ${args[0]}${RESET}`); }
+        else { lines.push(result); }
+        break;
+      }
+
+      case 'touch': {
+        if (!args[0]) { lines.push(`${RED}touch: missing file operand${RESET}`); break; }
+        const result = await this.fs.writeFile(resolve(this.cwd, args[0]), '');
+        if (result === '') { lines.push(`${GREEN}touch: ${args[0]}${RESET}`); }
+        else { lines.push(result); }
+        break;
+      }
+
+      case 'rm': {
+        if (!args[0]) { lines.push(`${RED}rm: missing operand${RESET}`); break; }
+        const target = resolve(this.cwd, args[0]);
+        const children = this.fs.listChildren(target);
+        if (children.length > 0 && args.includes('-r')) {
+          const result = await this.fs.deletePath(target);
+          if (result === '') { lines.push(`${GREEN}rm: removed ${target}${RESET}`); }
+          else { lines.push(result); }
+        } else if (children.length > 0 && !args.includes('-r')) {
+          lines.push(`${RED}rm: ${args[0]}: is a directory (use -r)${RESET}`);
+        } else {
+          const result = await this.fs.deletePath(target);
+          if (result === '') { lines.push(`${GREEN}rm: ${args[0]}${RESET}`); }
+          else { lines.push(result); }
+        }
+        break;
+      }
+
+      case 'cp': {
+        if (!args[0] || !args[1]) { lines.push(`${RED}cp: missing source or destination${RESET}`); break; }
+        const srcPath = resolve(this.cwd, args[0]);
+        const destPath = resolve(this.cwd, args[1]);
+        const content = this.fs.readFile(srcPath);
+        if (content === undefined) { lines.push(`${RED}cp: ${args[0]}: No such file${RESET}`); break; }
+        const result = await this.fs.writeFile(destPath, content);
+        if (result === '') { lines.push(`${GREEN}cp: ${args[0]} -> ${args[1]}${RESET}`); }
+        else { lines.push(result); }
+        break;
+      }
+
+      case 'mv': {
+        if (!args[0] || !args[1]) { lines.push(`${RED}mv: missing source or destination${RESET}`); break; }
+        const srcPath = resolve(this.cwd, args[0]);
+        const destPath = resolve(this.cwd, args[1]);
+        const content = this.fs.readFile(srcPath);
+        if (content === undefined) { lines.push(`${RED}mv: ${args[0]}: No such file${RESET}`); break; }
+        const result = await this.fs.writeFile(destPath, content);
+        if (result !== '') { lines.push(result); break; }
+        const delResult = await this.fs.deletePath(srcPath);
+        if (delResult !== '') { lines.push(delResult); }
+        else { lines.push(`${GREEN}mv: ${args[0]} -> ${args[1]}${RESET}`); }
         break;
       }
 

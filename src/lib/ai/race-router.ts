@@ -26,16 +26,30 @@ export interface RaceResult {
 export async function raceQuery(
   webmodelFn: () => Promise<string>,
   geminiFn: () => Promise<string>,
+  timeoutMs = 120_000,
 ): Promise<RaceResult> {
   let cancelled = false;
   const cancelLoser = () => { cancelled = true; };
+  const controller = new AbortController();
+  const timeout = setTimeout(() => {
+    controller.abort();
+    cancelLoser();
+  }, timeoutMs);
   const webmodelPromise = webmodelFn().then((text) => ({ winner: 'webmodel' as RaceWinner, text }));
   const geminiPromise = geminiFn().then((text) => ({ winner: 'gemini' as RaceWinner, text }));
   webmodelPromise.catch(() => { if (!cancelled) cancelLoser(); });
   geminiPromise.catch(() => { if (!cancelled) cancelLoser(); });
   try {
-    return await Promise.any<RaceResult>([webmodelPromise, geminiPromise]);
+    const result = await Promise.any<RaceResult>([webmodelPromise, geminiPromise]);
+    return result;
+  } catch (err: any) {
+    const aggregate = new AggregateError(
+      err.errors ?? [err],
+      'All providers failed or timed out',
+    );
+    throw aggregate;
   } finally {
+    clearTimeout(timeout);
     cancelLoser();
   }
 }

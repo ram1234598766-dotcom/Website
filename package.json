@@ -13,7 +13,9 @@
     "deploy": "npx wrangler deploy",
     "cf-preview": "npx wrangler dev",
     "firebase:setup": "bash scripts/firebase-setup.sh",
-    "firebase:deploy": "firebase deploy --only database"
+    "firebase:deploy": "firebase deploy --only database",
+    "setup": "bash scripts/setup.sh",
+    "quickstart": "make quickstart"
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.3",
@@ -42,6 +44,9 @@
     "@sentry/react": "^10.74.0",
     "@tailwindcss/postcss": "^4.1.14",
     "@xterm/addon-fit": "^0.11.0",
+    "@xterm/addon-search": "^0.16.0",
+    "@xterm/addon-web-links": "^0.12.0",
+    "@xterm/addon-webgl": "^0.19.0",
     "@xterm/xterm": "^6.0.0",
     "date-fns": "^4.1.0",
     "diff": "^9.0.0",
@@ -66,6 +71,7 @@
     "postcss": "8.5.28"
   },
   "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.2",
     "@opennextjs/cloudflare": "^1.20.6",
     "@playwright/test": "^1.50.0",
     "@testing-library/jest-dom": "^7.0.1",

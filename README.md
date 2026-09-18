@@ -33,6 +33,28 @@ Keys live in environment variables and are never printed. HTML is sanitized with
 
 ---
 
+## What this is, in plain English
+
+VantaOS is a development environment that runs entirely in your browser — think of it as a laptop inside a tab. You get a file manager, a code editor with 15 language support, a sandboxed terminal for JavaScript and shell commands, and an AI assistant. Everything works offline by default: your files live in your browser's local storage. When you want more, you can plug in Firebase for real user accounts and file sync, or add a Gemini API key for smarter AI. No installation, no server to manage, no account required. Open the URL and start coding.
+
+---
+
+## Troubleshooting
+
+**"No peers found" / "Can't connect"** — VantaOS runs as a single-browser instance by default. The file manager, editor, terminal, and AI all work locally. If you added Firebase, your data syncs across devices. If features seem limited, check that you're not in a restricted network — some AI model downloads need access to huggingface.co.
+
+**"Port already in use"** — If `npm run dev` complains about port 3000, either stop the other process (`lsof -i :3000` then `kill <PID>`) or start on a different port: `npx next dev -p 3001`.
+
+**"Omni-AI says Service Unavailable"** — The in-browser AI model downloads from Hugging Face on first use. If your network blocks Hugging Face, retry once. If it still fails, go to the chat **Settings** and switch to a cloud provider (Gemini, OpenRouter, or OpenAI) — those only need an API key.
+
+**"Files don't persist after refresh"** — Files are stored in your browser's IndexedDB. Make sure you're not in private/incognito mode (some browsers block persistent storage there). If the issue continues, clear site data and reload.
+
+**"Terminal won't run JavaScript"** — The terminal runs code in a sandboxed Web Worker. If you see a blank screen after running `js`, try clicking inside the terminal panel first to focus it. Press Ctrl+` to toggle the terminal panel open/closed.
+
+**"VPN shows elevated privilege required"** — The VPN service (`/api/vpn`) requires the host machine to have network administration privileges (CAP_NET_ADMIN on Linux, Administrator on Windows). Without these, the VPN toggle will display an error. This is by design — running a TUN device requires OS-level permission.
+
+---
+
 ## Architecture
 
 ```
@@ -64,14 +86,20 @@ serves the app shell, static assets, and the API routes
 ```bash
 git clone https://github.com/ram1234598766-dotcom/Website.git
 cd Website
-npm ci
 
-# Environment is entirely optional — the app runs in demo mode without it
-cp .env.example .env.local     # fill in values only if you want Firebase/Gemini
+# One command — installs deps, sets up env, starts the server
+make quickstart
+
+# Or do it manually:
+npm ci
 npm run dev
 ```
 
 Open the printed localhost URL. Every `NEXT_PUBLIC_FIREBASE_*` variable is optional: without them the app starts in demo mode with local accounts. No config is required for the editors, terminal, GitHub browsing, Google Drive demo, in-browser WebModel, or the model manager.
+
+### First-time setup?
+
+Run `npm run setup` for a guided wizard that walks you through Firebase and AI configuration with friendly prompts and sensible defaults.
 
 ---
 
@@ -83,7 +111,7 @@ Open the printed localhost URL. Every `NEXT_PUBLIC_FIREBASE_*` variable is optio
 | `npm run build` | Next.js production build → `.next/` |
 | `npm run deploy` | OpenNext Worker bundle (`.open-next/`) + deploy |
 | `npm run lint` | Type-check without emitting (`tsc --noEmit`) |
-| `npm test` | Run the Vitest suite — 1047/1047 tests across 65 files |
+| `npm test` | Run the Vitest suite — 1254/1254 tests across 79 files |
 | `npm run deploy` | `npx wrangler deploy` (builds via `[build]` in wrangler.toml) — one Worker unit (worker + assets) |
 | `npm run cf-preview` | Build, then preview the OpenNext worker locally via `wrangler dev` |
 
@@ -93,7 +121,7 @@ Open the printed localhost URL. Every `NEXT_PUBLIC_FIREBASE_*` variable is optio
 
 ## Testing
 
-- **Unit/integration** — `npm test` runs Vitest: 1047/1047 tests passing across 65 files (Sep 14, 2026).
+- **Unit/integration** — `npm test` runs Vitest: 1254/1254 tests passing across 79 files.
 - **E2E** — Playwright: 9 `test()` cases across 7 files in `tests/e2e/flows` (auth 2, terminal 2, files 1, home 1, ide 1, ide-run 1, omni-ai 1), run with `npx playwright test --config=tests/e2e/playwright.config.ts`; the config's webServer builds and serves the hybrid app (`npx next build && npx next start -p 4173`).
 - **CI** (`.github/workflows/ci.yml`) — on push/PR with Node 22: `npm ci`, lint (`tsc --noEmit`), unit tests (`vitest run`, excluding `tests/e2e/**`), build (`next build`), Playwright E2E, and an **`npm audit` job** (`npm audit --audit-level=high`; 0 vulnerabilities as of Sep 14, 2026).
 

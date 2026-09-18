@@ -550,10 +550,6 @@ function applyOpToState(
     }
     case 'delete_node': {
       const { nodeId, path } = op.payload;
-      pathIndex.delete(path);
-      nodes.delete(nodeId);
-      dirtySet.delete(nodeId);
-      // Remove from parent's children
       const node = nodes.get(nodeId);
       if (node) {
         const parentKey = node.parentId ?? '__root__';
@@ -563,6 +559,9 @@ function applyOpToState(
           siblings.filter((id) => id !== nodeId)
         );
       }
+      pathIndex.delete(path);
+      nodes.delete(nodeId);
+      dirtySet.delete(nodeId);
       break;
     }
   }

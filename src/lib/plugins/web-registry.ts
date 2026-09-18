@@ -39,15 +39,31 @@ function parseNpmRegistryUrl(url: string): string | null {
 }
 
 async function fetchAndValidate(url: string): Promise<PluginManifest> {
-  const res = await fetch(url);
-  if (!res.ok) {
-    throw new Error(`Failed to fetch manifest: ${res.status}`);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 30_000);
+  try {
+    const res = await fetch(url, { signal: controller.signal });
+    if (!res.ok) {
+      throw new Error(`Failed to fetch manifest: ${res.status}`);
+    }
+    let raw: unknown;
+    try {
+      raw = await res.json();
+    } catch {
+      throw new Error('Manifest response was not valid JSON');
+    }
+    if (!isValidManifest(raw)) {
+      throw new Error('Invalid plugin manifest');
+    }
+    return raw;
+  } catch (err: any) {
+    if (err?.name === 'AbortError') {
+      throw new Error(`Fetching manifest timed out after 30s`);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeout);
   }
-  const raw = await res.json();
-  if (!isValidManifest(raw)) {
-    throw new Error('Invalid plugin manifest');
-  }
-  return raw;
 }
 
 export async function fetchGitHubManifest(

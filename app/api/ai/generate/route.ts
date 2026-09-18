@@ -1,12 +1,16 @@
+import { NextRequest, NextResponse } from 'next/server';
 import { handleApiRequest, serverEnv } from '@/src/lib/server/api-router';
+import { withTimeout } from '@/src/lib/server/timeout';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-export async function POST(request: Request): Promise<Response> {
-  return handleApiRequest(request, serverEnv());
-}
+const _postHandler = async (req: NextRequest): Promise<NextResponse> => {
+  return handleApiRequest(req, serverEnv()) as Promise<NextResponse>;
+};
 
-export async function OPTIONS(request: Request): Promise<Response> {
-  return handleApiRequest(request, serverEnv());
+export const POST = withTimeout(_postHandler, 30000);
+
+export async function OPTIONS(request: NextRequest): Promise<NextResponse> {
+  return handleApiRequest(request, serverEnv()) as Promise<NextResponse>;
 }

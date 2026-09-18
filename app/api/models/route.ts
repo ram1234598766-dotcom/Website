@@ -5,16 +5,22 @@
  * (size, compatibility, download status) for the UI model browser.
  *
  * This endpoint returns model metadata (id, version, publisher,
- * shard layout, runtime requirements, license). The SHA256 values
+ * signature, shard layout, runtime requirements, license). The SHA256 values
  * below are placeholder hex digests — actual SHA256 verification
  * happens in adapter.ts via Transformers.js pipeline loading,
  * which does not use these hashes.
  */
 
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { validateManifest, totalBytes } from '@/src/lib/models/manifest';
 
 export const dynamic = 'force-static';
+
+function jsonError(error: string, status: number, requestId?: string) {
+  const body: Record<string, unknown> = { error };
+  if (requestId) body.requestId = requestId;
+  return NextResponse.json(body, { status });
+}
 
 const MANIFESTS = [
   {
@@ -37,8 +43,8 @@ const MANIFESTS = [
     signatureScheme: 'hmac-sha256' as const,
     signature: 'hf-verified-smollm2-360m',
     shards: [
-      { url: 'https://huggingface.co/onnx-community/SmolLM2-360M-ONNX/resolve/main/config.json', byteLength: 1_200, sha256: '234567890123456789012345678901234567890123456789012345678901234' },
-      { url: 'https://huggingface.co/onnx-community/SmolLM2-360M-ONNX/resolve/main/model.onnx', byteLength: 380_000_000, sha256: '234567890123456789012345678901234567890123456789012345678901234' },
+      { url: 'https://huggingface.co/onnx-community/SmolLM2-360M-ONNX/resolve/main/config.json', byteLength: 1_200, sha256: '23456789012345678901234567890123456789012345678901234' },
+      { url: 'https://huggingface.co/onnx-community/SmolLM2-360M-ONNX/resolve/main/model.onnx', byteLength: 380_000_000, sha256: '23456789012345678901234567890123456789012345678901234' },
     ],
     runtimeRequirements: { webgpu: false, wasm: true, minMemoryMB: 512, minStorageMB: 512 },
     license: { name: 'Apache-2.0', acceptableUse: ['commercial', 'research', 'personal'] },
@@ -76,8 +82,8 @@ const MANIFESTS = [
     signatureScheme: 'hmac-sha256' as const,
     signature: 'hf-verified-lamini-1b',
     shards: [
-      { url: 'https://huggingface.co/LaMini/LaMini-LLaMA-1.1B/resolve/main/config.json', byteLength: 1_200, sha256: '34567890123456789012345678901234567890123456789012345678901234' },
-      { url: 'https://huggingface.co/LaMini/LaMini-LLaMA-1.1B/resolve/main/model.onnx', byteLength: 1_100_000_000, sha256: '34567890123456789012345678901234567890123456789012345678901234' },
+      { url: 'https://huggingface.co/LaMini/LaMini-LLaMA-1.1B/resolve/main/config.json', byteLength: 1_200, sha256: '3456789012345678901234567890123456789012345678901234' },
+      { url: 'https://huggingface.co/LaMini/LaMini-LLaMA-1.1B/resolve/main/model.onnx', byteLength: 1_100_000_000, sha256: '3456789012345678901234567890123456789012345678901234' },
     ],
     runtimeRequirements: { webgpu: false, wasm: true, minMemoryMB: 1024, minStorageMB: 1024 },
     license: { name: 'Apache-2.0', acceptableUse: ['commercial', 'research', 'personal'] },
@@ -89,8 +95,8 @@ const MANIFESTS = [
     signatureScheme: 'hmac-sha256' as const,
     signature: 'hf-verified-phi-2',
     shards: [
-      { url: 'https://huggingface.co/microsoft/Phi-2/resolve/main/config.json', byteLength: 1_500, sha256: '4567890123456789012345678901234567890123456789012345678901234' },
-      { url: 'https://huggingface.co/microsoft/Phi-2/resolve/main/model.onnx', byteLength: 2_700_000_000, sha256: '4567890123456789012345678901234567890123456789012345678901234' },
+      { url: 'https://huggingface.co/microsoft/Phi-2/resolve/main/config.json', byteLength: 1_500, sha256: '456789012345678901234567890123456789012345678901234' },
+      { url: 'https://huggingface.co/microsoft/Phi-2/resolve/main/model.onnx', byteLength: 2_700_000_000, sha256: '456789012345678901234567890123456789012345678901234' },
     ],
     runtimeRequirements: { webgpu: false, wasm: true, minMemoryMB: 2048, minStorageMB: 2048 },
     license: { name: 'MIT', acceptableUse: ['commercial', 'research', 'personal'] },
@@ -102,8 +108,8 @@ const MANIFESTS = [
     signatureScheme: 'hmac-sha256' as const,
     signature: 'hf-verified-phi-3-mini',
     shards: [
-      { url: 'https://huggingface.co/microsoft/Phi-3-mini/resolve/main/config.json', byteLength: 1_500, sha256: '567890123456789012345678901234567890123456789012345678901234' },
-      { url: 'https://huggingface.co/microsoft/Phi-3-mini/resolve/main/model.onnx', byteLength: 3_800_000_000, sha256: '567890123456789012345678901234567890123456789012345678901234' },
+      { url: 'https://huggingface.co/microsoft/Phi-3-mini/resolve/main/config.json', byteLength: 1_500, sha256: '56789012345678901234567890123456789012345678901234' },
+      { url: 'https://huggingface.co/microsoft/Phi-3-mini/resolve/main/model.onnx', byteLength: 3_800_000_000, sha256: '56789012345678901234567890123456789012345678901234' },
     ],
     runtimeRequirements: { webgpu: false, wasm: true, minMemoryMB: 3072, minStorageMB: 3072 },
     license: { name: 'MIT', acceptableUse: ['commercial', 'research', 'personal'] },
@@ -115,15 +121,16 @@ const MANIFESTS = [
     signatureScheme: 'hmac-sha256' as const,
     signature: 'hf-verified-phi-3.5-mini',
     shards: [
-      { url: 'https://huggingface.co/microsoft/Phi-3.5-mini/resolve/main/config.json', byteLength: 1_500, sha256: '67890123456789012345678901234567890123456789012345678901234' },
-      { url: 'https://huggingface.co/microsoft/Phi-3.5-mini/resolve/main/model.onnx', byteLength: 3_800_000_000, sha256: '67890123456789012345678901234567890123456789012345678901234' },
+      { url: 'https://huggingface.co/microsoft/Phi-3.5-mini/resolve/main/config.json', byteLength: 1_500, sha256: '6789012345678901234567890123456789012345678901234' },
+      { url: 'https://huggingface.co/microsoft/Phi-3.5-mini/resolve/main/model.onnx', byteLength: 3_800_000_000, sha256: '6789012345678901234567890123456789012345678901234' },
     ],
     runtimeRequirements: { webgpu: false, wasm: true, minMemoryMB: 3072, minStorageMB: 3072 },
     license: { name: 'MIT', acceptableUse: ['commercial', 'research', 'personal'] },
   },
 ];
 
-export async function GET() {
+export async function GET(request: Request) {
+  const requestId = request.headers.get('x-request-id') ?? undefined;
   try {
     const manifests = MANIFESTS.map((raw) => {
       const validated = validateManifest(raw);
@@ -133,11 +140,28 @@ export async function GET() {
       };
     });
 
-    return NextResponse.json({ models: manifests }, { status: 200 });
-  } catch (err) {
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Unknown error' },
-      { status: 500 },
+      { models: manifests },
+      {
+        status: 200,
+        headers: requestId ? { 'X-Request-ID': requestId } : undefined,
+      },
     );
+  } catch {
+    return jsonError('Failed to load model manifests', 500, requestId);
   }
+}
+
+export async function OPTIONS(request: Request) {
+  return new NextResponse(null, {
+    status: 204,
+    headers: {
+      'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+      'Access-Control-Max-Age': '86400',
+      ...(request.headers.get('x-request-id')
+        ? { 'X-Request-ID': request.headers.get('x-request-id')! }
+        : {}),
+    },
+  });
 }

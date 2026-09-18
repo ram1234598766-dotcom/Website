@@ -333,7 +333,7 @@ describe('POST /api/ai/generate — streaming', () => {
 
     const errorEvents = events.filter((e) => e.error !== undefined);
     expect(errorEvents.length).toBeGreaterThan(0);
-    expect(String(errorEvents[0].error)).toContain('upstream down');
+    expect(String(errorEvents[0].error)).toContain('AI stream failed');
   });
 
   it('non-stream path still returns {text} (regression)', async () => {

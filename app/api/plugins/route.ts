@@ -1,21 +1,21 @@
-/**
- * GET /api/plugins
- *
- * Returns the current plugin registry state: installed plugins,
- * their enabled status, and signatures.
- *
- * In production this queries the plugin service; here it returns
- * an empty registry (no plugins installed by default).
- */
-
 import { NextResponse } from 'next/server';
 
 export const dynamic = 'force-static';
 
-export async function GET() {
+function jsonError(error: string, status: number, requestId?: string) {
+  const body: Record<string, unknown> = { error };
+  if (requestId) body.requestId = requestId;
+  return NextResponse.json(body, { status });
+}
+
+export async function GET(request: Request) {
+  const requestId = request.headers.get('x-request-id') ?? undefined;
   return NextResponse.json(
     { plugins: [], total: 0, status: 'ok' },
-    { status: 200 },
+    {
+      status: 200,
+      headers: requestId ? { 'X-Request-ID': requestId } : undefined,
+    },
   );
 }
 
@@ -26,24 +26,34 @@ export async function GET() {
  * Validates the manifest and signature before installing.
  */
 export async function POST(request: Request) {
+  const requestId = request.headers.get('x-request-id') ?? undefined;
   try {
     const body = (await request.json()) as { manifest?: unknown; url?: string };
 
     if (!body.manifest && !body.url) {
-      return NextResponse.json(
-        { error: 'Provide either manifest or url' },
-        { status: 400 },
-      );
+      return jsonError('Provide either manifest or url', 400, requestId);
     }
 
-    return NextResponse.json(
-      { error: 'Plugin installation requires the full registry service', code: 'unavailable' },
-      { status: 503 },
+    return jsonError(
+      'Plugin installation requires the full registry service',
+      503,
+      requestId,
     );
   } catch {
-    return NextResponse.json(
-      { error: 'Invalid request body' },
-      { status: 400 },
-    );
+    return jsonError('Invalid request body', 400, requestId);
   }
+}
+
+export async function OPTIONS(request: Request) {
+  return new NextResponse(null, {
+    status: 204,
+    headers: {
+      'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+      'Access-Control-Max-Age': '86400',
+      ...(request.headers.get('x-request-id')
+        ? { 'X-Request-ID': request.headers.get('x-request-id')! }
+        : {}),
+    },
+  });
 }

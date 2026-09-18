@@ -1,4 +1,27 @@
+import { vi } from 'vitest';
 import '@testing-library/jest-dom/vitest';
+
+// Polyfill for vitest 5.x: vi.unsetAllEnvs was removed.
+// Some Phase 3 tests still call it; provide a no-op fallback.
+if (typeof vi.unsetAllEnvs === 'undefined') {
+  vi.unsetAllEnvs = () => {
+    for (const key of Object.keys(process.env)) {
+      delete (process.env as any)[key];
+    }
+  };
+}
+
+if (typeof vi.setEnv === 'undefined') {
+  vi.setEnv = (key: string, value: string) => {
+    process.env[key] = value;
+  };
+}
+
+if (typeof vi.unsetenv === 'undefined') {
+  vi.unsetenv = (key: string) => {
+    delete process.env[key];
+  };
+}
 
 // jsdom does not implement matchMedia which xterm.js requires.
 Object.defineProperty(window, 'matchMedia', {
