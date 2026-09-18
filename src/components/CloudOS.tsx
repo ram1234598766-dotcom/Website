@@ -10,12 +10,18 @@ const CloudDiffEditor = dynamic(() => import('./CloudDiffEditor'), {
 import { formatWithPrettier, isPrettierFormattable } from '../lib/editor/prettier';
 import { EDITOR_THEMES, type EditorTheme } from '../lib/editor/settings';
 import { Play, Terminal, Code2, FolderTree, Settings, FileJson, FileType, CheckCircle2, Plus, Trash2, Edit2, File as FileIcon, Archive, ChevronDown, ChevronRight, Folder, FolderOpen, ArrowRight, X, Activity, Columns, Rows, FileCode2, FileTerminal, Database } from 'lucide-react';
-import { Keyboard, Github, HardDrive } from 'lucide-react';
+import { Keyboard, Github, HardDrive, Store } from 'lucide-react';
 import TerminalPanel from './TerminalPanel';
 import GitHubManager from './GitHubManager';
 import DriveManager from './DriveManager';
 import { saveAs } from 'file-saver';
 import { useWorkspace } from '../lib/workspace/workspace';
+import ActivityBar, { type ActivityView } from './ActivityBar';
+import BottomPanel from './BottomPanel';
+import SubAgentPanel from './SubAgentPanel';
+import WebPluginRegistry from './WebPluginRegistry';
+import SearchPanel from './SearchPanel';
+import Statusbar from './Statusbar';
 
 interface PluginMeta {
   name: string;
@@ -88,6 +94,8 @@ export default function CloudOS() {
   const [originalFiles, setOriginalFiles] = useState<Record<string, string>>({});
   const [showDiff, setShowDiff] = useState(false);
   const [activeFileId, setActiveFileId] = useState<string>('0');
+  const [activeView, setActiveView] = useState<ActivityView>('explorer');
+
   const [isTerminalOpen, setIsTerminalOpen] = useState(true);
     const [terminalHeight, setTerminalHeight] = useState(256);
   const [terminalTheme, setTerminalTheme] = useState<any>('dark');
@@ -848,8 +856,9 @@ export default function CloudOS() {
       </div>
 
       <div className="flex flex-1 overflow-hidden">
+        <ActivityBar active={activeView} onChange={setActiveView} />
         {/* Sidebar / File Explorer */}
-        {sidebarOpen && (
+        {activeView === 'explorer' && sidebarOpen && (
           <div data-testid="sidebar" className="w-64 bg-slate-900 border-r border-slate-800 flex flex-col shrink-0">
             <div className="p-4 flex items-center justify-between border-b border-slate-800">
               <div className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
@@ -857,12 +866,23 @@ export default function CloudOS() {
                 Workspace
               </div>
               <div className="flex items-center gap-1">
-                 <button 
-                   onClick={() => {
-                     setCreatingParentId(null);
-                     setCreatingType('file');
-                     setIsCreating(true);
-                   }}
+                <button
+                  onClick={() => {
+                    window.dispatchEvent(new CustomEvent('vantaos:open-plugins', { detail: { tab: 'marketplace' } }));
+                  }}
+                  className="flex items-center gap-1 px-2 py-1 rounded text-slate-400 hover:text-indigo-400 hover:bg-indigo-500/10 transition-colors cursor-pointer"
+                  title="Browse Extensions"
+                  aria-label="Browse Extensions"
+                >
+                  <Store className="w-3.5 h-3.5" />
+                  <span className="text-[10px]">Browse</span>
+                </button>
+                <button 
+                  onClick={() => {
+                    setCreatingParentId(null);
+                    setCreatingType('file');
+                    setIsCreating(true);
+                  }}
                    className="p-1 rounded text-slate-400 hover:text-indigo-400 hover:bg-indigo-500/10 transition-colors cursor-pointer"
                    title="New File"
                    aria-label="New File"
@@ -1113,6 +1133,14 @@ export default function CloudOS() {
             </div>
             
           </div>
+        )}
+
+        {activeView === 'search' && (
+          <SearchPanel onClose={() => setActiveView('explorer')} />
+        )}
+        {activeView === 'agents' && <SubAgentPanel />}
+        {activeView === 'extensions' && (
+          <WebPluginRegistry onClose={() => setActiveView('explorer')} />
         )}
 
         {/* Editor Area */}
@@ -1436,6 +1464,12 @@ export default function CloudOS() {
           </div>
         </div>
       </div>
+      {activeView === 'terminal' && (
+        <div style={{ height: 200, flexShrink: 0, display: 'flex', flexDirection: 'column' }}>
+          <BottomPanel />
+        </div>
+      )}
+      <Statusbar />
       
       {/* Plugin Modal */}
       <AnimatePresence>

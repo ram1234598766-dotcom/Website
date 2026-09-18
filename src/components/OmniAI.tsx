@@ -1,10 +1,11 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { BrainCircuit, Send, Settings, Key, Globe, Zap, Bot, Trash2, Loader2, Cpu, Clock, Sparkles, CheckCircle2, AlertCircle } from 'lucide-react';
+import { BrainCircuit, Send, Settings, Key, Globe, Zap, Bot, Trash2, Loader2, Cpu, Clock, Sparkles, CheckCircle2, AlertCircle, Layers } from 'lucide-react';
 import { SandboxRunner } from '../lib/terminal/runner';
 import { queryWebModel } from '../lib/models/adapter';
 import { TOOL_REGISTRY, getToolById, getToolsByCategory, type ToolDef } from '../lib/ai/tools/registry';
+import SubAgentDispatcher from './SubAgentDispatcher';
 
 type AIProvider = 'webmodel' | 'openrouter' | 'gemini' | 'openai';
 
@@ -556,6 +557,7 @@ export default function OmniAI() {
   const [input, setInput] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showDispatcher, setShowDispatcher] = useState(false);
   const [settings, setSettings] = useState<StoredSettings>(loadSettings);
   const [tempApiKey, setTempApiKey] = useState(settings.apiKey);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -677,6 +679,11 @@ export default function OmniAI() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <button onClick={() => setShowDispatcher(true)} aria-label="Subagents"
+            className="p-2.5 text-slate-400 hover:text-indigo-400 hover:bg-indigo-500/10 rounded-xl transition-colors cursor-pointer focus-visible:ring-2 focus-visible:ring-indigo-400"
+            title="Subagents">
+            <Layers className="w-5 h-5" />
+          </button>
           <button onClick={clearHistory} disabled={messages.length === 0} aria-label="Clear history"
             className="p-2.5 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-xl transition-colors disabled:opacity-30 disabled:pointer-events-none cursor-pointer focus-visible:ring-2 focus-visible:ring-indigo-400"
             title="Clear history">
@@ -858,6 +865,14 @@ export default function OmniAI() {
           </div>
         </div>
       </div>
+      <SubAgentDispatcher
+        isOpen={showDispatcher}
+        onClose={() => setShowDispatcher(false)}
+        onResultsReady={(message) => {
+          setMessages((prev) => [...prev, { role: 'user', content: message }]);
+          setShowDispatcher(false);
+        }}
+      />
     </div>
   );
 }

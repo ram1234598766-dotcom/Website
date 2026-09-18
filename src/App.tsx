@@ -20,6 +20,23 @@ import { WorkspaceProvider } from './lib/workspace/workspace';
 
 export default function App() {
   const [currentView, setCurrentView] = useState<ViewState>('home');
+  const [pluginTab, setPluginTab] = useState<'installed' | 'marketplace'>('installed');
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail as { tab?: 'installed' | 'marketplace' } | undefined;
+      setPluginTab(detail?.tab ?? 'marketplace');
+      setCurrentView('plugins');
+    };
+    window.addEventListener('vantaos:open-plugins', handler);
+    return () => window.removeEventListener('vantaos:open-plugins', handler);
+  }, []);
+
+  useEffect(() => {
+    if (currentView !== 'plugins') {
+      setPluginTab('installed');
+    }
+  }, [currentView]);
   const [session, setSession] = useState<any>(null);
   const [sessionWarning, setSessionWarning] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
@@ -142,7 +159,7 @@ export default function App() {
                 {currentView === 'omni-ai' && <OmniAI />}
                 {currentView === 'admin' && <AdminPanel />}
                 {currentView === 'models' && <ModelManager />}
-                {currentView === 'plugins' && <PluginManager onClose={() => setCurrentView('home')} />}
+                {currentView === 'plugins' && <PluginManager onClose={() => setCurrentView('home')} defaultTab={pluginTab} />}
               </motion.div>
             </AnimatePresence>
           </main>
