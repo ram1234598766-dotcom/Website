@@ -8,8 +8,7 @@
 const enc = new TextEncoder();
 
 export function bytesToBase64Url(bytes: Uint8Array): string {
-  let bin = '';
-  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+  const bin = String.fromCharCode(...new Uint8Array(bytes));
   return btoa(bin)
     .replace(/\+/g, '-')
     .replace(/\//g, '_')
@@ -17,6 +16,7 @@ export function bytesToBase64Url(bytes: Uint8Array): string {
 }
 
 export function base64UrlToBytes(input: string): Uint8Array {
+  if (input.length > 1_000_000) throw new Error('base64Url input too large');
   const pad = input.length % 4 === 0 ? '' : '='.repeat(4 - (input.length % 4));
   const b64 = input.replace(/-/g, '+').replace(/_/g, '/') + pad;
   const bin = atob(b64);
@@ -42,8 +42,12 @@ export async function hmacSha256(
 
 /** Constant-time byte comparison. */
 export function timingSafeEqual(a: Uint8Array, b: Uint8Array): boolean {
-  if (a.length !== b.length) return false;
-  let diff = 0;
-  for (let i = 0; i < a.length; i++) diff |= a[i] ^ b[i];
+  const aLen = a.length;
+  const bLen = b.length;
+  const len = aLen > bLen ? aLen : bLen;
+  let diff = aLen ^ bLen;
+  for (let i = 0; i < len; i++) {
+    diff |= (a[i] ?? 0) ^ (b[i] ?? 0);
+  }
   return diff === 0;
 }

@@ -9,6 +9,7 @@ export default defineConfig({
     include: ['tests/**/*.test.ts', 'tests/**/*.test.tsx', 'workers/**/*.test.ts'],
     exclude: ['tests/e2e/**'],
     testTimeout: 10000,
+    fileParallelism: false,
     globals: false,
     coverage: {
       provider: 'v8',

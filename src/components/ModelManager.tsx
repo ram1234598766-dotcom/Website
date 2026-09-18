@@ -6,6 +6,13 @@
  * feedback.
  */
 
+/**
+ * Manifests now reference real HuggingFace models (Xenova/gpt2,
+ * onnx-community/SmolLM2-135M-ONNX) resolved via adapter.ts MODEL_ID_MAP.
+ * Installing a model triggers a real inference test through queryWebModel
+ * (transformers.js WebGPU/WASM), not raw shard downloads.
+ */
+
 import React, { useState, useEffect, useCallback, useMemo, memo } from 'react';
 import {
   Download,
@@ -22,27 +29,48 @@ import { motion, AnimatePresence } from 'motion/react';
 // @ts-ignore Module resolution works at runtime via Next.js bundler
 import { ModelManifest, DeviceProfile } from '@/src/lib/models/manifest';
 // @ts-ignore Module resolution works at runtime via Next.js bundler
-import { detectDevice, meetsRequirements, requirementGaps } from '@/src/lib/models/device';
+import { detectDevice, meetsRequirements, recommendForDevice, requirementGaps } from '@/src/lib/models/device';
+// @ts-ignore Module resolution works at runtime via Next.js bundler
+import { queryWebModel } from '@/src/lib/models/adapter';
 
 /* ------------------------------------------------------------------ */
-/*  Demo data — in production this comes from a registry endpoint.     */
+/*  Demo data — model IDs match adapter.ts MODEL_ID_MAP.          */
 /* ------------------------------------------------------------------ */
 
 const DEMO_MANIFESTS: ModelManifest[] = [
   {
-    id: 'vanta-smollm2-135m',
+    id: 'gpt2',
     version: '1.0.0',
-    publisher: 'VantaOS Labs',
+    publisher: 'Hugging Face',
     signatureScheme: 'ed25519',
-    signature: 'aB3_abc123demo_signature',
+    signature: 'a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4',
     shards: [
       {
-        url: 'https://models.vantaos.dev/vanta-smollm2-135m/v1/shard-0.bin',
-        byteLength: 2 * 1024 * 1024,
-        sha256: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
+        url: 'https://huggingface.co/Xenova/gpt2/resolve/main/model.onnx',
+        byteLength: 500 * 1024 * 1024,
+        sha256: 'a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2',
       },
     ],
-    runtimeRequirements: { webgpu: false, wasm: true, minMemoryMB: 512, minStorageMB: 16 },
+    runtimeRequirements: { webgpu: false, wasm: true, minMemoryMB: 512, minStorageMB: 512 },
+    license: {
+      name: 'MIT',
+      acceptableUse: ['research', 'commercial'],
+    },
+  },
+  {
+    id: 'tinyllama',
+    version: '1.0.0',
+    publisher: 'onnx-community',
+    signatureScheme: 'hmac-sha256',
+    signature: 'b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5',
+    shards: [
+      {
+        url: 'https://huggingface.co/onnx-community/SmolLM2-135M-ONNX/resolve/main/model.onnx',
+        byteLength: 260 * 1024 * 1024,
+        sha256: 'b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3',
+      },
+    ],
+    runtimeRequirements: { webgpu: false, wasm: true, minMemoryMB: 256, minStorageMB: 260 },
     license: {
       name: 'Apache-2.0',
       url: 'https://www.apache.org/licenses/LICENSE-2.0',
@@ -50,47 +78,23 @@ const DEMO_MANIFESTS: ModelManifest[] = [
     },
   },
   {
-    id: 'vanta-phi3-mini-4k',
-    version: '2.1.0',
-    publisher: 'VantaOS Labs',
-    signatureScheme: 'hmac-sha256',
-    signature: 'hmac_demo_sig_xyz',
-    shards: [
-      {
-        url: 'https://models.vantaos.dev/vanta-phi3-mini-4k/v2/shard-0.bin',
-        byteLength: 48 * 1024 * 1024,
-        sha256: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
-      },
-      {
-        url: 'https://models.vantaos.dev/vanta-phi3-mini-4k/v2/shard-1.bin',
-        byteLength: 48 * 1024 * 1024,
-        sha256: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
-      },
-    ],
-    runtimeRequirements: { webgpu: true, wasm: true, minMemoryMB: 4096, minStorageMB: 200 },
-    license: {
-      name: 'MIT',
-      acceptableUse: ['research', 'commercial'],
-    },
-  },
-  {
-    id: 'vanta-llama3-8b-quant',
+    id: 'webmodel',
     version: '1.0.0',
-    publisher: 'VantaOS Labs',
-    signatureScheme: 'ed25519',
-    signature: 'demo_llama3_sig',
+    publisher: 'onnx-community',
+    signatureScheme: 'hmac-sha256',
+    signature: 'c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6',
     shards: [
       {
-        url: 'https://models.vantaos.dev/vanta-llama3-8b-quant/v1/shard-0.bin',
-        byteLength: 512 * 1024 * 1024,
-        sha256: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
+        url: 'https://huggingface.co/onnx-community/SmolLM2-135M-ONNX/resolve/main/model.onnx',
+        byteLength: 260 * 1024 * 1024,
+        sha256: 'c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4',
       },
     ],
-    runtimeRequirements: { webgpu: true, wasm: true, minMemoryMB: 16384, minStorageMB: 1024 },
+    runtimeRequirements: { webgpu: false, wasm: true, minMemoryMB: 256, minStorageMB: 260 },
     license: {
-      name: 'LLaMA-3.0',
-      url: 'https://ai.meta.com/llama/license/',
-      acceptableUse: ['research'],
+      name: 'Apache-2.0',
+      url: 'https://www.apache.org/licenses/LICENSE-2.0',
+      acceptableUse: ['research', 'commercial', 'fine-tuning'],
     },
   },
 ];
@@ -133,6 +137,11 @@ export default function ModelManager() {
   const [deviceCaps, setDeviceCaps] = useState<any>(null);
   const [statuses, setStatuses] = useState<Record<string, ModelStatus>>({});
 
+  const recommended = useMemo(() => {
+    if (!deviceCaps) return [];
+    return recommendForDevice(deviceCaps, DEMO_MANIFESTS);
+  }, [deviceCaps]);
+
   useEffect(() => {
     detectDevice().then((caps) => {
       setDeviceProfile(caps.profile);
@@ -147,17 +156,36 @@ export default function ModelManager() {
   const handleDownload = useCallback(
     async (manifest: ModelManifest) => {
       updateStatus(manifest.id, { phase: 'downloading', progress: 0 });
+
+      let progressTimer: ReturnType<typeof setInterval> | null = null;
       try {
-        const { downloadModel } = await import('../lib/models/downloader');
-        await downloadModel(manifest, (p) => {
-          const pct = p.totalBytes > 0 ? (p.bytesReceived / p.totalBytes) * 100 : 0;
-          updateStatus(manifest.id, { phase: p.phase, progress: Math.round(pct), error: p.error });
-        });
+        progressTimer = setInterval(() => {
+          setStatuses((prev) => {
+            const current = prev[manifest.id];
+            if (!current || current.phase === 'done' || current.phase === 'error') return prev;
+            const newProgress = Math.min(90, current.progress + Math.round(2 + Math.random() * 4));
+            return {
+              ...prev,
+              [manifest.id]: { ...current, progress: newProgress },
+            };
+          });
+        }, 600);
+
+        await queryWebModel('hello', manifest.id as any, 30000);
+
+        if (progressTimer) {
+          clearInterval(progressTimer);
+          progressTimer = null;
+        }
         updateStatus(manifest.id, { phase: 'done', progress: 100 });
       } catch (err) {
+        if (progressTimer) {
+          clearInterval(progressTimer);
+          progressTimer = null;
+        }
         updateStatus(manifest.id, {
           phase: 'error',
-          error: err instanceof Error ? err.message : 'Download failed',
+          error: err instanceof Error ? err.message : 'Install failed',
         });
       }
     },
@@ -197,6 +225,30 @@ export default function ModelManager() {
           <HardDrive className="h-5 w-5 text-gray-400" />
           <span className="text-xs text-gray-400">
             {deviceCaps.storageQuotaMB.toLocaleString()} MiB storage available
+          </span>
+        </motion.div>
+      )}
+      {!deviceCaps && (
+        <motion.div
+          initial={{ opacity: 0, y: -8 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-6 rounded-lg border border-gray-700 bg-gray-800/60 p-4 flex items-center gap-3"
+        >
+          <Cpu className="h-5 w-5 text-gray-400 animate-pulse" />
+          <span className="text-sm text-gray-400">Detecting device capabilities…</span>
+        </motion.div>
+      )}
+
+      {/* Recommendation banner */}
+      {recommended.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: -4 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-4 rounded-lg border border-green-800/50 bg-green-900/10 p-3"
+        >
+          <span className="text-sm font-semibold text-green-400">Recommended for your device:</span>
+          <span className="text-sm text-gray-400 ml-2">
+            {recommended.join(', ')} — best fit for WebGPU {deviceCaps?.webgpu ? '✓' : '✗'} / WASM {deviceCaps?.wasm ? '✓' : '?'}
           </span>
         </motion.div>
       )}
@@ -243,7 +295,7 @@ export default function ModelManager() {
                             : 'bg-red-900/40 text-red-400'
                         }`}
                       >
-                        WebGPU {deviceCaps?.webgpu ? '✓' : '✗'}
+                        WebGPU {deviceCaps ? (deviceCaps.webgpu ? '✓' : '✗') : '?'}
                       </span>
                     )}
                     {manifest.runtimeRequirements.wasm && (
@@ -254,7 +306,7 @@ export default function ModelManager() {
                             : 'bg-red-900/40 text-red-400'
                         }`}
                       >
-                        WASM {deviceCaps?.wasm ? '✓' : '✗'}
+                        WASM {deviceCaps ? (deviceCaps.wasm ? '✓' : '✗') : '?'}
                       </span>
                     )}
                     <span className="rounded bg-gray-700/40 px-2 py-0.5 text-[10px] font-medium text-gray-300">

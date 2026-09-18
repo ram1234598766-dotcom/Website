@@ -19,7 +19,7 @@ export interface ServiceSLO {
   /** Threshold the metric must stay under (in ms for latency, seconds for boot). */
   threshold: number;
   /** Unit of the threshold value. */
-  thresholdUnit: 'ms' | 's';
+  thresholdUnit: 'ms' | 's' | '%';
 }
 
 export interface SLOStatus {
@@ -28,7 +28,7 @@ export interface SLOStatus {
   target: number;
   window: string;
   threshold: number;
-  thresholdUnit: 'ms' | 's';
+  thresholdUnit: 'ms' | 's' | '%';
   /** Actual measured compliance percentage (0–100). */
   actual: number;
   /** Whether the SLO is currently being met. */
@@ -38,6 +38,36 @@ export interface SLOStatus {
 }
 
 export const SLO_MONITORING_ENABLED = true;
+
+import { sentryErrorStore } from './error-store';
+import { setTelemetryEventObserver } from '../telemetry';
+
+setTelemetryEventObserver((event) => {
+  sentryErrorStore.recordObservation();
+  if (event.type === 'error') {
+    sentryErrorStore.recordError();
+  }
+});
+
+const ERROR_RATE_WINDOW_MS = 30 * 24 * 3600 * 1000;
+
+function computeErrorRateSLO(): SLOStatus {
+  const counts = sentryErrorStore.getWindowCounts(ERROR_RATE_WINDOW_MS);
+  const observations = counts.observations;
+  const errors = counts.errors;
+  const actual = observations > 0 ? ((observations - errors) / observations) * 100 : 100;
+  return {
+    service: 'error-rate',
+    metric: 'Error rate',
+    target: 99.9,
+    window: '30d',
+    threshold: 0.1,
+    thresholdUnit: '%',
+    actual: Math.round(actual * 10) / 10,
+    met: actual >= 99.9,
+    observations,
+  };
+}
 
 export const SLO_DEFINITIONS: ServiceSLO[] = [
   {
@@ -87,6 +117,14 @@ export const SLO_DEFINITIONS: ServiceSLO[] = [
     window: '30d',
     threshold: 500,
     thresholdUnit: 'ms',
+  },
+  {
+    service: 'error-rate',
+    metric: 'Error rate',
+    target: 99.9,
+    window: '30d',
+    threshold: 0.1,
+    thresholdUnit: '%',
   },
 ];
 
@@ -157,6 +195,9 @@ export async function checkSLOs(): Promise<SLOStatus[]> {
  * Check a single SLO by service name.
  */
 export async function checkSLOByService(service: string): Promise<SLOStatus | undefined> {
+  if (service === 'error-rate') {
+    return computeErrorRateSLO();
+  }
   const statuses = await checkSLOs();
   return statuses.find((s) => s.service === service);
 }

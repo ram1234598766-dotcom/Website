@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { ViewState } from '../types';
 import {
   motion,
@@ -28,6 +28,7 @@ import {
   Play,
   Braces,
   BrainCircuit,
+  Github,
 } from 'lucide-react';
 import Logo from './Logo';
 
@@ -61,6 +62,48 @@ const fadeUp = {
     transition: { duration: 0.7, ease: EASE },
   },
 };
+
+function ProjectGrid() {
+  const [repos, setRepos] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch('https://api.github.com/users/ram1234598766-dotcom/repos?per_page=20&sort=updated')
+      .then(r => r.json())
+      .then(data => {
+        if (Array.isArray(data)) setRepos(data.filter((r: any) => !r.fork).slice(0, 6));
+        setLoading(false);
+      })
+      .catch(() => setLoading(false));
+  }, []);
+
+  if (loading) return (
+    <div className="flex justify-center py-12"><span className="text-sm text-slate-500">Loading projects...</span></div>
+  );
+  if (repos.length === 0) return (
+    <div className="text-center py-8"><p className="text-sm text-slate-500">No public repositories found.</p></div>
+  );
+
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      {repos.map((repo) => (
+        <a key={repo.id} href={repo.html_url} target="_blank" rel="noopener noreferrer"
+          className="group bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.06] hover:border-indigo-500/20 rounded-2xl p-5 transition-all duration-300">
+          <div className="flex items-center gap-3 mb-3">
+            <Github className="w-5 h-5 text-white/70 group-hover:text-indigo-400 transition-colors" />
+            <h3 className="text-sm font-semibold text-white group-hover:text-indigo-300 transition-colors truncate">{repo.name}</h3>
+          </div>
+          <p className="text-xs text-slate-400 line-clamp-2 leading-relaxed mb-3">{repo.description || 'No description provided.'}</p>
+          <div className="flex items-center gap-4 text-[10px] text-slate-500">
+            {repo.stargazers_count > 0 && <span>⭐ {repo.stargazers_count}</span>}
+            <span>{repo.language || 'Unknown'}</span>
+            <span>{repo.forks_count || 0} forks</span>
+          </div>
+        </a>
+      ))}
+    </div>
+  );
+}
 
 export default function Home({ setCurrentView, onSignIn, onSignUp }: HomeProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -682,7 +725,25 @@ export default function Home({ setCurrentView, onSignIn, onSignUp }: HomeProps) 
           </motion.div>
         </motion.section>
 
-        {/* 7. CTA Section */}
+        {/* 7. My Other Projects Section */}
+        <motion.section
+          className="w-full max-w-6xl mx-auto mb-24 sm:mb-32 px-4 z-10 relative"
+        >
+          <div className="text-center mb-10">
+            <span className="eyebrow inline-flex items-center gap-2 mb-3 text-indigo-400">
+              <Github className="w-4 h-4" /> Open Source
+            </span>
+            <motion.h2 variants={fadeUp} className="text-3xl md:text-5xl font-black text-white tracking-tight">
+              My Other Projects
+            </motion.h2>
+            <motion.p variants={fadeUp} className="text-slate-400 mt-3 max-w-md mx-auto text-sm">
+              Some things I've built and contributed to. Click to explore.
+            </motion.p>
+          </div>
+          <ProjectGrid />
+        </motion.section>
+
+        {/* 8. CTA Section */}
         <motion.section
           initial={{ opacity: 0, y: 40 }}
           whileInView={{ opacity: 1, y: 0 }}

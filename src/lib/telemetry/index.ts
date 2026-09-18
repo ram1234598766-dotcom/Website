@@ -87,8 +87,13 @@ function createEvent(
   };
 }
 
+let eventObserver: ((event: QueuedEventInternal) => void) | null = null;
+
 function enqueue(event: QueuedEventInternal): void {
   queue.push(event);
+  if (eventObserver) {
+    eventObserver(event);
+  }
   if (queue.length >= MAX_QUEUE_SIZE) {
     queue.splice(0, Math.floor(MAX_QUEUE_SIZE / 2));
   }
@@ -202,6 +207,12 @@ export function clearTelemetryQueue(): void {
  *
  * @param handler - Function to receive flushed events, or null to disable
  */
+export function setTelemetryEventObserver(
+  observer: (event: QueuedEventInternal) => void,
+): void {
+  eventObserver = observer;
+}
+
 export function setTelemetryFlushHandler(
   handler: ((events: QueuedEvent[]) => void) | null,
 ): void {

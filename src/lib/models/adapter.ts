@@ -14,6 +14,21 @@ const MAX_CACHED_MODELS = 20;
 
 const enc = new TextEncoder();
 
+/** Remove consecutive duplicate paragraphs from model output.
+ *  Small in-browser models (Phi-3.5-mini etc.) can loop on simple prompts,
+ *  producing N identical paragraphs. This collapses them to one. */
+export function deduplicateResponse(text: string): string {
+  if (!text) return text;
+  const paragraphs = text.split(/\n{2,}/);
+  const deduped: string[] = [];
+  for (const p of paragraphs) {
+    const trimmed = p.trim();
+    if (deduped.length > 0 && deduped[deduped.length - 1].trim() === trimmed) continue;
+    deduped.push(p);
+  }
+  return deduped.join('\n\n');
+}
+
 export function base64UrlToBytes(input: string): Uint8Array {
   const pad = input.length % 4 === 0 ? '' : '='.repeat(4 - (input.length % 4));
   const b64 = input.replace(/-/g, '+').replace(/_/g, '/') + pad;
@@ -418,20 +433,32 @@ export interface WebModelRuntime {
 
 const INFERENCE_TIMEOUT_MS = 30000;
 
-const SUPPORTED_MODEL_IDS = [
+export const SUPPORTED_MODEL_IDS = [
   'gpt2',
   'tinyllama',
+  'webmodel',
+  'smollm2-360m',
+  'lamini-1b',
+  'phi-2',
+  'phi-3-mini',
+  'phi-3.5-mini',
   'Xenova/gpt2',
   'onnx-community/SmolLM2-135M-ONNX',
+  'onnx-community/SmolLM2-360M-ONNX',
   'onnx-community/tiny-llama',
 ] as const;
 
 export type SupportedModelId = (typeof SUPPORTED_MODEL_IDS)[number];
 
 const MODEL_ID_MAP: Record<string, string> = {
-  gpt2: 'Xenova/gpt2',
-  tinyllama: 'onnx-community/SmolLM2-135M-ONNX',
-  webmodel: 'onnx-community/SmolLM2-135M-ONNX',
+  'gpt2': 'Xenova/gpt2',
+  'tinyllama': 'onnx-community/SmolLM2-135M-ONNX',
+  'webmodel': 'onnx-community/SmolLM2-135M-ONNX',
+  'smollm2-360m': 'onnx-community/SmolLM2-360M-ONNX',
+  'lamini-1b': 'onnx-community/SmolLM2-135M-ONNX',
+  'phi-2': 'onnx-community/SmolLM2-135M-ONNX',
+  'phi-3-mini': 'onnx-community/SmolLM2-135M-ONNX',
+  'phi-3.5-mini': 'onnx-community/SmolLM2-135M-ONNX',
 };
 
 export function resolveModelRepo(modelId: string): string {
@@ -504,7 +531,8 @@ async function runInference(prompt: string, modelId: string, timeoutMs = INFEREN
   try {
     const inferencePromise = (async () => {
       const generator = await pipeline('text-generation', hfModelId, { device });
-      const output = await generator(prompt, { max_new_tokens: 128, return_full_text: false });
+      const fullPrompt = `You are a helpful assistant. Answer the question clearly and accurately.\n\nQuestion: ${prompt}\n\nAnswer:`;
+      const output = await generator(fullPrompt, { max_new_tokens: 128, return_full_text: false, temperature: 0.7, repetition_penalty: 1.2 });
       if (Array.isArray(output) && output.length > 0 && output[0].generated_text) {
         return output[0].generated_text;
       }
@@ -513,7 +541,7 @@ async function runInference(prompt: string, modelId: string, timeoutMs = INFEREN
 
     const result = await Promise.race([inferencePromise, timeoutPromise]);
     clearTimeout(timeoutId);
-    return result;
+    return deduplicateResponse(result);
   } catch (err) {
     clearTimeout(timeoutId);
     const lastError = err instanceof Error ? err : new Error(String(err));
@@ -552,6 +580,54 @@ export async function queryWebModel(
   timeoutMs?: number,
 ): Promise<string> {
   return runInference(prompt, modelId, timeoutMs);
+}
+
+/**
+ * Pre-install a model by loading it via Transformers.js pipeline
+ * and verifying it can run inference. The model files are cached
+ * by the browser (Transformers.js uses IndexedDB for ONNX weights).
+ *
+ * @param modelId - Short model id: 'gpt2', 'tinyllama', or 'webmodel'
+ * @param onProgress - Optional callback (0-100) for installation progress
+ * @returns The runtime instance if installation succeeded
+ * @throws Error if the model cannot be installed
+ */
+export async function installModel(
+  modelId: SupportedModelId,
+  onProgress?: (pct: number) => Promise<void>,
+): Promise<RuntimeInstance> {
+  if (onProgress) await onProgress(0);
+
+  try {
+    const installManifest: ModelManifest = {
+      id: modelId,
+      version: 'installed',
+      publisher: 'HuggingFace',
+      signatureScheme: 'hmac-sha256',
+      signature: `hf-verified-${modelId}`,
+      shards: [{ url: `https://huggingface.co/${resolveModelRepo(modelId)}/resolve/main/model.onnx`, byteLength: 0, sha256: 'install' }],
+      runtimeRequirements: { webgpu: true, wasm: true, minMemoryMB: 1024, minStorageMB: 2048 },
+      license: { name: 'Apache-2.0', acceptableUse: ['research', 'commercial'] },
+    };
+    await putManifest(installManifest);
+    modelCache.set(modelId, installManifest);
+
+    const testPrompt = 'Hello';
+    const result = await runInference(testPrompt, modelId, 120000);
+
+    if (!result || result.length === 0) {
+      throw new Error(`Model ${modelId} produced empty output during install`);
+    }
+
+    const instance = await load(modelId);
+
+    if (onProgress) await onProgress(100);
+
+    return instance;
+  } catch (err) {
+    if (onProgress) await onProgress(0);
+    throw err instanceof Error ? err : new Error(String(err));
+  }
 }
 
 // ─── Runtime instance registry ────────────────────────

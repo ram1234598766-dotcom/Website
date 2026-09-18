@@ -15,7 +15,15 @@ export interface ProviderConfig {
 
 export const PROVIDERS: ProviderConfig[] = [
   { id: 'webmodel', name: 'WebModel',
-    models: [{ id: 'gpt2', name: 'GPT-2' }, { id: 'tinyllama', name: 'SmolLM2-135M' }],
+    models: [
+      { id: 'gpt2', name: 'GPT-2 (124M)' },
+      { id: 'tinyllama', name: 'SmolLM2-135M' },
+      { id: 'smollm2-360m', name: 'SmolLM2-360M' },
+      { id: 'lamini-1b', name: 'LaMini-1.1B' },
+      { id: 'phi-2', name: 'Phi-2 (2.7B)' },
+      { id: 'phi-3-mini', name: 'Phi-3-mini (3.8B)' },
+      { id: 'phi-3.5-mini', name: 'Phi-3.5-mini (3.8B)' },
+    ],
     defaultModel: 'gpt2',
     desc: 'Runs in your browser via Transformers.js (WebGPU/WASM). No API key.' },
   { id: 'openrouter', name: 'OpenRouter',

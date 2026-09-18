@@ -30,6 +30,15 @@ function rateLimitCheck(key: string): { allowed: boolean; remaining: number; res
   return { allowed: true, remaining: RATE_LIMIT - 1, resetAt: new Date(now + RATE_LIMIT_WINDOW).toISOString() };
 }
 
+function rateLimitSlide(key: string): void {
+  const entry = rateLimitStore.get(key);
+  if (!entry) return;
+  const now = Date.now();
+  if (now - entry.windowStart >= RATE_LIMIT_WINDOW) {
+    rateLimitStore.set(key, { count: 1, windowStart: now });
+  }
+}
+
 // ─── Server-key Gemini gate ─────────────────────────────────
 //
 // `POST /api/ai/generate` with provider 'gemini' and no client apiKey spends
@@ -107,4 +116,4 @@ function resetServerGeminiLimits(): void {
   serverGeminiDailyStore.clear();
 }
 
-export { rateLimitCheck, rateLimitStore, checkServerGemini, resetServerGeminiLimits };
+export { rateLimitCheck, rateLimitSlide, rateLimitStore, checkServerGemini, resetServerGeminiLimits };

@@ -110,7 +110,7 @@ export async function exchangeCodeForToken(
   };
   if (!res.ok || !data.access_token) {
     const detail = data.error_description || data.error || `status ${res.status}`;
-    throw new Error(`GitHub token exchange failed: ${detail}`);
+    throw new OAuthCallbackError(`GitHub token exchange failed: ${detail}`);
   }
   return data.access_token;
 }
@@ -395,7 +395,8 @@ export class OAuthCallbackError extends Error {}
  */
 export function mapUnprocessableEntity(
   body: any,
-  pathAfterPrefix: string
+  pathAfterPrefix: string,
+  origin: string = 'http://localhost:3000'
 ): Response | null {
   const msg = String(body?.message ?? '');
   if (msg.toLowerCase().includes('not a fast forward') || msg.toLowerCase().includes('non-fast-forward')) {
@@ -407,7 +408,8 @@ export function mapUnprocessableEntity(
           'Fetch the latest changes, rebase or merge, then push again. ' +
           'Your local edits are safe — nothing was committed to the remote.',
       },
-      409
+      409,
+      origin
     );
   }
   if (msg.toLowerCase().includes('branch protection rule')) {
@@ -418,7 +420,8 @@ export function mapUnprocessableEntity(
         message:
           'Create a pull request instead, or push to a non-protected branch.',
       },
-      409
+      409,
+      origin
     );
   }
   return null;
@@ -426,18 +429,26 @@ export function mapUnprocessableEntity(
 
 const CORS_ALLOWED_ORIGINS = ['http://localhost:3000', 'https://website.vasudevaya.workers.dev', 'https://www.vantaos.org'];
 function corsHeaders(origin: string | undefined): Record<string, string> {
-  const safe = (origin && CORS_ALLOWED_ORIGINS.includes(origin)) ? origin : 'http://localhost:3000';
-  return {
-    'Access-Control-Allow-Origin': safe,
+  const safe = (origin && CORS_ALLOWED_ORIGINS.includes(origin)) ? origin : null;
+  const headers: Record<string, string> = {
     'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS',
-    'Access-Control-Allow-Credentials': 'true',
   };
+  if (safe !== null) {
+    headers['Access-Control-Allow-Origin'] = safe;
+    headers['Access-Control-Allow-Credentials'] = 'true';
+  }
+  return headers;
 }
-function json(body: unknown, status = 200, origin?: string): Response {
+  function json(body: unknown, status = 200, origin?: string): Response {
   const res = new Response(JSON.stringify(body), {
     status,
     headers: { 'Content-Type': 'application/json', ...corsHeaders(origin) },
   });
   return res;
+}
+
+// Prevent accidental token leaks through error messages.
+function safeErrorMessage(err: unknown): string {
+  return 'Operation failed';
 }

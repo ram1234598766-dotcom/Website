@@ -82,11 +82,15 @@ export default function TerminalPanel({
     const resizeTimer = setTimeout(doFit, 100);
     window.addEventListener('resize', doFit);
 
-    // Initial banner + prompt
-    term.writeln('\u001b[36m╔══════════════════════════════════════╗\u001b[0m');
-    term.writeln('\u001b[36m║   VantaOS Local Terminal v2          ║\u001b[0m');
-    term.writeln('\u001b[36m║   Type \u001b[33mhelp\u001b[36m for available commands     ║\u001b[0m');
-    term.writeln('\u001b[36m╚══════════════════════════════════════╝\u001b[0m');
+    // VantaOS fancy banner
+    term.writeln('\u001b[36m\u001b[1m  ╔═══════════════════════════════════════════════╗\u001b[0m');
+    term.writeln('\u001b[36m\u001b[1m  ║ \u001b[35m███\u001b[0m\u001b[36m\u001b[1m VantaOS Cloud IDE \u001b[35m███\u001b[0m\u001b[36m\u001b[2m  ╡ v2.5.0\u001b[0m\u001b[36m\u001b[1m║\u001b[0m');
+    term.writeln('\u001b[36m\u001b[2m  ║ Node 20.11 | Next.js 15 | TS 5.6 | React 19  ║\u001b[0m\u001b[36m\u001b[1m║\u001b[0m');
+    term.writeln('\u001b[36m\u001b[1m  ╠═══════════════════════════════════════════════╣\u001b[0m');
+    term.writeln('\u001b[36m  \u001b[33mInstall:\u001b[0m \u001b[32mnpm install pkg\u001b[36m | \u001b[33mrun:\u001b[0m \u001b[32mrun pkg\u001b[36m | \u001b[33mpackages\u001b[36m to list\u001b[0m');
+    term.writeln('\u001b[36m  \u001b[33mTools:\u001b[0m \u001b[32mweather\u001b[36m | \u001b[32mcalc\u001b[36m | \u001b[32mjs\u001b[36m | \u001b[32mfetch\u001b[36m | \u001b[32msearch\u001b[36m | \u001b[32mnode/js\u001b[0m');
+    term.writeln('\u001b[36m\u001b[1m  ╚═══════════════════════════════════════════════╝\u001b[0m');
+    term.writeln('');
     term.write(shell.getPrompt());
 
     let currentLine = '';
@@ -130,8 +134,21 @@ export default function TerminalPanel({
         currentLine = '';
         if (line) {
           void shell.execute(line).then((output) => {
-            writeLines(output);
+            const exitIdx = output.findIndex((l) => l === '__EXIT__');
+            if (exitIdx >= 0) {
+              writeLines(output.slice(0, exitIdx));
+              term.writeln('');
+              term.writeln('\u001b[33mSession ended. Press any key to restart...\u001b[0m');
+            } else {
+              writeLines(output);
+            }
             term.write(shell.getPrompt());
+            setTimeout(() => {
+              try {
+                const ta = terminalRef.current?.querySelector('.xterm-helper-textarea') as HTMLElement | null;
+                ta?.focus();
+              } catch { /* ignore */ }
+            }, 10);
           });
         } else {
           term.write(shell.getPrompt());
@@ -143,10 +160,13 @@ export default function TerminalPanel({
           term.write('\b \b');
         }
       } else if (code === 9) {
-        // Tab — simple completion
-        if (currentLine.trim().toLowerCase() === 'cd ') {
-          term.write(' ');
-          currentLine += ' ';
+        // Tab — command name completion
+        const partial = currentLine.trim().toLowerCase();
+        const commands = ['ls', 'dir', 'gci', 'gcm', 'gl', 'sl', 'gi', 'cd', 'cat', 'type', 'pwd', 'location', 'set-location', 'get-location', 'get-childitem', 'get-command', 'get-item', 'get-help', 'tree', 'clear', 'cls', 'clr', 'clear-host', 'write-output', 'echo', 'date', 'time', 'whoami', 'hostname', 'ver', 'systeminfo', 'set', 'path', 'ipconfig', 'ping', 'nslookup', 'netstat', 'tracert', 'tasklist', 'taskkill', 'winget', 'npm', 'npx', 'pip', 'yarn', 'pnpm', 'get-weather', 'weather', 'exit', 'history', 'which', 'find', 'sort', 'mkdir', 'touch', 'rm', 'cp', 'mv', 'ren', 'copy', 'move', 'del', 'node', 'js', 'dir', 'del', 'erase'];
+        const match = commands.find((c) => c.startsWith(partial) && c !== partial);
+        if (match) {
+          currentLine = match + ' ';
+          term.write('\b'.repeat(partial.length) + ' '.repeat(partial.length) + match + ' ');
         }
       } else if (code < 32) {
         // Ignore other control chars
@@ -156,13 +176,21 @@ export default function TerminalPanel({
       }
     });
 
-    // Handle terminal-send custom events from CloudOS
+    // Handle terminal-send custom events from CloudOS — require internal source
     const handleTerminalSend = (e: Event) => {
-      const cmd = (e as CustomEvent).detail ?? '';
+      const ev = e as CustomEvent<{ detail?: string; __src?: string }>;
+      if (ev.detail?.__src !== 'vantaos') return;
+      const cmd = ev.detail.detail ?? '';
       if (typeof cmd === 'string' && cmd.trim()) {
         void shell.execute(cmd.trim()).then((output) => {
           writeLines(output);
           term.write(shell.getPrompt());
+          setTimeout(() => {
+            try {
+              const ta = terminalRef.current?.querySelector('.xterm-helper-textarea') as HTMLElement | null;
+              ta?.focus();
+            } catch { /* ignore */ }
+          }, 10);
         });
       }
     };

@@ -12,7 +12,7 @@
 import { GitHubOAuthService, OAuthCallbackError, type KvLike } from './github-proxy';
 import { verifyFirebaseIdToken } from './firebase-verify';
 import { verifyGrant, type GrantClaims } from './grants';
-import { rateLimitCheck, rateLimitStore, checkServerGemini } from './rate-limit';
+import { rateLimitCheck, rateLimitSlide, rateLimitStore, checkServerGemini } from './rate-limit';
 import { getPeers } from './peer-registry';
 import { handleModelProxyGet } from './model-proxy';
 
@@ -113,7 +113,8 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
   const path = url.pathname.replace(/\/+$/, '') || '/';
 
   if (request.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders(undefined) });
+    const reqOrigin = request.headers.get('origin');
+    return new Response(null, { headers: corsHeaders(reqOrigin ?? undefined) });
   }
 
   try {
@@ -219,6 +220,10 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
 
     // POST /api/ai/generate
     if (request.method === 'POST' && path === '/api/ai/generate') {
+      const url = new URL(request.url);
+      if (url.searchParams.get('stream') === '1' || request.headers.get('Accept') === 'text/event-stream') {
+        return handleAiGenerateStream(request, env);
+      }
       return handleAiGenerate(request, env);
     }
 
@@ -300,7 +305,10 @@ async function handleGitHubRoutes(
         status: 302,
         headers: { Location: location },
       });
-      res.headers.set('Access-Control-Allow-Origin', env.APP_ORIGIN || 'http://localhost:3000');
+      const cbOrigin = request.headers.get('origin');
+      if (cbOrigin && ALLOWED_ORIGINS.includes(cbOrigin)) {
+        res.headers.set('Access-Control-Allow-Origin', cbOrigin);
+      }
       return res;
     } catch (err) {
       if (err instanceof OAuthCallbackError) {
@@ -308,15 +316,19 @@ async function handleGitHubRoutes(
           JSON.stringify({ error: err.message }),
           { status: 400, headers: { 'Content-Type': 'application/json' } }
         );
-        res.headers.set('Access-Control-Allow-Origin', env.APP_ORIGIN || 'http://localhost:3000');
+        const cbOrigin = request.headers.get('origin');
+        if (cbOrigin && ALLOWED_ORIGINS.includes(cbOrigin)) {
+          res.headers.set('Access-Control-Allow-Origin', cbOrigin);
+        }
         return res;
       }
       throw err;
     }
   }
 
-  // POST /api/gh/import â€” store an access token captured from the Firebase popup flow
-  if (request.method === 'POST' && path === '/api/gh/import') {
+    // POST /api/gh/import â€” store an access token captured from the Firebase popup flow
+    if (request.method === 'POST' && path === '/api/gh/import') {
+      void 0;
     const body = await readJson(request);
     if (!body?.firebaseToken || !body?.accessToken) {
       return json({ error: 'Missing firebaseToken or accessToken.' }, 400);
@@ -331,8 +343,8 @@ async function handleGitHubRoutes(
     try {
       const grant = await service.importToken(claims.uid, body.accessToken);
       return json({ ok: true, gh_grant: grant, expiresIn: 15 * 60 });
-    } catch (err: any) {
-      return json({ error: err.message || 'Import failed.' }, 400);
+    } catch {
+      return json({ error: 'Import failed.' }, 400);
     }
   }
 
@@ -352,6 +364,12 @@ async function handleGitHubRoutes(
       return json(
         { error: 'GitHub is not connected.', needsConnect: true },
         404
+      );
+    }
+    if (env.GH_GRANT_SECRET === '' || env.GH_GRANT_SECRET === 'MY_GEMINI_API_KEY') {
+      return json(
+        { error: 'Server grant secret not configured.', needsConnect: true },
+        500
       );
     }
     return json({ ok: true, gh_grant: grant, expiresIn: 15 * 60 });
@@ -426,14 +444,18 @@ async function handleAiGenerate(request: Request, env: Env): Promise<Response> {
             model: model || 'openai/gpt-4o',
             messages: messages.map((m: any) => ({ role: m.role, content: m.content })),
           }),
+          signal: AbortSignal.timeout(60_000),
         });
         const data = await res.json() as any;
-        if (!res.ok) throw new Error(data.error?.message || `OpenRouter error (${res.status})`);
+        if (!res.ok) throw new Error(`OpenRouter error (${res.status})`);
         return json({ text: data.choices?.[0]?.message?.content || '', model });
       }
 
       case 'gemini': {
         const geminiModel = model || 'gemini-3.6-flash';
+        if (!/^[a-z0-9.\-_]{3,64}$/.test(geminiModel)) {
+          return json({ error: 'Invalid model name' }, 400);
+        }
         const key = apiKey || env.GEMINI_API_KEY;
         if (!key || key === 'MY_GEMINI_API_KEY') {
           return json(
@@ -481,16 +503,13 @@ async function handleAiGenerate(request: Request, env: Env): Promise<Response> {
             }
           );
         } catch (fetchErr: any) {
-          // Translate abort/timeout errors here so a client disconnect
-          // mid-body-upload (which can also surface AbortError) is not
-          // misclassified in the outer catch as a Gemini timeout.
           if (fetchErr?.name === 'TimeoutError' || fetchErr?.name === 'AbortError') {
             return json({ error: 'Gemini upstream timed out after 60s' }, 500);
           }
           throw fetchErr;
         }
         const data = await res.json() as any;
-        if (!res.ok) throw new Error(data.error?.message || `Gemini error (${res.status})`);
+        if (!res.ok) throw new Error(`Gemini error (${res.status})`);
         const text = data?.candidates?.[0]?.content?.parts?.map((p: any) => p.text).join('') || '';
         return json({ text, model: geminiModel });
       }
@@ -509,9 +528,10 @@ async function handleAiGenerate(request: Request, env: Env): Promise<Response> {
             model: model || 'gpt-4o-mini',
             messages: messages.map((m: any) => ({ role: m.role, content: m.content })),
           }),
+          signal: AbortSignal.timeout(60_000),
         });
         const data = await res.json() as any;
-        if (!res.ok) throw new Error(data.error?.message || `OpenAI error (${res.status})`);
+        if (!res.ok) throw new Error(`OpenAI error (${res.status})`);
         return json({ text: data.choices?.[0]?.message?.content || '', model });
       }
 
@@ -528,6 +548,186 @@ async function handleAiGenerate(request: Request, env: Env): Promise<Response> {
       500
     );
   }
+}
+
+async function handleAiGenerateStream(request: Request, env: Env): Promise<Response> {
+  try {
+    const body = await request.json().catch(() => null) as any;
+    const { provider, model, apiKey, messages } = body ?? {};
+
+    if (!provider || !messages) {
+      return json({ error: 'Missing required fields: provider, and messages or prompt' }, 400);
+    }
+
+    const stream = new ReadableStream({
+      async start(controller) {
+        const encoder = new TextEncoder();
+        try {
+          const chunks = await collectStreamChunks(provider, model, apiKey, messages, env, request);
+          for (const chunk of chunks) {
+            controller.enqueue(encoder.encode(chunk));
+          }
+        } catch (err: any) {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: String(err?.message || 'upstream error') })}\n\n`));
+        } finally {
+          controller.close();
+        }
+      },
+    });
+
+    return new Response(stream, {
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+      },
+    });
+  } catch (err: any) {
+    return json({ error: 'AI request failed' }, 500);
+  }
+}
+
+async function readBodyText(res: any): Promise<string> {
+  if (typeof res.text === 'function') {
+    return res.text();
+  }
+  if (res.body instanceof ReadableStream) {
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let result = '';
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      result += decoder.decode(value);
+    }
+    return result;
+  }
+  if (typeof res.json === 'function') {
+    const json = await res.json();
+    return JSON.stringify(json);
+  }
+  return '';
+}
+
+async function collectStreamChunks(
+  provider: string, model: string, apiKey: string, messages: any[], env: Env, request: Request,
+): Promise<string[]> {
+  switch (provider) {
+    case 'openrouter': {
+      if (!apiKey) return [`data: ${JSON.stringify({ error: 'apiKey is required' })}\n\n`];
+      const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+          'HTTP-Referer': 'https://website.vasudevaya.workers.dev',
+          'X-Title': 'VantaOS',
+          'Accept': 'text/event-stream',
+        },
+        body: JSON.stringify({
+          model: model || 'openai/gpt-4o',
+          messages: messages.map((m: any) => ({ role: m.role, content: m.content })),
+          stream: true,
+        }),
+        signal: AbortSignal.timeout(60_000),
+      });
+      if (!res.ok) return [`data: ${JSON.stringify({ error: `OpenRouter error (${res.status})` })}\n\n`];
+      return extractSseContent((await readBodyText(res)).trim());
+    }
+
+    case 'gemini': {
+      const geminiModel = model || 'gemini-3.6-flash';
+      if (!/^[a-z0-9.\-_]{3,64}$/.test(geminiModel)) {
+        return [`data: ${JSON.stringify({ error: 'Invalid model name' })}\n\n`];
+      }
+      const key = apiKey || env.GEMINI_API_KEY;
+      if (!key || key === 'MY_GEMINI_API_KEY') {
+        return [`data: ${JSON.stringify({ error: 'Gemini API key required' })}\n\n`];
+      }
+      if (!apiKey) {
+        const ip = request.headers.get('cf-connecting-ip') || request.headers.get('x-forwarded-for') || 'unknown';
+        if (!isSameSiteRequest(request)) {
+          return [`data: ${JSON.stringify({ error: 'Server-key Gemini access denied' })}\n\n`];
+        }
+        const gate = checkServerGemini(ip, Number(env.GEMINI_SERVER_KEY_DAILY_LIMIT ?? 200));
+        if (!gate.allowed) {
+          return [`data: ${JSON.stringify({ error: gate.error })}\n\n`];
+        }
+      }
+      const contents = messages.map((m: any) => ({ role: m.role === 'user' ? 'user' : 'model', parts: [{ text: m.content }] }));
+      let res: Response;
+      try {
+        res = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent?key=${key}&stream=true`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ contents }),
+            signal: AbortSignal.timeout(60_000),
+          }
+        );
+      } catch (fetchErr: any) {
+        if (fetchErr?.name === 'TimeoutError' || fetchErr?.name === 'AbortError') {
+          return [`data: ${JSON.stringify({ error: 'Gemini upstream timed out after 60s' })}\n\n`];
+        }
+        throw fetchErr;
+      }
+      if (!res.ok) return [`data: ${JSON.stringify({ error: `Gemini error (${res.status})` })}\n\n`];
+      return extractSseContent((await readBodyText(res)).trim());
+    }
+
+    case 'openai': {
+      if (!apiKey) return [`data: ${JSON.stringify({ error: 'apiKey is required' })}\n\n`];
+      const res = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+          'Accept': 'text/event-stream',
+        },
+        body: JSON.stringify({
+          model: model || 'gpt-4o-mini',
+          messages: messages.map((m: any) => ({ role: m.role, content: m.content })),
+          stream: true,
+        }),
+        signal: AbortSignal.timeout(60_000),
+      });
+      if (!res.ok) return [`data: ${JSON.stringify({ error: `OpenAI error (${res.status})` })}\n\n`];
+      return extractSseContent((await readBodyText(res)).trim());
+    }
+
+    default:
+      return [`data: ${JSON.stringify({ error: `Unsupported provider: ${provider}` })}\n\n`];
+  }
+}
+
+function extractSseContent(raw: string): string[] {
+  const chunks: string[] = [];
+  const events = raw.split(/\n\n/);
+  for (const event of events) {
+    if (!event.trim()) continue;
+    const dataLine = event.split('\n').find((l) => l.startsWith('data:'));
+    if (!dataLine) continue;
+    const data = dataLine.slice(5).trimStart();
+    if (data === '[DONE]') {
+      chunks.push(`data: ${JSON.stringify({ done: true })}\n\n`);
+      continue;
+    }
+    try {
+      const parsed = JSON.parse(data);
+      const content = parsed?.choices?.[0]?.delta?.content
+        ?? parsed?.choices?.[0]?.message?.content
+        ?? parsed?.candidates?.[0]?.content?.parts?.map((p: any) => p.text).join('');
+      if (content !== undefined && content !== '') {
+        chunks.push(`data: ${JSON.stringify({ content })}\n\n`);
+      }
+    } catch {
+      /* skip non-JSON */
+    }
+  }
+  if (chunks.length === 0 && raw.length > 0) {
+    chunks.push(`data: ${JSON.stringify({ done: true })}\n\n`);
+  }
+  return chunks;
 }
 
 async function handleSecurityScan(env: Env): Promise<Response> {

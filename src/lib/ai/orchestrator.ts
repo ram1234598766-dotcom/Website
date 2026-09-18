@@ -17,7 +17,7 @@
 /* ------------------------------------------------------------------ */
 
 const SECRET_PATTERNS: RegExp[] = [
-  /AIza[0-9A-Za-z\-_]{8,}/g,
+  /AIza[0-9A-Za-z\-_]{8,}/,
   /(?:api[_-]?key|apikey|api_secret|secret|token|password)\s*[:=]\s*['"]?([A-Za-z0-9\-_\.]{8,})/gi,
   /sk_live_[0-9a-zA-Z]{8,}/gi,
   /sk_test_[0-9a-zA-Z]{8,}/gi,
@@ -30,6 +30,7 @@ const SECRET_PATTERNS: RegExp[] = [
 export function redact(value: string): string {
   let out = value;
   for (const pattern of SECRET_PATTERNS) {
+    pattern.lastIndex = 0;
     out = out.replace(pattern, '[REDACTED]');
   }
   return out;

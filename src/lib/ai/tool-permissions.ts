@@ -16,6 +16,9 @@ export const DEFAULT_TOOLS: ToolDef[] = [
   { id: 'fetch', name: 'Fetch', description: 'Fetch content from a URL', requiresConfirmation: true },
   { id: 'calc', name: 'Calculator', description: 'Evaluate math expressions', requiresConfirmation: false },
   { id: 'time', name: 'Time', description: 'Get current time', requiresConfirmation: false },
+  { id: 'ws-read-file', name: 'Read File', description: 'Read a file from Cloud IDE workspace', requiresConfirmation: true },
+  { id: 'ws-write-file', name: 'Write File', description: 'Write content to a file in Cloud IDE workspace', requiresConfirmation: true },
+  { id: 'ws-list-files', name: 'List Files', description: 'List files and folders in Cloud IDE workspace', requiresConfirmation: false },
 ];
 
 export class ToolPermissionManager {
@@ -58,6 +61,9 @@ export class ToolPermissionManager {
       const toolName = tool?.name ?? toolId;
       const description = tool?.description ?? '';
       const result = await this.onPrompt(toolId, toolName, description);
+      if (permission !== this.getPermission(toolId)) {
+        return result === 'allow';
+      }
       this.permissions[toolId] = result;
       return result === 'allow';
     }

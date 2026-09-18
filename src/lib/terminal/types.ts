@@ -10,7 +10,8 @@ export type TerminalTheme =
   | 'light'
   | 'dracula'
   | 'monokai'
-  | 'ubuntu';
+  | 'ubuntu'
+  | 'powershell';
 
 export type TerminalPalette = {
   background: string;
@@ -32,6 +33,7 @@ export const TERMINAL_THEMES: Record<TerminalTheme, TerminalPalette> = {
   dracula: { background: '#282a36', foreground: '#f8f8f2', cursor: '#f8f8f0', black: '#21222c', red: '#ff5555', green: '#50fa7b', yellow: '#f1fa8c', blue: '#bd93f9', magenta: '#ff79c6', cyan: '#8be9fd', white: '#f8f8f2' },
   monokai: { background: '#272822', foreground: '#f8f8f2', cursor: '#f8f8f0', black: '#272822', red: '#f92672', green: '#a6e22e', yellow: '#f4bf75', blue: '#66d9ef', magenta: '#ae81ff', cyan: '#a1efe4', white: '#f9f8f5' },
   ubuntu: { background: '#300a24', foreground: '#eeeeee', cursor: '#bbbbbb', black: '#2e3436', red: '#cc0000', green: '#4e9a06', yellow: '#c4a000', blue: '#3465a4', magenta: '#75507b', cyan: '#06989a', white: '#d3d7cf' },
+  powershell: { background: '#000000', foreground: '#cccccc', cursor: '#ffffff', black: '#000000', red: '#c50f1f', green: '#13a10e', yellow: '#c19c00', blue: '#0037ad', magenta: '#881798', cyan: '#008282', white: '#e5e5e5' },
 };
 
 export const QUOTA_LIMITS = {

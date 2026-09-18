@@ -1,7 +1,7 @@
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import 'fake-indexeddb/auto';
 import type { ModelManifest, ModelShard } from '../src/lib/models/manifest';
-import { canonicalStringify, base64UrlToBytes, verifyManifestSignature, load, generate, unload, clearActiveInstances, downloadModel, resolveModel, modelCache, openDB, deleteDB } from '../src/lib/models/adapter';
+import { canonicalStringify, base64UrlToBytes, verifyManifestSignature, load, generate, unload, clearActiveInstances, downloadModel, resolveModel, modelCache, openDB, deleteDB, deduplicateResponse } from '../src/lib/models/adapter';
 
 async function sha256Hex(data: ArrayBuffer): Promise<string> {
   const hash = await crypto.subtle.digest('SHA-256', data);
@@ -135,6 +135,30 @@ describe('generate() - error clarity', () => {
       expect(msg).not.toBe('Instance em@1.0.0 is not loaded');
       expect(msg).not.toBe('Model not found for instance em@1.0.0');
     }
+  });
+});
+// === deduplicateResponse ===
+describe('deduplicateResponse - consecutive duplicates', () => {
+  it('collapses identical paragraphs to one', () => {
+    const text = 'HTTPS is a protocol.\n\nHTTPS is a protocol.\n\nHTTPS is a protocol.';
+    expect(deduplicateResponse(text)).toBe('HTTPS is a protocol.');
+  });
+  it('preserves non-duplicate paragraphs', () => {
+    const text = 'First paragraph.\n\nSecond paragraph.\n\nThird paragraph.';
+    expect(deduplicateResponse(text)).toBe(text);
+  });
+  it('handles single paragraph', () => {
+    expect(deduplicateResponse('Hello world.')).toBe('Hello world.');
+  });
+  it('handles empty string', () => {
+    expect(deduplicateResponse('')).toBe('');
+  });
+  it('handles mixed — some duplicates', () => {
+    const text = 'A.\n\nA.\n\nB.\n\nB.\n\nC.';
+    expect(deduplicateResponse(text)).toBe('A.\n\nB.\n\nC.');
+  });
+  it('handles null/undefined gracefully', () => {
+    expect(deduplicateResponse('' as any)).toBe('');
   });
 });
 function makeManifest(): ModelManifest {

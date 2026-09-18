@@ -16,7 +16,7 @@ beforeEach(() => {
 
 describe('SLO_DEFINITIONS', () => {
   it('defines exactly 6 SLOs covering all required services', () => {
-    expect(SLO_DEFINITIONS).toHaveLength(6);
+    expect(SLO_DEFINITIONS).toHaveLength(7);
     const services = SLO_DEFINITIONS.map((s) => s.service);
     expect(services).toContain('boot');
     expect(services).toContain('save');
@@ -24,6 +24,7 @@ describe('SLO_DEFINITIONS', () => {
     expect(services).toContain('model-download');
     expect(services).toContain('ai');
     expect(services).toContain('terminal');
+    expect(services).toContain('error-rate');
   });
 
   it('each SLO has the required interface fields', () => {
@@ -100,7 +101,7 @@ describe('checkSLOs', () => {
   it('returns a Promise that resolves to an array of SLOStatus', async () => {
     const result = await checkSLOs();
     expect(Array.isArray(result)).toBe(true);
-    expect(result).toHaveLength(6);
+    expect(result).toHaveLength(7);
   });
 
   it('each status contains all required SLOStatus fields', async () => {
@@ -138,7 +139,9 @@ describe('checkSLOs', () => {
     const result = await checkSLOs();
     for (const status of result) {
       expect(Number.isInteger(status.observations)).toBe(true);
-      expect(status.observations).toBeGreaterThan(0);
+      if (status.service !== 'error-rate') {
+        expect(status.observations).toBeGreaterThan(0);
+      }
     }
   });
 
@@ -154,7 +157,7 @@ describe('checkSLOs', () => {
   it('service names match SLO_DEFINITIONS order', async () => {
     const result = await checkSLOs();
     const services = result.map((s) => s.service);
-    expect(services).toEqual(['boot', 'save', 'sync', 'model-download', 'ai', 'terminal']);
+    expect(services).toEqual(['boot', 'save', 'sync', 'model-download', 'ai', 'terminal', 'error-rate']);
   });
 
   it('threshold values match SLO_DEFINITIONS', async () => {

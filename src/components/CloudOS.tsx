@@ -140,7 +140,7 @@ export default function CloudOS() {
     const code = file.content.slice(0, 500);
     // Send the raw code (not JSON.stringify) — the terminal's `js` command
     // takes everything after the command verbatim, so quotes/newlines survive.
-    window.dispatchEvent(new CustomEvent("terminal-send", { detail: "js " + code }));
+    window.dispatchEvent(new CustomEvent("terminal-send", { detail: { detail: "js " + code, __src: "vantaos" } }));
   }, [files, activeFileId]);
 
   const handleRun = useCallback(() => {
@@ -1420,7 +1420,7 @@ export default function CloudOS() {
                       </div>
                     )}
 
-                    <button onClick={() => window.dispatchEvent(new CustomEvent('terminal-send', { detail: 'clear\n' }))} className="p-1 hover:bg-slate-700 rounded text-slate-400 hover:text-slate-200 cursor-pointer" title="Clear Console">
+                    <button onClick={() => window.dispatchEvent(new CustomEvent('terminal-send', { detail: { detail: 'clear\n', __src: 'vantaos' } }))} className="p-1 hover:bg-slate-700 rounded text-slate-400 hover:text-slate-200 cursor-pointer" title="Clear Console">
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
                     <button onClick={() => setIsTerminalOpen(false)} className="p-1 hover:bg-slate-700 rounded text-slate-400 hover:text-slate-200 cursor-pointer" title="Close Panel">

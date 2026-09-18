@@ -80,7 +80,23 @@ const DEFAULT_CONFIG: SandboxRunnerConfig = {
  */
 export function buildSandboxWorkerSource(): string {
   return `
-const SBOX = globalThis;
+const _G = globalThis;
+const BLOCKED = new Set(['fetch', 'XMLHttpRequest', 'WebSocket', 'importScripts', 'localStorage', 'sessionStorage', 'indexedDB', 'open', 'alert', 'confirm', 'prompt', 'print', 'eval', 'Function', 'constructor', 'getPrototypeOf', 'prototype', 'window', 'document', 'navigator', 'location', 'history', 'frames', 'self', 'top', 'parent', 'global', 'globalThis']);
+const SBOX = new Proxy(_G, {
+  get(t, p) {
+    if (typeof p === 'string' && BLOCKED.has(p)) return undefined;
+    const v = t[p];
+    return typeof v === 'function' ? v.bind(t) : v;
+  },
+  has(t, p) {
+    if (typeof p === 'string' && BLOCKED.has(p)) return false;
+    return p in t;
+  },
+});
+const _origPostMessage = SBOX.postMessage;
+SBOX.postMessage = function () {
+  return _origPostMessage.apply(SBOX, arguments);
+};
 SBOX.sboxRun = function (id, code) {
   const orig = {
     log: SBOX.console.log, error: SBOX.console.error,
@@ -95,7 +111,8 @@ SBOX.sboxRun = function (id, code) {
   SBOX.console.warn  = function () { emit('warn', arguments); };
   SBOX.console.info  = function () { emit('info', arguments); };
   try {
-    const result = new Function(code)();
+    const fn = new Function(code)();
+    const result = typeof fn === 'function' ? fn.call(SBOX) : fn;
     send({ type: 'result', id: id, value: String(result ?? 'undefined') });
   } catch (e) {
     send({ type: 'error', id: id, message: (e && typeof e.message === 'string') ? e.message : String(e) });
@@ -135,7 +152,13 @@ function browserSandboxWorkerFactory(source: string): SandboxWorkerLike {
     );
   }
   const url = URL.createObjectURL(new Blob([source], { type: 'text/javascript' }));
-  let worker: Worker | null = new Worker(url);
+  let worker: Worker | null = null;
+  try {
+    worker = new Worker(url);
+  } catch {
+    URL.revokeObjectURL(url);
+    throw new Error('SandboxRunner needs a Worker-capable browser (Web Worker or URL.createObjectURL).');
+  }
   return {
     onMessage(cb) {
       worker?.addEventListener('message', (ev: MessageEvent) => cb(ev.data));
@@ -146,7 +169,11 @@ function browserSandboxWorkerFactory(source: string): SandboxWorkerLike {
       );
     },
     post(message) {
-      worker?.postMessage(message);
+      try {
+        worker?.postMessage(message);
+      } catch {
+        /* worker terminated mid-post — treat as no-op */
+      }
     },
     terminate() {
       worker?.terminate();
@@ -205,10 +232,14 @@ export class SandboxRunner implements JsRunner {
     const settle = (r: Omit<SandboxRunResult, 'durationMs'>) => {
       if (settled) return;
       settled = true;
-      if (timer !== null) clearTimeout(timer);
-      worker?.terminate();
-      worker = null;
-      finish({ ...r, durationMs: Date.now() - started });
+      try {
+        if (timer !== null) { clearTimeout(timer); timer = null; }
+        worker?.terminate();
+        worker = null;
+        finish({ ...r, durationMs: Date.now() - started });
+      } catch {
+        /* settle must never throw — suppress */
+      }
     };
 
     try {

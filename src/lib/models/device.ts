@@ -30,11 +30,14 @@ async function hasWebGPU(): Promise<boolean> {
 /**
  * Detect WebAssembly support — universal in modern browsers but still
  * worth checking for older environments.
+ * Checks both Module instantiation and Instance creation for
+ * environments where one works but the other is restricted.
  */
 function hasWASM(): boolean {
   if (typeof WebAssembly === 'undefined') return false;
   try {
-    new WebAssembly.Module(new Uint8Array([0, 97, 115, 109]));
+    const mod = new WebAssembly.Module(new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0]));
+    new WebAssembly.Instance(mod);
     return true;
   } catch {
     return false;
@@ -133,6 +136,33 @@ export function detectDeviceSync(): DeviceCapabilities {
     storageQuotaMB: 1024,
     cores,
   };
+}
+
+/**
+ * Recommend models based on device capabilities.
+ * Returns model IDs sorted by suitability — best fit first.
+ *
+ * - WebGPU available: returns WebGPU-capable models first (heavier, faster)
+ * - WASM only: returns WASM-compatible models (lighter)
+ * - Neither: returns empty array (no local models possible)
+ */
+export function recommendForDevice(
+  caps: DeviceCapabilities,
+  availableModels: { id: string; runtimeRequirements: { webgpu: boolean; wasm: boolean } }[],
+): string[] {
+  if (!caps.wasm && !caps.webgpu) return [];
+
+  const scored = availableModels.map((m) => {
+    let score = 0;
+    if (m.runtimeRequirements.webgpu && caps.webgpu) score += 100;
+    if (m.runtimeRequirements.wasm && caps.wasm) score += 50;
+    if (m.runtimeRequirements.webgpu && !caps.webgpu) score -= 200;
+    if (m.runtimeRequirements.wasm && !caps.wasm) score -= 100;
+    return { id: m.id, score };
+  });
+
+  scored.sort((a, b) => b.score - a.score);
+  return scored.filter((s) => s.score > 0).map((s) => s.id);
 }
 
 /**

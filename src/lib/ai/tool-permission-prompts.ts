@@ -62,6 +62,10 @@ export class ToolPermissionPromptManager {
     this.promptState = { isPrompting: true, toolId, toolName, toolDescription: description };
 
     return new Promise<ToolPermission>((resolve) => {
+      const existing = this.promptResolvers.get(toolId);
+      if (existing) {
+        this.promptResolvers.delete(toolId);
+      }
       this.promptResolvers.set(toolId, resolve);
     });
   }
