@@ -9,7 +9,12 @@ test.describe('Terminal', () => {
     await page.locator('nav').getByText('Cloud OS IDE').click();
     await page.waitForTimeout(2000);
 
-    // The terminal is open by default in CloudOS; ensure it's visible
+    // The terminal opens via the ActivityBar Terminal icon; open it
+    await page
+      .getByRole('toolbar', { name: 'Activity bar' })
+      .getByRole('button', { name: 'Terminal' })
+      .click();
+    // The bottom panel mounts xterm on demand; ensure it's visible
     const terminalArea = page.locator('.xterm-helper-textarea').first();
     await terminalArea.waitFor({ timeout: 10_000 });
 

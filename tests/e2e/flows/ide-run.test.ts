@@ -14,7 +14,10 @@ test.describe('IDE Run button (CloudOS)', () => {
     await page.waitForTimeout(2000);
 
     // Click the Run button — this should send "js <code>" to the terminal.
-    await page.getByRole('button', { name: 'Compile & Run' }).click();
+    // The button's accessible name is its aria-label, not the visible text.
+    await page
+      .getByRole('button', { name: 'Compile and run active file' })
+      .click();
 
     // Terminal is mounted on demand; wait for it and for the output.
     const terminalArea = page.locator('.xterm-helper-textarea').first();

@@ -92,6 +92,7 @@ const SBOX = new Proxy(_G, {
     if (typeof p === 'string' && BLOCKED.has(p)) return false;
     return p in t;
   },
+  set(t, p, v) { t[p] = v; return true; },
 });
 const _origPostMessage = SBOX.postMessage;
 SBOX.postMessage = function () {

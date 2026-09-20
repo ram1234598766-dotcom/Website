@@ -39,6 +39,11 @@
   ],
   "exclude": [
     ".next",
-    "node_modules"
+    "node_modules",
+    ".open-next",
+    "coverage",
+    "playwright-report",
+    "test-results",
+    "out"
   ]
 }
