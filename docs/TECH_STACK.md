@@ -305,8 +305,8 @@ Suites by directory:
   GEMINI_API_KEY` (absent in prod ⇒ Gemini off by default); GitHub OAuth
   secrets (`GH_GRANT_SECRET`, `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`,
   `GH_TOKENS`) are not bound in production, so `/api/gh/*` is disabled.
-  `NEXT_PUBLIC_FIREBASE_*` in `wrangler.toml` are public Firebase web config
-  by design.
+  `NEXT_PUBLIC_FIREBASE_*` in `wrangler.toml` are now stored as
+  `wrangler secret put` (Cloudflare-side), not in plaintext [vars].
 - **GitHub OAuth proxy:** 🎯/⚠️ implemented, presence-guarded, **not enabled
   in prod**; browser-stored GitHub token is a known limitation of the current
   direct-integration path.
