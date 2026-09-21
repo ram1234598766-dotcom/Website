@@ -15,6 +15,7 @@ import { verifyGrant, type GrantClaims } from './grants';
 import { rateLimitCheck, rateLimitSlide, rateLimitStore, rateLimitCheckAtomic, checkServerGemini, resetServerGeminiLimits } from './rate-limit';
 import { getPeers } from './peer-registry';
 import { handleModelProxyGet } from './model-proxy';
+import { deliverSmtp, sanitizeHeader } from './smtp';
 import { logServerError } from './log';
 
 export { rateLimitCheck, rateLimitSlide, rateLimitStore, rateLimitCheckAtomic, checkServerGemini, resetServerGeminiLimits };
@@ -28,6 +29,13 @@ export interface Env {
   APP_ORIGIN?: string;
   NEXT_PUBLIC_FIREBASE_PROJECT_ID?: string;
   GEMINI_SERVER_KEY_DAILY_LIMIT?: string;
+  /** SMTP relay used by POST /api/email/send. Values are referenced by name only — never logged. */
+  SMTP_HOST?: string;
+  SMTP_PORT?: string;
+  SMTP_USER?: string;
+  SMTP_PASS?: string;
+  SMTP_FROM?: string;
+  SMTP_SECURE?: string;
 }
 
 const ALLOWED_ORIGINS = ['http://localhost:3000', 'https://website.vasudevaya.workers.dev', 'https://www.vantaos.org'];
@@ -151,6 +159,12 @@ export function serverEnv(): Env {
     GH_TOKENS: undefined,
     APP_ORIGIN: process.env.APP_ORIGIN,
     NEXT_PUBLIC_FIREBASE_PROJECT_ID: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+    SMTP_HOST: process.env.SMTP_HOST,
+    SMTP_PORT: process.env.SMTP_PORT,
+    SMTP_USER: process.env.SMTP_USER,
+    SMTP_PASS: process.env.SMTP_PASS,
+    SMTP_FROM: process.env.SMTP_FROM,
+    SMTP_SECURE: process.env.SMTP_SECURE,
   };
 }
 
@@ -330,6 +344,11 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
     }
 
     // â”€â”€â”€ GitHub OAuth + proxy (Phase 5 token boundary) â”€â”€â”€
+    // POST /api/email/send — deliver a composed message through the SMTP relay
+    if (request.method === 'POST' && path === '/api/email/send') {
+      return handleEmailSend(request, env, requestId);
+    }
+
     if (path.startsWith('/api/gh')) {
       return handleGitHubRoutes(request, env, path, url, requestId);
     }
@@ -511,6 +530,105 @@ async function requireGrant(
     );
   }
   return { claims };
+}
+
+const MAX_MAIL_RECIPIENT_CHARS = 254;
+const MAX_MAIL_SUBJECT_CHARS = 300;
+const MAX_MAIL_CONTENT_CHARS = 100_000;
+const MAX_MAIL_BODY_BYTES = 1_048_576;
+const EMAIL_ADDRESS_RE = /^[^\s@<>]{1,64}@[^\s@<>]{1,190}$/;
+const SMTP_HOST_RE = /^[a-z0-9.-]{1,253}$/i;
+
+/**
+ * POST /api/email/send — deliver one prepared message through the configured
+ * SMTP relay (external email sending; see src/lib/server/smtp.ts).
+ *
+ * Firewall design:
+ *  - The message is persisted to Realtime Database by the client panel before
+ *    it ever reaches this route, so RTDB stays the audit trail.
+ *  - Recipient/subject/content are validated at the boundary (max sizes and a
+ *    strict address shape) before any SMTP command is issued.
+ *  - The sender is taken from the verified Firebase ID token (when Firebase is
+ *    configured), so users cannot spoof the From header. Demo mode (no
+ *    Firebase) still works but only through the RTDB path.
+ *  - With no SMTP relay configured the route returns skipped:true so the panel
+ *    keeps working; it never fails the compose flow.
+ */
+async function handleEmailSend(request: Request, env: Env, requestId?: string): Promise<Response> {
+  const j = (data: unknown, status = 200, extra: Record<string, string> = {}): Response =>
+    json(data, status, extra, undefined, requestId);
+
+  try {
+    const contentLength = request.headers.get('content-length');
+    if (contentLength && parseInt(contentLength, 10) > MAX_MAIL_BODY_BYTES) {
+      return j({ error: 'Request body exceeds 1MB limit' }, 413);
+    }
+
+    const body = await request.json().catch(() => null);
+    const to = typeof body?.to === 'string' ? body.to.trim() : '';
+    const subject = typeof body?.subject === 'string' ? body.subject : '';
+    const content = typeof body?.content === 'string' ? body.content : '';
+
+    if (!to || to.length > MAX_MAIL_RECIPIENT_CHARS || !EMAIL_ADDRESS_RE.test(to)) {
+      return j({ error: 'A valid recipient address is required.' }, 400);
+    }
+    if (subject.length > MAX_MAIL_SUBJECT_CHARS) {
+      return j({ error: 'Subject must be 300 characters or fewer.' }, 400);
+    }
+    if (content.length > MAX_MAIL_CONTENT_CHARS) {
+      return j({ error: 'Message content is too large.' }, 400);
+    }
+
+    // The From/Reply-To address comes from the verified user's profile.
+    let senderEmail: string | undefined;
+    if (isFirebaseConfigured(env)) {
+      const token = typeof body?.firebaseToken === 'string' ? body.firebaseToken : '';
+      const claims = await verifyFirebaseIdToken(token, {
+        projectId: projectId(env),
+        nowMs: Date.now(),
+      });
+      if (!claims) {
+        return j({ error: 'Unauthorized' }, 401);
+      }
+      senderEmail = claims.email;
+    }
+
+    const host = env?.SMTP_HOST;
+    if (!host) {
+      // No external relay configured — the panel already saved the message to
+      // the mailbox, so this is a graceful no-op rather than a failure.
+      return j({ ok: true, delivered: false, skipped: true });
+    }
+    if (!SMTP_HOST_RE.test(host)) {
+      throw new Error('invalid SMTP_HOST configuration');
+    }
+
+    const secure = env.SMTP_SECURE === '1' || env.SMTP_PORT === '465';
+    const port = Number(env.SMTP_PORT ?? (secure ? 465 : 587));
+    if (!Number.isInteger(port) || port < 1 || port > 65535) {
+      throw new Error('invalid SMTP_PORT configuration');
+    }
+
+    const { messageId } = await deliverSmtp({
+      host: sanitizeHeader(host),
+      port,
+      secure,
+      user: env.SMTP_USER,
+      pass: env.SMTP_PASS,
+      from: env.SMTP_FROM || senderEmail || 'noreply@vantaos.local',
+      to,
+      subject,
+      text: content,
+      replyTo: senderEmail,
+    });
+
+    return j({ ok: true, delivered: true, messageId, to });
+  } catch (err: any) {
+    // Never leak relay internals (host, credentials, server reply text) to the
+    // client — the shared error envelope gets a generic, client-safe message.
+    logServerError('api.email_send_error', requestId, err);
+    return j({ error: 'Email delivery failed', code: 'smtp_delivery_failed' }, 502);
+  }
 }
 
 const MAX_AI_MESSAGES = 64;

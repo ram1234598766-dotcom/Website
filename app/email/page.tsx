@@ -107,7 +107,39 @@ export default function EmailPage() {
     }
     setCompose(EMPTY_COMPOSE);
     setComposing(false);
-    show('Mail sent', 'success', 3000);
+
+    // A persistent copy lands in the Realtime Database mailbox first — it is
+    // the audit trail and the demo-mode fallback. External SMTP delivery is a
+    // best-effort follow-up through /api/email/send; a failed relay never
+    // un-sends the message, it just surfaces the state honestly to the user.
+    let delivery: 'delivered' | 'skipped' | 'failed' = 'skipped';
+    try {
+      const firebaseToken = await user.getIdToken();
+      const smtpRes = await fetch('/api/email/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          firebaseToken,
+          to: compose.to_address.trim(),
+          subject: compose.subject.trim(),
+          content: compose.content,
+        }),
+      });
+      const smtpBody = await smtpRes.json().catch(() => null);
+      if (smtpRes.ok && smtpBody?.delivered === true) delivery = 'delivered';
+      else if (smtpRes.ok && smtpBody?.skipped === true) delivery = 'skipped';
+      else delivery = 'failed';
+    } catch {
+      delivery = 'failed';
+    }
+
+    if (delivery === 'delivered') {
+      show('Mail sent via SMTP', 'success', 3000);
+    } else if (delivery === 'skipped') {
+      show('Mail saved to your mailbox', 'success', 3000);
+    } else {
+      setError('Saved to your mailbox, but external SMTP delivery failed.');
+    }
   };
 
   const handleSaveDraft = async () => {
@@ -151,7 +183,7 @@ export default function EmailPage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-3xl font-bold text-white">Email</h1>
-          <p className="text-slate-400 text-sm mt-1">Per-user mailbox stored in the Realtime Database</p>
+          <p className="text-slate-400 text-sm mt-1">Per-user mailbox in the Realtime Database, relayed via SMTP when configured</p>
         </div>
         <div className="flex items-center gap-2">
           {configured && user && (
