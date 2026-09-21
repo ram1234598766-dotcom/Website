@@ -27,3 +27,17 @@ Chronological log of phases and significant work. One entry per phase, prefixed 
 - Removed unused `@lhci/cli` (Phase 0 dev tooling) → clears the 7 high audit findings; CI audit gate green.
 - Gate: lint 0 · vitest 1317/1317 (86 files) · build 0 (`/` 179 B/104 kB, `/ide` 1.76 kB/105 kB) · E2E 9/9 · wrangler dry-run 0 · audit 0.
 - Report: docs/phase-notes/phase-1-report.md
+
+---
+
+## Phase 2 — Security fixes — 2026-09-21
+
+**Outcome:** green gate; rules hardened (34/34), token routes fail closed in demo mode. Branch `phase/2-security`.
+
+- `database.rules.json`: removed always-true write ternaries; updates freeze immutable fields and constrain counter deltas (`upvotes_count` ±1, `replies_count` +1, one at a time, `>= 0`); added `replies .indexOn: ["thread_id"]` and root `profiles .read`.
+- `src/lib/server/api-router.ts`: added server-safe `isFirebaseConfigured` + `requireFirebaseConfig`; the four `verifyFirebaseIdToken` routes now return 503 `firebase_not_configured` in demo mode instead of a throw-driven 500, and skip JWKS.
+- `tests/phase2/firebase-auth-gate.test.ts` (new): 10 cases covering all four routes.
+- `package.json`: added `test:rules` (RTDB emulator → `vitest.rules.config.ts`).
+- `wrangler.toml` `[vars]`: verified comment-only; no secrets committed.
+- Gate: lint 0 · vitest 1327/1327 (87 files) · test:rules 34/34 · build 0 · E2E 9/9 · wrangler dry-run 0 (6080.91 KiB / 1246.22 KiB gzip, 144 assets) · audit 0.
+- Report: docs/phase-notes/phase-2-report.md
