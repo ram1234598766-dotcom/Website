@@ -14,6 +14,18 @@ scripts/_artifacts/
 # test artifacts
 playwright-report/
 test-results/
+lighthouse-report.json
+
+# opencode / local tooling (established decision at baseline-20260920)
+.opencode/
+scripts/deploy.mjs
+scripts/ship.mjs
+scripts/gen-tools.js
+scripts/gen-tools.py
+scripts/gen-tools2.py
+scripts/vantaos-mcp.js
+.mcp.json
+skillet.lock
 
 # TS incremental build artifact
 *.tsbuildinfo
