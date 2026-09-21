@@ -37,11 +37,15 @@ async function runChecks(verbose: boolean) {
 
   const anyDegraded = [firebase, ai].some((s) => s.status === 'degraded');
 
-  let httpStatus = 200;
-  if (anyDegraded) httpStatus = 503;
+  // Demo mode is the supported first-run experience (AGENTS §4). An optional
+  // integration being unconfigured is a degraded *report*, not a failed probe:
+  // returning 503 here would have orchestrators restart a perfectly healthy
+  // app. The body still carries status: 'degraded' for dashboards.
+  const httpStatus = 200;
+  const overallStatus = anyDegraded ? 'degraded' : 'healthy';
 
   const response: Record<string, unknown> = {
-    status: httpStatus === 200 ? 'healthy' : 'degraded',
+    status: overallStatus,
     timestamp: new Date().toISOString(),
     services,
   };
