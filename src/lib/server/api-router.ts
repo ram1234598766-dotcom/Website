@@ -109,6 +109,34 @@ function projectId(env: Env): string {
 }
 
 /**
+ * Server-side Firebase configuration check. This mirrors the client
+ * `isFirebaseConfigured()` in src/lib/firebase.ts, but must not import it: that
+ * module pulls the Firebase SDK, which is client-only and heavy. On the server
+ * the only surface that matters for token verification is the project id —
+ * without it the ID token audience/issuer cannot be validated.
+ */
+function isFirebaseConfigured(env: Env): boolean {
+  return !!env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
+}
+
+/**
+ * Gate for routes that verify Firebase ID tokens. In demo mode (no Firebase
+ * project configured) `projectId()` would throw, surfacing as a misleading 500
+ * from the outer catch-all. Returning 503 here keeps the failure honest and
+ * skips the JWKS fetch entirely.
+ */
+function requireFirebaseConfig(env: Env, requestId: string): Response | null {
+  if (isFirebaseConfigured(env)) return null;
+  return json(
+    { error: 'Firebase is not configured', code: 'firebase_not_configured' },
+    503,
+    {},
+    undefined,
+    requestId,
+  );
+}
+
+/**
  * Resolves the environment for the Next.js runtime from process.env.
  * GH_TOKENS has no runtime source (no KV binding under OpenNext) and is
  * always undefined â€” GitHub token storage is documented as fail-closed.
@@ -263,6 +291,8 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
 
     // POST /api/edge-functions/auth-sync â€” real server-side token verification
     if (request.method === 'POST' && path === '/api/edge-functions/auth-sync') {
+      const notConfigured = requireFirebaseConfig(env, requestId);
+      if (notConfigured) return notConfigured;
       const auth = request.headers.get('authorization');
       const token = auth?.startsWith('Bearer ') ? auth.slice(7) : auth;
       const claims = await verifyFirebaseIdToken(token ?? '', {
@@ -316,6 +346,8 @@ async function handleGitHubRoutes(
 
   // POST /api/gh/authorize â€” start a server-driven OAuth dance
   if (request.method === 'POST' && path === '/api/gh/authorize') {
+    const notConfigured = requireFirebaseConfig(env, requestId);
+    if (notConfigured) return notConfigured;
     const body = await readJson(request);
     if (!body?.firebaseToken) {
       return json({ error: 'Missing firebaseToken.' }, 401, {}, undefined, requestId);
@@ -366,6 +398,8 @@ async function handleGitHubRoutes(
 
     // POST /api/gh/import â€” store an access token captured from the Firebase popup flow
     if (request.method === 'POST' && path === '/api/gh/import') {
+      const notConfigured = requireFirebaseConfig(env, requestId);
+      if (notConfigured) return notConfigured;
       const body = await readJson(request);
     if (!body?.firebaseToken || !body?.accessToken) {
       return json({ error: 'Missing firebaseToken or accessToken.' }, 400, {}, undefined, requestId);
@@ -387,6 +421,8 @@ async function handleGitHubRoutes(
 
   // POST /api/gh/session â€” mint a fresh grant if we already hold a token for this uid
   if (request.method === 'POST' && path === '/api/gh/session') {
+    const notConfigured = requireFirebaseConfig(env, requestId);
+    if (notConfigured) return notConfigured;
     const auth = request.headers.get('authorization');
     const token = auth?.startsWith('Bearer ') ? auth.slice(7) : auth;
     const claims = await verifyFirebaseIdToken(token ?? '', {
