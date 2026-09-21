@@ -36,6 +36,11 @@
 | `npx wrangler deploy --dry-run` | **exit 0** — Total Upload 6080.91 KiB / gzip 1246.28 KiB, 141 asset files, bindings `WORKER_SELF_REFERENCE`, `ASSETS` |
 | `npm audit --audit-level=high` | **found 0 vulnerabilities** (exit 0) |
 | `make quickstart` (background, then probed) | deps + env detected, `Ready in 1979ms`, `GET / 200 in 3090ms`; probe **HTTP 200 after 4 s** with real SSR HTML; killed, `PORT3000_LISTENERS_AFTER=0` |
+| `npm run setup` (sandbox copy, non-interactive) | **exit 0** — "No interactive terminal detected" guidance, no `.env.local` written |
+| `setup.sh` under PTY (sandbox, full answers) | **exit 0** — all 4 steps; `.env.local` written with the 5 Firebase keys + `GEMINI_API_KEY` |
+| `setup.sh` under PTY (sandbox, Enter at every prompt) | **exit 0** — Firebase/Gemini skipped, **no `.env.local`** created |
+| `git clone` + `npm ci` (fresh clone in temp) | clone **1.4 s**; `npm ci` **60.45 s**, 513 packages |
+| `npm run dev` (fresh clone, no `.env.local`) | `Ready in 5.9 s`; first `GET / 200` at **16.78 s**; 0 listeners left on 3000 |
 
 ## METRICS
 | Metric | Before | After |
@@ -45,7 +50,7 @@
 | README test counts | 1317/1317 across 86 files | **1327/1327 across 87 files** |
 | README `npm run deploy` rows | 2 | 1 |
 | README stale `firebase:deploy` warning | present | removed |
-| Quickstart time-to-HTTP-200 | not previously measured | 4 s (warm tree) |
+| Quickstart time-to-HTTP-200 | not previously measured | 4 s warm tree; **78.6 s fresh clone** (1.4 clone + 60.45 install + 16.78 dev) |
 | Unit tests / rules suite | 1327/87 · 34/34 | 1327/87 · 34/34 |
 
 ## RISKS
@@ -54,7 +59,7 @@
 - **Rollback:** `git revert --no-edit 273793d 67ef83f 3a62b15` (branch not pushed, no deploy).
 
 ## FINDINGS
-- `CONTRIBUTING.md` still describes a "static export"/`out/` (lines 5, 52, 110, 112) and repeats the outdated `firebase:deploy` claim (line 119). Left untouched: outside this phase's named files, and AGENTS §5's four-way static-export reconciliation is still open.
+- `CONTRIBUTING.md` described a "static export"/`out/` (lines 5, 52, 110, 112) and repeated the outdated `firebase:deploy` claim (line 119). **Resolved** in the §5 docs-only pass (`5e7ac60`): the file now matches the real one-Worker build and the corrected `firebase deploy --only database` script.
 - `AGENTS.md` §3 baseline ("~1317 tests / 86 files") is now stale against 1327/87. Not edited — it is the operating brief, not a phase artifact.
 - `plans/phase3-interface-beginner.md` Step 2 asks for `scripts/setup.mjs` that itself installs, copies env, starts the dev server, and HTTP-checks port 3000. `tests/phase3/setup-script.test.ts` asserts `scripts/setup.sh` and AGENTS §8 asks only for a 4-step wizard, so the shell wizard was kept and server startup stays with `make quickstart`. The `.mjs` rewrite was not done.
 - `next start` still warns it does not work with `output: standalone`; the Playwright webServer relies on it (carried over from Phase 2).
@@ -62,5 +67,10 @@
 - Orphaned `java.exe` held port 9000 before this run, as noted in Phase 2; killed before `test:rules`.
 
 ## BLOCKED
-- **`npm run setup` was not executed end-to-end**, because it writes `.env.local`, which the operating brief forbids modifying. Its content contract is covered by `tests/phase3/setup-script.test.ts` (passing) and its two non-Bash halves were exercised separately: `make quickstart` (deps → env → dev server → HTTP 200) and the rules/test suites. The interactive prompts and derived defaults are **not verified** by execution.
-- **Fresh-clone install-to-interactive timing** (plan Step 1 target < 60 s) is **not verified** — no fresh clone was made; the 4 s measurement is on a warm tree with `node_modules` and env already present.
+- **None.** Both items were closed on `phase/2b-api-hardening` (full report: `docs/phase-notes/phase-2b-report.md`).
+  - **`npm run setup` end-to-end — VERIFIED in a sandbox.** A repo copy under the OS temp dir (never the real `.env.local`) was driven through a real PTY (util-linux `script` 2.42.1):
+    - *Full answers:* all 4 steps ran, exit 0. `.env.local` was generated with the five keys set — derived defaults resolved to `sandbox-proj.firebaseapp.com` and `https://sandbox-proj-default-rtdb.firebaseio.com` — plus `GEMINI_API_KEY`, and `.env.example`'s `STORAGE_BUCKET`/`MESSAGING_SENDER_ID` were preserved. Placeholder values were replaced, not duplicated.
+    - *Enter at every prompt (demo mode):* Firebase and Gemini skipped, exit 0, and **no `.env.local` was written** — demo mode needs zero config.
+    - *Non-interactive guard:* exercised via the real `npm run setup` entrypoint — exit 0 with the "No interactive terminal detected" guidance and no file written.
+  - **Fresh-clone install-to-interactive timing — MEASURED.** `git clone` 1.4 s → `npm ci` 60.45 s (warm npm cache, 513 packages) → `npm run dev` `Ready in 5.9 s`, first `GET / 200` at 16.78 s from server start. **Cold total ≈ 78.6 s**, so the plan's "< 60 s" target holds only on a warm tree (the earlier 4 s figure); the install dominates. The clone had no `.env.local`, which also confirms demo-mode first-run (HTTP 200).
+  - Caveat: npm 11 skipped postinstall scripts for `esbuild`, `onnxruntime-node`, `protobufjs`, `workerd` (the install-scripts gate). The dev server still served 200 because the esbuild/workerd platform binaries arrive via optional deps; a cold-cache install on a locked-down npm config is untested.
