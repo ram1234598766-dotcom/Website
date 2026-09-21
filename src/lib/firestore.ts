@@ -8,6 +8,14 @@
  *   threads/{id}                          forum threads
  *   replies/{id}                          forum replies
  *   upvotes/{uid}_{tid}_{rid}             deterministic id — dedupes votes
+ *   mailboxes/{uid}/messages/{msgId}      per-user email mailbox
+ *   presence/{deviceId}                   online presence for peer discovery
+ *   dms/{uid}/inbox/{oppUid}/{msgId}      direct messages (dual-inbox copy)
+ *   notifications/{uid}/{evtId}           per-user notification feed
+ *
+ * Every message/mail node is self-contained (recipient + sender denormalized)
+ * so lists render without a join. Sends write one copy into the sender's
+ * folder and one into the recipient's folder via the same key.
  *
  * Thread/reply nodes carry denormalized author fields (author_username,
  * author_avatar_url), so lists render without an extra join. Counters are
@@ -32,6 +40,7 @@ import {
   equalTo,
   increment,
   serverTimestamp,
+  onDisconnect,
   type Database,
   type DataSnapshot,
   type Unsubscribe,
@@ -323,4 +332,381 @@ export function subscribeMetrics(cb: (m: Metrics) => void): Unsubscribe {
     unsubReplies();
     unsubProfiles();
   };
+}
+
+/* ------------------------------------------------------------------ */
+/* Mailbox                                                             */
+/* ------------------------------------------------------------------ */
+
+export type MailCategory = 'inbox' | 'sent' | 'drafts';
+
+export interface MailMessage {
+  id: string;
+  from: string;
+  from_uid: string;
+  to: string;
+  subject: string;
+  content: string;
+  category: MailCategory;
+  read: boolean;
+  starred: boolean;
+  timestamp: string;
+}
+
+function snapshotToMail(snap: DataSnapshot): MailMessage[] {
+  const messages: MailMessage[] = [];
+  snap.forEach((child) => {
+    const v = child.val() || {};
+    const category: MailCategory =
+      v.category === 'sent' || v.category === 'drafts' ? v.category : 'inbox';
+    messages.push({
+      id: child.key || '',
+      from: v.from || '',
+      from_uid: v.from_uid || '',
+      to: v.to || '',
+      subject: v.subject || '',
+      content: v.content || '',
+      category,
+      read: v.read === true,
+      starred: v.starred === true,
+      timestamp: toIso(v.timestamp),
+    });
+  });
+  return messages;
+}
+
+export function subscribeMailbox(
+  uid: string,
+  cb: (messages: MailMessage[]) => void
+): Unsubscribe {
+  if (!isFirestoreAvailable()) {
+    cb([]);
+    return () => {};
+  }
+  return onValue(ref(getDb(), `mailboxes/${uid}/messages`), (snap) => {
+    const messages = snapshotToMail(snap);
+    messages.sort((a, b) => (a.timestamp < b.timestamp ? 1 : -1));
+    cb(messages);
+  });
+}
+
+export async function sendMail(input: {
+  to_uid: string;
+  to_address: string;
+  subject: string;
+  content: string;
+}): Promise<{ id: string | null; error: string | null }> {
+  const user = getCurrentFireUser();
+  if (!isFirestoreAvailable() || !user) {
+    return { id: null, error: 'Sign in to send mail. Realtime Database requires a configured Firebase project.' };
+  }
+  if (!input.to_uid) {
+    return { id: null, error: 'A recipient is required.' };
+  }
+  const senderAddress = user.email || 'you@vantaos.local';
+  const base = {
+    from_uid: user.uid,
+    to_uid: input.to_uid,
+    subject: String(input.subject).slice(0, 300),
+    content: String(input.content),
+    timestamp: serverTimestamp(),
+  };
+  try {
+    const mine = await push(ref(getDb(), `mailboxes/${user.uid}/messages`), {
+      ...base,
+      to: input.to_address,
+      from: senderAddress,
+      category: 'sent',
+      read: true,
+      starred: false,
+    });
+    const msgKey = mine.key ?? '';
+    if (msgKey) {
+      await set(
+        ref(getDb(), `mailboxes/${input.to_uid}/messages/${msgKey}`),
+        {
+          ...base,
+          to: input.to_address,
+          from: senderAddress,
+          category: 'inbox',
+          read: false,
+          starred: false,
+        }
+      );
+    }
+    return { id: msgKey || null, error: null };
+  } catch (err: any) {
+    return { id: null, error: err?.message || 'Failed to send mail.' };
+  }
+}
+
+export async function saveDraftMail(input: {
+  to_uid?: string;
+  to_address?: string;
+  subject?: string;
+  content?: string;
+  draftId?: string;
+}): Promise<{ id: string | null; error: string | null }> {
+  const user = getCurrentFireUser();
+  if (!isFirestoreAvailable() || !user) {
+    return { id: null, error: 'Drafts require a configured Firebase project.' };
+  }
+  const payload = {
+    from: user.email || 'you@vantaos.local',
+    from_uid: user.uid,
+    to: input.to_address || '',
+    to_uid: input.to_uid || '',
+    subject: String(input.subject ?? '').slice(0, 300),
+    content: String(input.content ?? ''),
+    category: 'drafts',
+    read: true,
+    starred: false,
+    timestamp: serverTimestamp(),
+  };
+  try {
+    if (input.draftId) {
+      await set(ref(getDb(), `mailboxes/${user.uid}/messages/${input.draftId}`), payload);
+      return { id: input.draftId, error: null };
+    }
+    const childRef = await push(ref(getDb(), `mailboxes/${user.uid}/messages`), payload);
+    return { id: childRef.key ?? null, error: null };
+  } catch (err: any) {
+    return { id: null, error: err?.message || 'Failed to save draft.' };
+  }
+}
+
+export async function setMailRead(
+  uid: string,
+  messageId: string,
+  read: boolean
+): Promise<void> {
+  if (!isFirestoreAvailable()) return;
+  await update(ref(getDb(), `mailboxes/${uid}/messages/${messageId}`), { read });
+}
+
+export async function setMailStarred(
+  uid: string,
+  messageId: string,
+  starred: boolean
+): Promise<void> {
+  if (!isFirestoreAvailable()) return;
+  await update(ref(getDb(), `mailboxes/${uid}/messages/${messageId}`), { starred });
+}
+
+export async function deleteMail(uid: string, messageId: string): Promise<void> {
+  if (!isFirestoreAvailable()) return;
+  await remove(ref(getDb(), `mailboxes/${uid}/messages/${messageId}`));
+}
+
+/* ------------------------------------------------------------------ */
+/* Presence — peer discovery                                           */
+/* ------------------------------------------------------------------ */
+
+export interface PresencePeer {
+  deviceId: string;
+  uid: string;
+  email: string;
+  label: string;
+  address: string;
+  protocol: string;
+  online: boolean;
+  lastSeen: string;
+}
+
+export function subscribePresence(
+  omitUid: string,
+  cb: (peers: PresencePeer[]) => void
+): Unsubscribe {
+  if (!isFirestoreAvailable()) {
+    cb([]);
+    return () => {};
+  }
+  return onValue(ref(getDb(), 'presence'), (snap) => {
+    const peers: PresencePeer[] = [];
+    snap.forEach((child) => {
+      const v = child.val() || {};
+      if (v.uid && v.uid !== omitUid) {
+        peers.push({
+          deviceId: child.key || '',
+          uid: v.uid,
+          email: v.email || '',
+          label: v.label || '',
+          address: v.address || '',
+          protocol: v.protocol || '',
+          online: v.online !== false,
+          lastSeen: toIso(v.lastSeen),
+        });
+      }
+    });
+    peers.sort((a, b) => (a.lastSeen < b.lastSeen ? 1 : -1));
+    cb(peers);
+  });
+}
+
+/** Announce this device and remove the record when the tab closes. */
+export async function publishPresence(input: {
+  label: string;
+  address: string;
+  protocol: string;
+}): Promise<{ stop: () => void }> {
+  const noop = { stop: () => {} };
+  const user = getCurrentFireUser();
+  if (!isFirestoreAvailable() || !user) return noop;
+  const deviceId = crypto.randomUUID();
+  const node = ref(getDb(), `presence/${deviceId}`);
+  await set(node, {
+    uid: user.uid,
+    email: user.email || '',
+    label: input.label,
+    address: input.address,
+    protocol: input.protocol,
+    online: true,
+    lastSeen: serverTimestamp(),
+  });
+  onDisconnect(node).remove();
+  return {
+    stop: () => {
+      remove(node);
+    },
+  };
+}
+
+/* ------------------------------------------------------------------ */
+/* Direct messages — dual-inbox copy keyed by opponent                 */
+/* ------------------------------------------------------------------ */
+
+export interface DirectMessage {
+  id: string;
+  sender_id: string;
+  recipient_id: string;
+  content: string;
+  timestamp: string;
+}
+
+/** inbox keyed by opponent uid (the second identifier on the path). */
+export function subscribeDirectInbox(
+  uid: string,
+  cb: (inbox: Record<string, DirectMessage[]>) => void
+): Unsubscribe {
+  if (!isFirestoreAvailable()) {
+    cb({});
+    return () => {};
+  }
+  return onValue(ref(getDb(), `dms/${uid}/inbox`), (snap) => {
+    const inbox: Record<string, DirectMessage[]> = {};
+    snap.forEach((opponent) => {
+      const list: DirectMessage[] = [];
+      opponent.forEach((child) => {
+        const v = child.val() || {};
+        list.push({
+          id: child.key || '',
+          sender_id: v.sender_id || '',
+          recipient_id: v.recipient_id || v.sender_id || '',
+          content: v.content || '',
+          timestamp: toIso(v.timestamp),
+        });
+      });
+      list.sort((a, b) => (a.timestamp > b.timestamp ? 1 : -1));
+      inbox[opponent.key || ''] = list;
+    });
+    cb(inbox);
+  });
+}
+
+export async function sendDirectMessage(input: {
+  to_uid: string;
+  content: string;
+}): Promise<{ id: string | null; error: string | null }> {
+  const user = getCurrentFireUser();
+  if (!isFirestoreAvailable() || !user) {
+    return { id: null, error: 'Sign in to message. Realtime Database requires a configured Firebase project.' };
+  }
+  if (!input.to_uid) {
+    return { id: null, error: 'A recipient is required.' };
+  }
+  const payload = {
+    sender_id: user.uid,
+    recipient_id: input.to_uid,
+    content: String(input.content).slice(0, 4000),
+    timestamp: serverTimestamp(),
+  };
+  try {
+    const mine = await push(ref(getDb(), `dms/${user.uid}/inbox/${input.to_uid}`), payload);
+    const msgKey = mine.key ?? '';
+    if (msgKey) {
+      await set(
+        ref(getDb(), `dms/${input.to_uid}/inbox/${user.uid}/${msgKey}`),
+        payload
+      );
+    }
+    return { id: msgKey || null, error: null };
+  } catch (err: any) {
+    return { id: null, error: err?.message || 'Failed to send message.' };
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Notifications                                                       */
+/* ------------------------------------------------------------------ */
+
+export interface AppNotification {
+  id: string;
+  message: string;
+  type: string;
+  source: string;
+  timestamp: string;
+}
+
+export function subscribeNotifications(
+  uid: string,
+  cb: (items: AppNotification[]) => void
+): Unsubscribe {
+  if (!isFirestoreAvailable()) {
+    cb([]);
+    return () => {};
+  }
+  return onValue(ref(getDb(), `notifications/${uid}`), (snap) => {
+    const items: AppNotification[] = [];
+    snap.forEach((child) => {
+      const v = child.val() || {};
+      items.push({
+        id: child.key || '',
+        message: v.message || '',
+        type: v.type || 'info',
+        source: v.source || 'system',
+        timestamp: toIso(v.timestamp),
+      });
+    });
+    items.sort((a, b) => (a.timestamp < b.timestamp ? 1 : -1));
+    cb(items);
+  });
+}
+
+export async function pushNotification(
+  uid: string,
+  input: { message: string; type?: string; source?: string }
+): Promise<{ id: string | null; error: string | null }> {
+  const user = getCurrentFireUser();
+  if (!isFirestoreAvailable() || !uid || !user) {
+    return { id: null, error: 'Notifications require a configured Firebase project.' };
+  }
+  if (uid !== user.uid) {
+    return { id: null, error: 'Cannot notify another user.' };
+  }
+  try {
+    const childRef = await push(ref(getDb(), `notifications/${uid}`), {
+      message: String(input.message).slice(0, 500),
+      type: input.type || 'info',
+      source: input.source || 'system',
+      timestamp: serverTimestamp(),
+    });
+    return { id: childRef.key ?? null, error: null };
+  } catch (err: any) {
+    return { id: null, error: err?.message || 'Failed to save notification.' };
+  }
+}
+
+export async function clearNotifications(uid: string): Promise<void> {
+  if (!isFirestoreAvailable()) return;
+  await remove(ref(getDb(), `notifications/${uid}`));
 }
