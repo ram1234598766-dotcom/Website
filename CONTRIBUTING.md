@@ -27,7 +27,7 @@ to set up, run, and ship changes — and the ground rules we review against.
 - Node.js 22+ (LTS) and npm.
 - A browser for the UI (Chrome or Firefox is fine).
 - Optional, only for deploy-adjacent work: `wrangler login` (deploy) and the
-  Firebase CLI (rules deploy and `firebase:setup`).
+  Firebase CLI (rules deploy).
 
 ## Quickstart
 
@@ -38,10 +38,11 @@ npm ci          # reproducible install
 npm run dev     # start the Next.js dev server
 ```
 
-Open `http://localhost:3000`. The app runs in **Firebase demo mode** with no
-environment variables — forum, admin, drive, and GitHub features activate
-only when `NEXT_PUBLIC_FIREBASE_*` (and optionally `GH_*` / `GEMINI_API_KEY`)
-are set in `.env.local`. Nothing is available to break until you add keys.
+Open `http://localhost:3000`. No Firebase setup is needed — the hosted app is
+already provisioned, and a local clone runs in **Firebase demo mode** with no
+environment variables. Forum, admin, drive, and GitHub features switch on only
+when `NEXT_PUBLIC_FIREBASE_*` (and optionally `GH_*` / `GEMINI_API_KEY`) are
+provided. Nothing is available to break until you add keys.
 
 ## Development workflow
 
@@ -65,7 +66,6 @@ are set in `.env.local`. Nothing is available to break until you add keys.
 | `npm run start`      | Serve the production build locally (`next start`)        |
 | `npm run deploy`     | Build + `npx wrangler deploy` (single Worker unit; rollback via `wrangler rollback`) |
 | `npm run cf-preview` | Cloudflare Workers preview via `wrangler dev`            |
-| `npm run firebase:setup` | One-time Firebase config bootstrap (bash script)    |
 
 CI (`.github/workflows/ci.yml`) runs `lint`, `test`, `build`, and `e2e` jobs
 on Node 22 with `npm ci`. `npm run lint` and `npm test` are the mandatory

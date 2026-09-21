@@ -29,19 +29,19 @@ Import your repositories, edit files, and push back to the branch via blob/tree/
 Connect Google Drive via Google (Firebase) sign-in, browse your files read-only, open any text document into the editor, and save work into a dedicated VantaOS folder the app owns — your own files are never overwritten.
 
 ### 🔐 Privacy
-Keys live in environment variables and are never printed. HTML is sanitized with DOMPurify. The Worker proxy is rate-limited, and when no `NEXT_PUBLIC_FIREBASE_*` variables are present the app runs in demo mode with local accounts — nothing touches the cloud until you configure Firebase.
+Keys live in environment variables and are never printed. HTML is sanitized with DOMPurify. The Worker proxy is rate-limited, and when no `NEXT_PUBLIC_FIREBASE_*` variables are present the app runs in demo mode with local accounts — no Firebase setup is required.
 
 ---
 
 ## What this is, in plain English
 
-VantaOS is a development environment that runs entirely in your browser — think of it as a laptop inside a tab. You get a file manager, a code editor with 15 language support, a sandboxed terminal for JavaScript and shell commands, and an AI assistant. Everything works offline by default: your files live in your browser's local storage. When you want more, you can plug in Firebase for real user accounts and file sync, or add a Gemini API key for smarter AI. No installation, no server to manage, no account required. Open the URL and start coding.
+VantaOS is a development environment that runs entirely in your browser — think of it as a laptop inside a tab. You get a file manager, a code editor with 15 language support, a sandboxed terminal for JavaScript and shell commands, and an AI assistant. Everything works offline by default: your files live in your browser's local storage. Firebase is already provisioned for the hosted app, so real user accounts and cross-device sync work with no setup; local runs fall back to demo mode automatically. Add a Gemini API key if you want smarter AI. No installation, no server to manage, no account required. Open the URL and start coding.
 
 ---
 
 ## Troubleshooting
 
-**"No peers found" / "Can't connect"** — VantaOS runs as a single-browser instance by default. The file manager, editor, terminal, and AI all work locally. If you added Firebase, your data syncs across devices. If features seem limited, check that you're not in a restricted network — some AI model downloads need access to huggingface.co.
+**"No peers found" / "Can't connect"** — VantaOS runs as a single-browser instance by default. The file manager, editor, terminal, and AI all work locally. The hosted app is already connected to Firebase, so your data syncs across devices. If features seem limited, check that you're not in a restricted network — some AI model downloads need access to huggingface.co.
 
 **"Port already in use"** — If `npm run dev` complains about port 3000, either stop the other process (`lsof -i :3000` then `kill <PID>`) or start on a different port: `npx next dev -p 3001`.
 
@@ -99,7 +99,7 @@ Open the printed localhost URL. Every `NEXT_PUBLIC_FIREBASE_*` variable is optio
 
 ### First-time setup?
 
-Run `npm run setup` for a guided wizard that walks you through Firebase and AI configuration with friendly prompts and sensible defaults.
+Run `npm run setup` for a guided 3-step wizard that walks you through AI configuration with friendly prompts and sensible defaults. No Firebase setup is needed — the hosted app is already provisioned, and a local run uses demo mode automatically.
 
 ---
 
@@ -114,7 +114,7 @@ Run `npm run setup` for a guided wizard that walks you through Firebase and AI c
 | `npm run lint` | Type-check without emitting (`tsc --noEmit`) |
 | `npm test` | Run the Vitest suite — 1343/1343 tests across 90 files |
 | `npm run test:rules` | Run the RTDB security-rules suite against the local emulator |
-| `npm run setup` | Guided 4-step setup wizard (`scripts/setup.sh`) |
+| `npm run setup` | Guided 3-step setup wizard (`scripts/setup.sh`) |
 | `make quickstart` | Install deps, create `.env.local`, start the dev server |
 
 **RTDB rules:** the live data tier is Realtime Database. Deploy its rules with `firebase deploy --only database` — that is exactly what the `npm run firebase:deploy` script runs.

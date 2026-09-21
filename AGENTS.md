@@ -171,7 +171,7 @@ Firebase RTDB rules hardened, auth verified, secrets managed via wrangler secret
 - No secrets in wrangler.toml [vars] — use `wrangler secret put`
 
 ### Phase 3 — Interface & beginner experience
-One-command quickstart works. Plain-language README front door. `npm run setup` 4-step wizard. `.env.example` matches RTDB config.
+One-command quickstart works. Plain-language README front door. `npm run setup` 3-step wizard. `.env.example` matches RTDB config.
 - `make quickstart` — install, env, dev server start
 - README plain-language section above architecture diagram
 - `npm run setup` wizard with sensible defaults

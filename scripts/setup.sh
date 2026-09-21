@@ -44,7 +44,7 @@ if [ ! -t 0 ]; then
 fi
 
 # --- Step 1: Node.js check ---
-echo "── Step 1 of 4: Checking your environment ──"
+echo "── Step 1 of 3: Checking your environment ──"
 if command -v node &>/dev/null; then
   NODE_VERSION=$(node --version)
   echo "  ✓ Node.js found: $NODE_VERSION"
@@ -54,42 +54,8 @@ else
 fi
 echo ""
 
-# --- Step 2: Firebase configuration (optional) ---
-echo "── Step 2 of 4: Firebase configuration (optional) ──"
-echo "  Firebase turns on real accounts, the forum's shared data tier,"
-echo "  and Google Drive. Not ready yet? Press Enter at every prompt and"
-echo "  VantaOS runs in demo mode with local accounts — nothing breaks."
-echo ""
-read -rp "  Firebase project ID (or press Enter to skip): " FIREBASE_PROJECT_ID
-if [ -n "$FIREBASE_PROJECT_ID" ]; then
-  read -rp "  Firebase API key: " FIREBASE_API_KEY
-  FIREBASE_AUTH_DOMAIN_DEFAULT="${FIREBASE_PROJECT_ID}.firebaseapp.com"
-  read -rp "  Auth domain [$FIREBASE_AUTH_DOMAIN_DEFAULT]: " FIREBASE_AUTH_DOMAIN
-  FIREBASE_AUTH_DOMAIN="${FIREBASE_AUTH_DOMAIN:-$FIREBASE_AUTH_DOMAIN_DEFAULT}"
-  FIREBASE_DB_URL_DEFAULT="https://${FIREBASE_PROJECT_ID}-default-rtdb.firebaseio.com"
-  read -rp "  Realtime Database URL [$FIREBASE_DB_URL_DEFAULT]: " FIREBASE_DB_URL
-  FIREBASE_DB_URL="${FIREBASE_DB_URL:-$FIREBASE_DB_URL_DEFAULT}"
-  read -rp "  Firebase app ID (Project settings → Your apps → App ID): " FIREBASE_APP_ID
-
-  ensure_env_file
-  write_env NEXT_PUBLIC_FIREBASE_PROJECT_ID "$FIREBASE_PROJECT_ID"
-  write_env NEXT_PUBLIC_FIREBASE_API_KEY "$FIREBASE_API_KEY"
-  write_env NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN "$FIREBASE_AUTH_DOMAIN"
-  write_env NEXT_PUBLIC_FIREBASE_DATABASE_URL "$FIREBASE_DB_URL"
-  write_env NEXT_PUBLIC_FIREBASE_APP_ID "$FIREBASE_APP_ID"
-
-  if [ -n "$FIREBASE_API_KEY" ] && [ -n "$FIREBASE_APP_ID" ]; then
-    echo "  ✓ Firebase configured — real accounts and shared forum data are on"
-  else
-    echo "  ⚠ API key or app ID is missing — the app stays in demo mode until both are set"
-  fi
-else
-  echo "  → Skipping Firebase — demo mode (local accounts, local data)"
-fi
-echo ""
-
-# --- Step 3: Gemini AI key (optional) ---
-echo "── Step 3 of 4: Omni-AI cloud provider (optional) ──"
+# --- Step 2: Gemini AI key (optional) ---
+echo "── Step 2 of 3: Omni-AI cloud provider (optional) ──"
 echo "  Omni-AI can use cloud AI (Gemini, OpenRouter, OpenAI) for smarter"
 echo "  assistance. You can also use in-browser AI models for free."
 echo ""
@@ -103,10 +69,14 @@ else
 fi
 echo ""
 
-# --- Step 4: Start ---
-echo "── Step 4 of 4: Ready! ──"
+# --- Step 3: Start ---
+echo "── Step 3 of 3: Ready! ──"
 echo ""
 echo "  Your VantaOS instance is configured."
+echo ""
+echo "  Firebase needs no setup: the hosted app is already provisioned, and a"
+echo "  local run starts in demo mode (local accounts, local data) on its own."
+echo ""
 echo "  Next step: start the dev server with one of:"
 echo ""
 echo "    make quickstart    ← full setup + start"

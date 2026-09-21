@@ -13,7 +13,6 @@
     "start": "next start",
     "deploy": "npx wrangler deploy",
     "cf-preview": "npx wrangler dev",
-    "firebase:setup": "bash scripts/firebase-setup.sh",
     "firebase:deploy": "firebase deploy --only database",
     "setup": "bash scripts/setup.sh",
     "quickstart": "make quickstart"

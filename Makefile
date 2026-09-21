@@ -16,7 +16,7 @@ quickstart: ## Install dependencies, set up environment, and start the dev serve
 	fi
 	@if [ ! -f .env.local ] && [ ! -f .env ]; then \
 		echo "→ Creating .env.local from .env.example (demo mode — no Firebase needed)"; \
-		cp .env.example .env.local 2>/dev/null || echo "NEXT_PUBLIC_FIREBASE_API_KEY=" > .env.local; \
+		cp .env.example .env.local; \
 	else \
 		echo "→ Environment already configured (.env.local or .env exists)"; \
 	fi

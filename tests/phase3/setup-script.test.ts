@@ -8,8 +8,13 @@ import { resolve } from 'node:path';
  * Verifies scripts/setup.sh:
  *   - Exists and is executable
  *   - Has proper shebang line
- *   - Contains all 4 setup steps
+ *   - Contains all 3 setup steps
  *   - Contains friendly messages
+ *
+ * NOTE: the wizard previously had a dedicated Firebase configuration step.
+ * Firebase is pre-provisioned for the hosted app and a local clone boots in
+ * demo mode with no env vars, so that step was removed. The assertions below
+ * pin the 3-step shape and that the old Firebase prompts are gone.
  */
 
 const ROOT = resolve(import.meta.dirname, '..', '..');
@@ -48,31 +53,31 @@ describe('Setup script', () => {
     expect(content).toContain('environment');
   });
 
-  it('contains Step 2: Firebase configuration', () => {
+  it('no longer prompts for Firebase configuration', () => {
     const content = readFileSync(setupPath, 'utf-8');
-    expect(content).toContain('Step 2');
-    expect(content).toContain('Firebase');
+    expect(content).not.toContain('of 4');
+    expect(content).not.toContain('Firebase project ID');
+    expect(content).not.toContain('NEXT_PUBLIC_FIREBASE');
   });
 
-  it('contains Step 3: Omni-AI / Gemini configuration', () => {
+  it('contains Step 2: Omni-AI / Gemini configuration', () => {
     const content = readFileSync(setupPath, 'utf-8');
-    expect(content).toContain('Step 3');
+    expect(content).toContain('Step 2');
     expect(content).toContain('Omni-AI');
     expect(content).toContain('Gemini');
   });
 
-  it('contains Step 4: completion/ready', () => {
+  it('contains Step 3: completion/ready', () => {
     const content = readFileSync(setupPath, 'utf-8');
-    expect(content).toContain('Step 4');
+    expect(content).toContain('Step 3');
     expect(content).toMatch(/Ready|Complete|Done|Finish/i);
   });
 
-  it('contains all 4 steps', () => {
+  it('contains all 3 steps', () => {
     const content = readFileSync(setupPath, 'utf-8');
-    expect(content).toContain('Step 1 of 4');
-    expect(content).toContain('Step 2 of 4');
-    expect(content).toContain('Step 3 of 4');
-    expect(content).toContain('Step 4 of 4');
+    expect(content).toContain('Step 1 of 3');
+    expect(content).toContain('Step 2 of 3');
+    expect(content).toContain('Step 3 of 3');
   });
 
   it('contains friendly messages', () => {
@@ -85,10 +90,9 @@ describe('Setup script', () => {
 
   it('contains step completion messages', () => {
     const content = readFileSync(setupPath, 'utf-8');
-    expect(content).toContain('Step 1 of 4');
-    expect(content).toContain('Step 2 of 4');
-    expect(content).toContain('Step 3 of 4');
-    expect(content).toContain('Step 4 of 4');
+    expect(content).toContain('Step 1 of 3');
+    expect(content).toContain('Step 2 of 3');
+    expect(content).toContain('Step 3 of 3');
   });
 
   it('contains next step guidance', () => {

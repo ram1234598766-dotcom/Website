@@ -243,7 +243,6 @@ serves the static `out/` directory and intercepts `/api/*`.
 | `start` | 11 | `npx serve out` | ✅ current (static preview) |
 | `deploy` | 12 | `npm run build && npx wrangler deploy` | ✅ current |
 | `cf-preview` | 13 | `npm run build && npx wrangler dev` | ✅ current |
-| `firebase:setup` | 14 | `bash scripts/firebase-setup.sh` | ✅ current |
 | `firebase:deploy` | 15 | `firebase deploy --only firestore:rules,firestore:indexes` | 🔄 stale — targets Firestore; data tier is RTDB (`firebase deploy --only database`) |
 
 ### GitHub Actions (`.github/workflows/ci.yml`)
