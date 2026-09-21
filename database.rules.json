@@ -64,6 +64,7 @@
     "notifications": {
       "$uid": {
         ".read": "auth != null && $uid === auth.uid",
+        ".write": "auth != null && $uid === auth.uid && newData.exists() == false",
         "$evtId": {
           ".write": "auth != null && $uid === auth.uid",
           ".validate": "newData.exists() == false ? true : (newData.hasChildren(['message','type','source','timestamp']) && newData.child('message').isString() && newData.child('type').isString() && newData.child('source').isString())"
