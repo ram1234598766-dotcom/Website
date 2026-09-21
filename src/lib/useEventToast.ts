@@ -49,6 +49,19 @@ export function useEventToast() {
       timersRef.current.delete(id);
     }, 4000);
     timersRef.current.set(id, timer);
+
+    void (async () => {
+      try {
+        const [{ getCurrentFireUser }, { pushNotification }] = await Promise.all([
+          import('./firebase'),
+          import('./firestore'),
+        ]);
+        const user = getCurrentFireUser();
+        if (!user) return;
+        await pushNotification(user.uid, { message, type, source });
+      } catch { /* persistence is best-effort */ }
+    })();
+
     return id;
   }, []);
 
