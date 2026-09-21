@@ -19,6 +19,18 @@ import PWARegister from './components/PWARegister';
 import { client } from './lib/client';
 import { WorkspaceProvider } from './lib/workspace/workspace';
 import { X } from 'lucide-react';
+import dynamic from 'next/dynamic';
+import ToastBar from './components/ToastBar';
+
+const Dashboard = dynamic(() => import('../app/dashboard/page'), { ssr: false, loading: () => <div className="flex items-center justify-center h-64 text-slate-500">Loading Dashboard…</div> });
+const Security = dynamic(() => import('../app/security/page'), { ssr: false, loading: () => <div className="flex items-center justify-center h-64 text-slate-500">Loading Security…</div> });
+const Settings = dynamic(() => import('../app/settings/page'), { ssr: false, loading: () => <div className="flex items-center justify-center h-64 text-slate-500">Loading Settings…</div> });
+const NetworkPage = dynamic(() => import('../app/network/page'), { ssr: false, loading: () => <div className="flex items-center justify-center h-64 text-slate-500">Loading Network…</div> });
+const FilesPage = dynamic(() => import('../app/files/page'), { ssr: false, loading: () => <div className="flex items-center justify-center h-64 text-slate-500">Loading Files…</div> });
+const DocsPage = dynamic(() => import('../app/docs/page'), { ssr: false, loading: () => <div className="flex items-center justify-center h-64 text-slate-500">Loading Docs…</div> });
+const NotificationsPage = dynamic(() => import('../app/notifications/page'), { ssr: false, loading: () => <div className="flex items-center justify-center h-64 text-slate-500">Loading Notifications…</div> });
+const MessagingPage = dynamic(() => import('../app/messaging/page'), { ssr: false, loading: () => <div className="flex items-center justify-center h-64 text-slate-500">Loading Messaging…</div> });
+const EmailPage = dynamic(() => import('../app/email/page'), { ssr: false, loading: () => <div className="flex items-center justify-center h-64 text-slate-500">Loading Email…</div> });
 
 export default function App() {
   const [currentView, setCurrentView] = useState<ViewState>('home');
@@ -175,6 +187,35 @@ export default function App() {
                 {currentView === 'admin' && <AdminPanel />}
                 {currentView === 'models' && <ModelManager />}
                 {currentView === 'plugins' && <PluginManager onClose={() => setCurrentView('home')} defaultTab={pluginTab} />}
+                {currentView === 'dashboard' && <Dashboard />}
+                {currentView === 'network' && (
+                  <motion.div key="network" initial={{ opacity: 0, y: 15, filter: 'blur(8px)' }} animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }} exit={{ opacity: 0, y: -15, filter: 'blur(8px)' }} transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }} role="region" aria-label="network view" className="w-full flex-1 flex flex-col">
+                    <NetworkPage />
+                  </motion.div>
+                )}
+                {currentView === 'files' && (
+                  <motion.div key="files" initial={{ opacity: 0, y: 15, filter: 'blur(8px)' }} animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }} exit={{ opacity: 0, y: -15, filter: 'blur(8px)' }} transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }} role="region" aria-label="files view" className="w-full flex-1 flex flex-col">
+                    <FilesPage />
+                  </motion.div>
+                )}
+                {currentView === 'docs' && (
+                  <motion.div key="docs" initial={{ opacity: 0, y: 15, filter: 'blur(8px)' }} animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }} exit={{ opacity: 0, y: -15, filter: 'blur(8px)' }} transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }} role="region" aria-label="docs view" className="w-full flex-1 flex flex-col">
+                    <DocsPage />
+                  </motion.div>
+                )}
+                {currentView === 'security' && <Security />}
+                {currentView === 'settings' && <Settings />}
+                {currentView === 'notifications' && <NotificationsPage />}
+                {currentView === 'messaging' && (
+                  <motion.div key="messaging" initial={{ opacity: 0, y: 15, filter: 'blur(8px)' }} animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }} exit={{ opacity: 0, y: -15, filter: 'blur(8px)' }} transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }} role="region" aria-label="messaging view" className="w-full flex-1 flex flex-col">
+                    <MessagingPage />
+                  </motion.div>
+                )}
+                {currentView === 'email' && (
+                  <motion.div key="email" initial={{ opacity: 0, y: 15, filter: 'blur(8px)' }} animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }} exit={{ opacity: 0, y: -15, filter: 'blur(8px)' }} transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }} role="region" aria-label="email view" className="w-full flex-1 flex flex-col">
+                    <EmailPage />
+                  </motion.div>
+                )}
               </motion.div>
             </AnimatePresence>
           </main>
@@ -186,6 +227,8 @@ export default function App() {
           />
 
           <AuthModal isOpen={showAuthModal} onClose={handleCloseAuthModal} initialMode={authMode} />
+
+          <ToastBar />
 
           {showShortcutsHelp && (
             <ShortcutsHelpModal onClose={handleCloseShortcutsHelp} />

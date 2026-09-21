@@ -111,7 +111,7 @@ Run `npm run setup` for a guided wizard that walks you through Firebase and AI c
 | `npm run build` | Next.js production build → `.next/` |
 | `npm run deploy` | OpenNext Worker bundle (`.open-next/`) + deploy |
 | `npm run lint` | Type-check without emitting (`tsc --noEmit`) |
-| `npm test` | Run the Vitest suite — 1254/1254 tests across 79 files |
+| `npm test` | Run the Vitest suite — 1317/1317 tests across 86 files |
 | `npm run deploy` | `npx wrangler deploy` (builds via `[build]` in wrangler.toml) — one Worker unit (worker + assets) |
 | `npm run cf-preview` | Build, then preview the OpenNext worker locally via `wrangler dev` |
 
@@ -121,7 +121,7 @@ Run `npm run setup` for a guided wizard that walks you through Firebase and AI c
 
 ## Testing
 
-- **Unit/integration** — `npm test` runs Vitest: 1254/1254 tests passing across 79 files.
+- **Unit/integration** — `npm test` runs Vitest: 1317/1317 tests passing across 86 files.
 - **E2E** — Playwright: 9 `test()` cases across 7 files in `tests/e2e/flows` (auth 2, terminal 2, files 1, home 1, ide 1, ide-run 1, omni-ai 1), run with `npx playwright test --config=tests/e2e/playwright.config.ts`; the config's webServer builds and serves the hybrid app (`npx next build && npx next start -p 4173`).
 - **CI** (`.github/workflows/ci.yml`) — on push/PR with Node 22: `npm ci`, lint (`tsc --noEmit`), unit tests (`vitest run`, excluding `tests/e2e/**`), build (`next build`), Playwright E2E, and an **`npm audit` job** (`npm audit --audit-level=high`; 0 vulnerabilities as of Sep 14, 2026).
 

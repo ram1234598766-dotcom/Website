@@ -2,11 +2,10 @@
 
 import { useCallback } from 'react';
 import { useEventToast } from './useEventToast';
+import type { ToastType } from './useToast';
 
-export type ToastType = 'success' | 'error' | 'info' | 'warning';
-
-export function useToast() {
-  const { toasts, dismiss, addToast } = useEventToast();
+export function useEnhancedToast() {
+  const { toasts, eventCount, lastSync, dismiss, addToast } = useEventToast();
 
   const show = useCallback(
     (message: string, type: ToastType = 'info', duration: number = 3000): string => {
@@ -15,5 +14,5 @@ export function useToast() {
     [addToast]
   );
 
-  return { toasts, show, dismiss };
+  return { toasts, show, dismiss, eventCount, lastSync };
 }

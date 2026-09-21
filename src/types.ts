@@ -1,4 +1,4 @@
-export type ViewState = 'home' | 'forum' | 'learn' | 'cloud' | 'governance' | 'admin' | 'privacy' | 'omni-ai' | 'ai-training' | 'foundation' | 'ide' | 'models' | 'plugins';
+export type ViewState = 'home' | 'forum' | 'learn' | 'cloud' | 'governance' | 'admin' | 'privacy' | 'omni-ai' | 'ai-training' | 'foundation' | 'ide' | 'models' | 'plugins' | 'dashboard' | 'security' | 'settings' | 'network' | 'notifications' | 'files' | 'docs' | 'messaging' | 'email';
 
 export interface Profile {
   id: string;

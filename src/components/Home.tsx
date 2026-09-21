@@ -5,7 +5,16 @@ import {
   useScroll,
   useSpring,
   useTransform,
+  useReducedMotion,
 } from 'motion/react';
+import type { Variants } from 'motion/react';
+import {
+  EASE,
+  STAGGER,
+  DISTANCES,
+  DURATIONS,
+  useMotionTokens,
+} from '../lib/motion/tokens';
 import {
   Terminal,
   GitBranch,
@@ -47,19 +56,17 @@ interface Feature {
   view: FeatureView;
 }
 
-const EASE: [number, number, number, number] = [0.22, 1, 0.36, 1];
-
 const stagger = {
   hidden: {},
-  visible: { transition: { staggerChildren: 0.12, delayChildren: 0.05 } },
+  visible: { transition: { staggerChildren: STAGGER.staggerChildren, delayChildren: STAGGER.delayChildren } },
 };
 
-const fadeUp = {
-  hidden: { opacity: 0, y: 26 },
+const fadeUp: Variants = {
+  hidden: { opacity: 0, y: DISTANCES.fadeUp },
   visible: {
     opacity: 1,
     y: 0,
-    transition: { duration: 0.7, ease: EASE },
+    transition: { duration: DURATIONS.base, ease: EASE },
   },
 };
 

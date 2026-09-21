@@ -14,6 +14,13 @@ binding = "ASSETS"
 binding = "WORKER_SELF_REFERENCE"
 service = "website"
 
+# [[durable_objects.bindings]]
+# name = "RATE_LIMIT_DO"
+# class_name = "RateLimitDO"
+# Opt-in Durable Object rate limiting. Without this binding,
+# the in-memory rate limiter (src/lib/server/rate-limit.ts) is used.
+# Never changes default behavior.
+
 # [[r2_buckets]]
 # binding = "R2_BUCKET"
 # bucket_name = "website-bucket"

@@ -1,5 +1,5 @@
 import { ViewState } from '../types';
-import { Menu, X, Code2, BrainCircuit, ShieldAlert, UserPlus, LogIn, LogOut, Cpu, Puzzle, Bell } from 'lucide-react';
+import { Menu, X, Code2, BrainCircuit, ShieldAlert, UserPlus, LogIn, LogOut, Cpu, Puzzle, Bell, Activity, Settings, Shield, Wifi, FileText, BookOpen, Folder, Mail, MessageSquare } from 'lucide-react';
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import Logo from './Logo';
@@ -39,10 +39,19 @@ const Navigation = React.memo(function Navigation({ currentView, setCurrentView,
 
   const navItems = useMemo(() => {
     const items: { view: ViewState; label: string | React.ReactNode; icon: React.ReactNode }[] = [
+      { view: 'dashboard', label: 'Dashboard', icon: <Activity className="w-4 h-4" /> },
+      { view: 'network', label: 'Network', icon: <Wifi className="w-4 h-4" /> },
+      { view: 'files', label: 'Files', icon: <Folder className="w-4 h-4" /> },
+      { view: 'docs', label: 'Docs', icon: <BookOpen className="w-4 h-4" /> },
       { view: 'ide', label: 'Cloud OS IDE', icon: <Code2 className="w-4 h-4" /> },
       { view: 'omni-ai', label: 'Omni-AI', icon: <BrainCircuit className="w-4 h-4" /> },
       { view: 'models', label: 'WebModels', icon: <Cpu className="w-4 h-4" /> },
+      { view: 'security', label: 'Security', icon: <Shield className="w-4 h-4" /> },
+      { view: 'settings', label: 'Settings', icon: <Settings className="w-4 h-4" /> },
+      { view: 'notifications', label: 'Alerts', icon: <Bell className="w-4 h-4" /> },
       { view: 'plugins', label: 'Plugins', icon: <Puzzle className="w-4 h-4" /> },
+      { view: 'messaging', label: 'Messaging', icon: <MessageSquare className="w-4 h-4" /> },
+      { view: 'email', label: 'Email', icon: <Mail className="w-4 h-4" /> },
     ];
     if (isAdmin) {
       items.push({ view: 'admin', label: 'Admin', icon: <ShieldAlert className="w-4 h-4" /> });
