@@ -108,20 +108,22 @@ Run `npm run setup` for a guided wizard that walks you through Firebase and AI c
 | Command | What it does |
 |---------|--------------|
 | `npm run dev` | Start the dev server (`next dev`) |
-| `npm run build` | Next.js production build → `.next/` |
-| `npm run deploy` | OpenNext Worker bundle (`.open-next/`) + deploy |
+| `npm run build` | Next.js production build + OpenNext Worker bundle (`.open-next/`) |
+| `npm run deploy` | `npx wrangler deploy` — ships the single Worker unit (worker + assets) |
+| `npm run cf-preview` | Preview the built OpenNext worker locally via `wrangler dev` |
 | `npm run lint` | Type-check without emitting (`tsc --noEmit`) |
-| `npm test` | Run the Vitest suite — 1317/1317 tests across 86 files |
-| `npm run deploy` | `npx wrangler deploy` (builds via `[build]` in wrangler.toml) — one Worker unit (worker + assets) |
-| `npm run cf-preview` | Build, then preview the OpenNext worker locally via `wrangler dev` |
+| `npm test` | Run the Vitest suite — 1327/1327 tests across 87 files |
+| `npm run test:rules` | Run the RTDB security-rules suite against the local emulator |
+| `npm run setup` | Guided 4-step setup wizard (`scripts/setup.sh`) |
+| `make quickstart` | Install deps, create `.env.local`, start the dev server |
 
-**Stale script:** `firebase:deploy` (package.json line 15) is outdated — it still targets `firestore:rules/indexes`. RTDB is the live data tier; deploy its rules with `firebase deploy --only database` instead.
+**RTDB rules:** the live data tier is Realtime Database. Deploy its rules with `firebase deploy --only database` — that is exactly what the `npm run firebase:deploy` script runs.
 
 ---
 
 ## Testing
 
-- **Unit/integration** — `npm test` runs Vitest: 1317/1317 tests passing across 86 files.
+- **Unit/integration** — `npm test` runs Vitest: 1327/1327 tests passing across 87 files.
 - **E2E** — Playwright: 9 `test()` cases across 7 files in `tests/e2e/flows` (auth 2, terminal 2, files 1, home 1, ide 1, ide-run 1, omni-ai 1), run with `npx playwright test --config=tests/e2e/playwright.config.ts`; the config's webServer builds and serves the hybrid app (`npx next build && npx next start -p 4173`).
 - **CI** (`.github/workflows/ci.yml`) — on push/PR with Node 22: `npm ci`, lint (`tsc --noEmit`), unit tests (`vitest run`, excluding `tests/e2e/**`), build (`next build`), Playwright E2E, and an **`npm audit` job** (`npm audit --audit-level=high`; 0 vulnerabilities as of Sep 14, 2026).
 
@@ -155,15 +157,18 @@ npm run deploy           # npx wrangler deploy (build via [build] in wrangler.to
 
 | Variable | Purpose | Required |
 |----------|---------|----------|
-| `NEXT_PUBLIC_FIREBASE_API_KEY` | Firebase API key (RTDB data tier, auth, Drive) | No (demo-mode fallback) |
+| `NEXT_PUBLIC_FIREBASE_API_KEY` | Firebase API key (auth, RTDB data tier, Drive) | No (demo-mode fallback) |
 | `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN` | Firebase auth domain | No |
-| `NEXT_PUBLIC_FIREBASE_DATABASE_URL` | Firebase Realtime Database URL | No |
 | `NEXT_PUBLIC_FIREBASE_PROJECT_ID` | Firebase project ID | No |
+| `NEXT_PUBLIC_FIREBASE_APP_ID` | Firebase web app ID | No |
+| `NEXT_PUBLIC_FIREBASE_DATABASE_URL` | Overrides the Realtime Database URL; blank means the project default | No |
+| `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET` / `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID` | Optional Firebase extras; unused by the data tier | No |
+| `NEXT_PUBLIC_APP_URL` | Canonical app origin | No |
 | `GEMINI_API_KEY` | Worker secret backing `/api/ai/generate` (Omni-AI) — set the env var to enable | No |
 | `GH_GRANT_SECRET` | Guards the Worker GitHub OAuth proxy (`/api/gh/*`) | No (proxy off by default) |
 | `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` | GitHub OAuth proxy credentials for `/api/gh/*` | No |
 
-Firebase is configured only when all four `NEXT_PUBLIC_FIREBASE_*` variables are present (`isFirebaseConfigured()`); Omni-AI cloud generation is on only when `GEMINI_API_KEY` is set. Without them the app starts in demo mode.
+Firebase is configured only when the four core values — API key, auth domain, project ID, and app ID — are all present (`isFirebaseConfigured()`); Omni-AI cloud generation is on only when `GEMINI_API_KEY` is set. Without them the app starts in demo mode, with local accounts and local data.
 
 ---
 
