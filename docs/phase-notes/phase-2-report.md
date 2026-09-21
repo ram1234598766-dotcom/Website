@@ -52,10 +52,11 @@ The rules before/after was captured by running the same suite against the pre-fi
 - **Rollback:** `git revert --no-edit f0d9197 4323bc4 0a81b16` (branch not pushed, no deploy).
 
 ## FINDINGS
-- `next start` still warns that it does not work with `output: standalone` (AGENTS §5 / Phase 0 [A1]); the E2E webServer relies on it. Untouched.
-- Orphaned `java.exe` RTDB emulator can hold port 9000 after an aborted run and make `emulators:exec` fail with "port taken". It exited cleanly on the successful run; noted for CI.
-- `JAVA_HOME` points at JDK 8 while `java` on PATH is JDK 26; the emulator runs on 26 and logs a benign `sun.misc.Unsafe` deprecation warning.
-- 16 `app/api/*` route handlers were only spot-checked (via `tests/backend/error-handling.test.ts` and `tests/phase3/api-consistency.test.ts`), not all read in full.
+- **AGENTS §5 deploy-story drift — RESOLVED (docs-only, `5e7ac60`).** The four sources now agree: `next.config.mjs` is `output: 'standalone'` (with an inline build-story comment), `package.json` builds via `next build` + `opennextjs-cloudflare build`, `wrangler.toml` packages `.open-next/worker.js`, and there is no static `out/` export. README and CONTRIBUTING were corrected; Playwright's webServer is documented as `next build && next start -p 4173`. `next start` still prints `"next start" does not work with "output: standalone"`, but it serves the built app and E2E passes 9/9 — the webServer was deliberately left unchanged (switching to `node .next/standalone/server.js` requires copying `public`/`.next/static` and risks the gate).
+- **Other docs still describe a static export** (not fixed — internal design/audit records, outside the four sources): `docs/ARCHITECTURE.md` (40, 76, 91, 131, 174, 529, 541, 734), `docs/TECH_STACK.md` (50, 59, 76, 92, 214, 253, 328), `docs/TECH_STACK_AUDIT_REPORT.md` (160, 176), `docs/WEB_MODEL_SPEC.md` (5, 35, 171, 326, 338, 340), `docs/SLO_RUNBOOK.md` (21, 139), `SECURITY.md` (4, 95), `public/_redirects` (1). `docs/AUDIT.md` A1 and `docs/PHASE3_DELIVERABLE.md` row 8 already record the truth.
+- **Orphaned emulator `java.exe`.** An aborted `firebase emulators:exec` run left a listener on port 9000 (observed PID 11792, `jdk-26.0.2\bin\java.exe`) and the next run failed with "port taken". Detect/clear with `Get-NetTCPConnection -LocalPort 9000 -State Listen` then `Stop-Process -Id <pid> -Force`. Cleaned and re-ran: 34/34.
+- **`JAVA_HOME` ≠ `java` on PATH (verified).** `JAVA_HOME=C:\Program Files\Java\jdk1.8.0_211` (JDK 8) while `java` on PATH is `C:\Program Files\Common Files\Oracle\Java\javapath\java.exe` = 26.0.2. The emulator runs on 26 and logs a benign `sun.misc.Unsafe` deprecation warning. Left as-is (environment, not repo).
+- **16 `app/api/*` handlers — now read in full.** Resolved in Phase 2b (see `docs/phase-notes/WORKLOG.md`, "Phase 2b"): all 16 reviewed — 13 via the shared `handleApiRequest`, 4 standalone — with boundary fixes and new pinned tests on `phase/2b-api-hardening`.
 
 ## BLOCKED
 - None. All Phase 2 gate items pass on the frozen tree.
