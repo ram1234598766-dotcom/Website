@@ -15,6 +15,7 @@ import { verifyGrant, type GrantClaims } from './grants';
 import { rateLimitCheck, rateLimitSlide, rateLimitStore, rateLimitCheckAtomic, checkServerGemini, resetServerGeminiLimits } from './rate-limit';
 import { getPeers } from './peer-registry';
 import { handleModelProxyGet } from './model-proxy';
+import { logServerError } from './log';
 
 export { rateLimitCheck, rateLimitSlide, rateLimitStore, rateLimitCheckAtomic, checkServerGemini, resetServerGeminiLimits };
 
@@ -232,6 +233,11 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
       if (typeof body !== 'object' || body === null || !body.key || typeof body.key !== 'string') {
         return json({ error: 'key is required and must be a string' }, 400, {}, undefined, requestId);
       }
+      // AGENTS §7.6: the key is attacker-controlled and used verbatim as a
+      // Map key. Cap it so a request cannot mint an unbounded-length entry.
+      if (body.key.length > 128) {
+        return json({ error: 'key must be 128 characters or fewer' }, 400, {}, undefined, requestId);
+      }
       const result = rateLimitCheck(body.key);
       return json(result, 200, {}, undefined, requestId);
     }
@@ -272,6 +278,12 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
 
     // POST /api/ai/generate
     if (request.method === 'POST' && path === '/api/ai/generate') {
+      // AGENTS §7.6: same 1MB boundary as /api/model-proxy. Without this an
+      // unbounded body is read into memory and forwarded upstream verbatim.
+      const aiContentLength = request.headers.get('content-length');
+      if (aiContentLength && parseInt(aiContentLength, 10) > 1_048_576) {
+        return json({ error: 'Request body exceeds 1MB limit' }, 413, {}, undefined, requestId);
+      }
       const limiterKey = `ai:${request.headers.get('cf-connecting-ip') || request.headers.get('x-forwarded-for') || 'unknown'}`;
       const rl = rateLimitCheckAtomic(limiterKey);
       if (!rl.allowed) {
@@ -330,7 +342,7 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
       requestId,
     );
   } catch (err: any) {
-    console.error(`Worker error [${requestId}]:`, err);
+    logServerError('api.worker_error', requestId, err);
     // H3 FIX: Never leak internal error messages to clients
     return json({ error: 'Internal server error' }, 500, {}, undefined, requestId);
   }
@@ -501,6 +513,44 @@ async function requireGrant(
   return { claims };
 }
 
+const MAX_AI_MESSAGES = 64;
+const MAX_AI_MESSAGE_CHARS = 32_000;
+
+/**
+ * Boundary validation for the AI `messages` array (AGENTS §7.6).
+ *
+ * The browser client always sends `[{ role, content }]`, but the field is
+ * attacker-controlled. A non-array previously reached `messages.map()` and
+ * surfaced as an opaque 500, and unbounded payloads were forwarded to upstream
+ * providers — spend amplification when the operator's GEMINI_API_KEY pays for
+ * the call.
+ *
+ * Returns an error string, or null when the payload is well-formed.
+ */
+function validateAiMessages(messages: unknown): string | null {
+  if (!Array.isArray(messages)) return 'messages must be an array';
+  if (messages.length === 0) return 'messages must contain at least one message';
+  if (messages.length > MAX_AI_MESSAGES) {
+    return `messages must contain ${MAX_AI_MESSAGES} items or fewer`;
+  }
+  for (const message of messages) {
+    if (typeof message !== 'object' || message === null || Array.isArray(message)) {
+      return 'each message must be an object';
+    }
+    const { role, content } = message as { role?: unknown; content?: unknown };
+    if (typeof role !== 'string' || role.length === 0) {
+      return 'each message must have a non-empty string role';
+    }
+    if (typeof content !== 'string') {
+      return 'each message must have a string content';
+    }
+    if (content.length > MAX_AI_MESSAGE_CHARS) {
+      return `each message content must be ${MAX_AI_MESSAGE_CHARS} characters or fewer`;
+    }
+  }
+  return null;
+}
+
 async function handleAiGenerate(request: Request, env: Env, requestId?: string): Promise<Response> {
   const j = (data: unknown, status = 200, extra: Record<string, string> = {}): Response =>
     json(data, status, extra, undefined, requestId);
@@ -511,6 +561,10 @@ async function handleAiGenerate(request: Request, env: Env, requestId?: string):
 
     if (!provider || !messages) {
       return j({ error: 'Missing required fields: provider, and messages or prompt' }, 400);
+    }
+    const messagesError = validateAiMessages(messages);
+    if (messagesError) {
+      return j({ error: messagesError }, 400);
     }
 
     switch (provider) {
@@ -628,7 +682,7 @@ async function handleAiGenerate(request: Request, env: Env, requestId?: string):
     // SECURITY: never relay upstream error details to the client â€” they can
     // contain partial API keys or internal endpoint information.  Log the
     // real error server-side for debugging instead.
-    console.error('AI generate error:', err);
+    logServerError('api.ai_generate_error', requestId, err);
     return json(
       { error: 'AI request failed' },
       500,
@@ -650,6 +704,10 @@ async function handleAiGenerateStream(request: Request, env: Env, requestId?: st
     if (!provider || !messages) {
       return j({ error: 'Missing required fields: provider, and messages or prompt' }, 400);
     }
+    const messagesError = validateAiMessages(messages);
+    if (messagesError) {
+      return j({ error: messagesError }, 400);
+    }
 
     const stream = new ReadableStream({
       async start(controller) {
@@ -660,7 +718,7 @@ async function handleAiGenerateStream(request: Request, env: Env, requestId?: st
             controller.enqueue(encoder.encode(chunk));
           }
         } catch (err: any) {
-          console.error('AI stream error:', err);
+          logServerError('api.ai_stream_error', requestId, err);
           controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: 'AI stream failed' })}\n\n`));
         } finally {
           controller.close();
