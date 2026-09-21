@@ -3,17 +3,32 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
-  Activity, Server, Wifi, Globe, Zap, ArrowRight, RefreshCw,
-  CheckCircle2, XCircle, Clock, Shield, Cpu, HardDrive,
+  Activity, Server, Wifi, Globe, Zap, RefreshCw, Clock,
 } from 'lucide-react';
-import { useToast, ToastType } from '../../src/lib/useToast';
+import { useToast } from '../../src/lib/useToast';
+import {
+  subscribePresence, isFirestoreAvailable, type PresencePeer,
+} from '../../src/lib/firestore';
+import { onFireAuthStateChanged, type FirebaseUser } from '../../src/lib/firebase';
 
-interface PeerInfo {
-  id: string;
-  address: string;
-  protocol: string;
-  connectedAt: string;
-  latency?: number;
+interface ProviderHealth {
+  status?: string;
+  configured?: boolean;
+}
+
+interface StatusPayload {
+  status: string;
+  version: string;
+  environment: string;
+  uptimeSeconds: number;
+  mode: string;
+  services: Record<string, string>;
+  serviceHealth?: {
+    firebase?: ProviderHealth;
+    gemini?: ProviderHealth;
+    github?: ProviderHealth;
+    database?: ProviderHealth;
+  };
 }
 
 interface TopologyNode {
@@ -28,7 +43,6 @@ interface TopologyNode {
 interface TopologyEdge {
   from: string;
   to: string;
-  bandwidth?: number;
 }
 
 interface NetworkStatus {
@@ -36,9 +50,10 @@ interface NetworkStatus {
   hostname: string;
   totalPeers: number;
   connectedPeers: number;
-  bandwidth: { up: number; down: number };
-  latency: number;
+  latency: number | null;
   uptime: number;
+  healthyServices: number;
+  totalServices: number;
 }
 
 function formatUptime(s: number): string {
@@ -50,21 +65,30 @@ function formatUptime(s: number): string {
   return `${m}m`;
 }
 
-function formatBytes(b: number): string {
-  if (b >= 1_000_000_000) return `${(b / 1_000_000_000).toFixed(1)} GB/s`;
-  if (b >= 1_000_000) return `${(b / 1_000_000).toFixed(1)} MB/s`;
-  if (b >= 1_000) return `${(b / 1_000).toFixed(1)} KB/s`;
-  return `${b} B/s`;
+function healthMap(s: string | undefined): 'online' | 'offline' | 'degraded' {
+  switch (s) {
+    case 'healthy':
+    case 'available':
+    case 'configured':
+    case 'connected':
+    case 'ok':
+    case 'online':
+      return 'online';
+    case 'unhealthy':
+    case 'disabled':
+    case 'offline':
+      return 'offline';
+    default:
+      return 'degraded';
+  }
 }
 
-function buildTopology(peers: PeerInfo[]): { nodes: TopologyNode[]; edges: TopologyEdge[] } {
+function buildTopology(
+  peers: PresencePeer[],
+  status: StatusPayload | null,
+): { nodes: TopologyNode[]; edges: TopologyEdge[] } {
   const self: TopologyNode = {
-    id: 'self',
-    x: 300,
-    y: 250,
-    label: 'This Node',
-    type: 'self',
-    status: 'online',
+    id: 'self', x: 300, y: 250, label: 'This Node', type: 'self', status: 'online',
   };
   const nodes: TopologyNode[] = [self];
   const edges: TopologyEdge[] = [];
@@ -72,27 +96,29 @@ function buildTopology(peers: PeerInfo[]): { nodes: TopologyNode[]; edges: Topol
   peers.forEach((p, i) => {
     const angle = (i / Math.max(peers.length, 1)) * Math.PI * 2 - Math.PI / 2;
     const radius = 160;
-    const px = 300 + Math.cos(angle) * radius;
-    const py = 250 + Math.sin(angle) * radius;
     nodes.push({
-      id: p.id,
-      x: px,
-      y: py,
-      label: p.address,
+      id: p.deviceId,
+      x: 300 + Math.cos(angle) * radius,
+      y: 250 + Math.sin(angle) * radius,
+      label: p.label || p.email || p.address,
       type: 'peer',
-      status: 'online',
+      status: p.online ? 'online' : 'offline',
     });
-    edges.push({ from: 'self', to: p.id });
+    edges.push({ from: 'self', to: p.deviceId });
   });
 
-  const services = [
-    { id: 'svc-firebase', label: 'Firebase', type: 'service' as const, status: 'online' as const, x: 120, y: 80 },
-    { id: 'svc-gemini', label: 'Gemini', type: 'service' as const, status: 'degraded' as const, x: 480, y: 80 },
-    { id: 'svc-github', label: 'GitHub', type: 'service' as const, status: 'offline' as const, x: 120, y: 420 },
-    { id: 'svc-ai', label: 'AI Proxy', type: 'service' as const, status: 'online' as const, x: 480, y: 420 },
+  const svc = status?.serviceHealth ?? {};
+  const services: { id: string; label: string; status: string; x: number; y: number }[] = [
+    { id: 'svc-firebase', label: 'Firebase', status: svc.firebase?.status, x: 120, y: 80 },
+    { id: 'svc-gemini', label: 'Gemini', status: svc.gemini?.status, x: 480, y: 80 },
+    { id: 'svc-github', label: 'GitHub', status: svc.github?.status, x: 120, y: 420 },
+    { id: 'svc-database', label: 'Database', status: svc.database?.status, x: 480, y: 420 },
   ];
   services.forEach((s) => {
-    nodes.push(s);
+    nodes.push({
+      id: s.id, x: s.x, y: s.y, label: s.label, type: 'service',
+      status: healthMap(s.status),
+    });
     edges.push({ from: 'self', to: s.id });
   });
 
@@ -100,49 +126,52 @@ function buildTopology(peers: PeerInfo[]): { nodes: TopologyNode[]; edges: Topol
 }
 
 export default function NetworkPeersPage() {
-  const [peers, setPeers] = useState<PeerInfo[]>([]);
-  const [netStatus, setNetStatus] = useState<NetworkStatus | null>(null);
+  const [user, setUser] = useState<FirebaseUser | null>(null);
+  const configured = isFirestoreAvailable();
+  const [peers, setPeers] = useState<PresencePeer[]>([]);
+  const [status, setStatus] = useState<StatusPayload | null>(null);
+  const [latency, setLatency] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [wsConnected, setWsConnected] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
   const { show } = useToast();
 
-  const fetchData = useCallback(async () => {
-    try {
-      const [pRes, sRes] = await Promise.all([
-        fetch('/api/peers'),
-        fetch('/api/status'),
-      ]);
-      let downloadedPeers: PeerInfo[] = [];
-      if (pRes.ok) {
-        const data = await pRes.json();
-        downloadedPeers = (data.peers || []).map((p: PeerInfo) => ({
-          ...p,
-          latency: Math.floor(Math.random() * 80) + 5,
-        }));
-        setPeers(downloadedPeers);
-      }
-      if (sRes.ok) {
-        const sData = await sRes.json();
-        setNetStatus({
-          nodeId: `node-${sData.version ?? 'unknown'}`,
-          hostname: sData.environment ?? 'unknown',
-          totalPeers: downloadedPeers.length,
-          connectedPeers: downloadedPeers.filter((p: PeerInfo) => p.protocol === 'wss').length || downloadedPeers.length,
-          bandwidth: { up: Math.random() * 5_000_000, down: Math.random() * 20_000_000 },
-          latency: Math.floor(Math.random() * 50) + 2,
-          uptime: sData.uptimeSeconds ?? 0,
-        });
-      }
+  useEffect(() => {
+    if (!configured) return;
+    return onFireAuthStateChanged((u) => setUser(u));
+  }, [configured]);
+
+  useEffect(() => {
+    if (!user) {
+      setPeers([]);
+      return;
+    }
+    return subscribePresence(user.uid, (list) => {
+      setPeers(list);
       setError(null);
+    });
+  }, [user]);
+
+  const fetchStatus = useCallback(async () => {
+    try {
+      const start = performance.now();
+      const res = await fetch('/api/status');
+      const rtt = Math.round(performance.now() - start);
+      if (!res.ok) throw new Error(`status ${res.status}`);
+      const data = (await res.json()) as StatusPayload;
+      setStatus(data);
+      setLatency(rtt);
+      setError(null);
+      return data;
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load');
+      setError(e instanceof Error ? e.message : 'Failed to reach /api/status');
+      return null;
     }
   }, []);
 
   useEffect(() => {
-    fetchData();
-    const interval = setInterval(fetchData, 15000);
+    fetchStatus();
+    const interval = setInterval(fetchStatus, 15000);
 
     try {
       const ws = new WebSocket('wss://website.vasudevaya.workers.dev/api/status/stream');
@@ -151,8 +180,8 @@ export default function NetworkPeersPage() {
       ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
-          if (data?.status?.services) {
-            setNetStatus((prev) => prev ? { ...prev, uptime: data.status.uptimeSeconds ?? prev.uptime } : prev);
+          if (data?.status?.uptimeSeconds != null) {
+            setStatus((prev) => prev ? { ...prev, uptimeSeconds: data.status.uptimeSeconds } : prev);
           }
         } catch { /* ignore */ }
       };
@@ -163,9 +192,25 @@ export default function NetworkPeersPage() {
       clearInterval(interval);
       wsRef.current?.close();
     };
-  }, [fetchData]);
+  }, [fetchStatus]);
 
-  const { nodes, edges } = useMemo(() => buildTopology(peers), [peers]);
+  const netStatus: NetworkStatus | null = useMemo(() => {
+    if (!status) return null;
+    const healthyServices = Object.values(status.serviceHealth ?? {}).filter((h) => healthMap(h?.status) === 'online').length;
+    const totalServices = Object.keys(status.serviceHealth ?? {}).length;
+    return {
+      nodeId: `node-${status.version ?? 'unknown'}`,
+      hostname: status.environment ?? 'unknown',
+      totalPeers: peers.length,
+      connectedPeers: peers.filter((p) => p.online).length,
+      latency,
+      uptime: status.uptimeSeconds ?? 0,
+      healthyServices,
+      totalServices,
+    };
+  }, [status, peers, latency]);
+
+  const { nodes, edges } = useMemo(() => buildTopology(peers, status), [peers, status]);
 
   const statusColor = (s: string) => {
     switch (s) {
@@ -185,8 +230,11 @@ export default function NetworkPeersPage() {
     }
   };
 
-  const handlePeerClick = (peer: PeerInfo) => {
-    show(`Peer ${peer.address} — ${peer.protocol} — ${peer.latency ?? '—'}ms`, 'info', 4000);
+  const handlePeerClick = (p: PresencePeer) => {
+    show(
+      `${p.label || p.email || p.address} — ${p.online ? 'online' : 'offline'} — last seen ${new Date(p.lastSeen).toLocaleString()}`,
+      'info', 4000,
+    );
   };
 
   return (
@@ -195,7 +243,7 @@ export default function NetworkPeersPage() {
         <div>
           <h1 className="text-3xl font-bold text-white">Network & Peers</h1>
           <p className="text-slate-400 text-sm mt-1">
-            Topology, peer connections, and sync status
+            Presence peers, measured latency, and service health
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -205,11 +253,22 @@ export default function NetworkPeersPage() {
             />
             <span className="text-slate-400">{wsConnected ? 'WS Live' : 'Polling'}</span>
           </div>
-          <button onClick={fetchData} aria-label="Refresh" className="p-2 text-slate-400 hover:text-white hover:bg-white/5 rounded-lg">
+          <button onClick={() => fetchStatus()} aria-label="Refresh status" className="p-2 text-slate-400 hover:text-white hover:bg-white/5 rounded-lg">
             <RefreshCw className="w-4 h-4" />
           </button>
         </div>
       </div>
+
+      {(status?.mode === 'demo' || !configured) && (
+        <div role="status" className="mb-4 rounded-lg bg-amber-900/20 border border-amber-800/40 p-4 text-amber-200 text-sm">
+          Supported services are reporting partial health because some integrations are not configured. Peers require a signed-in Firebase account.
+        </div>
+      )}
+      {configured && !user && (
+        <div role="status" className="mb-4 rounded-lg bg-indigo-900/20 border border-indigo-800/40 p-4 text-indigo-200 text-sm">
+          Sign in to broadcast presence and view live peers.
+        </div>
+      )}
 
       {error && (
         <div role="alert" className="mb-4 rounded-lg bg-red-900/30 border border-red-800/50 p-4 text-red-300">
@@ -217,13 +276,12 @@ export default function NetworkPeersPage() {
         </div>
       )}
 
-      {/* Network stats */}
       {netStatus && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
           {[
             { label: 'Active Peers', value: `${netStatus.connectedPeers}/${netStatus.totalPeers}`, icon: Users, color: '#6366f1' },
-            { label: 'Latency', value: `${netStatus.latency}ms`, icon: Activity, color: '#22c55e' },
-            { label: 'Bandwidth', value: `${formatBytes(netStatus.bandwidth.down)}`, icon: Zap, color: '#f59e0b' },
+            { label: 'Latency', value: netStatus.latency != null ? `${netStatus.latency}ms` : '—', icon: Activity, color: '#22c55e' },
+            { label: 'Services', value: `${netStatus.healthyServices}/${netStatus.totalServices}`, icon: Zap, color: '#f59e0b' },
             { label: 'Uptime', value: formatUptime(netStatus.uptime), icon: Clock, color: '#06b6d4' },
           ].map((card) => (
             <motion.div
@@ -242,7 +300,6 @@ export default function NetworkPeersPage() {
         </div>
       )}
 
-      {/* Topology Visualization */}
       <div className="rounded-xl border border-white/10 bg-white/5 p-4 mb-6">
         <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
           <Server className="w-5 h-5 text-indigo-400" /> Network Topology
@@ -256,8 +313,7 @@ export default function NetworkPeersPage() {
             aria-label="Network topology diagram showing connections between this node, peers, and services"
           >
             <title>Network Topology</title>
-            <desc>Interactive diagram showing this node at center, connected to peers and services. Click a peer node for details.</desc>
-            {/* Edges */}
+            <desc>Diagram showing this node at center, connected to live peers and services. Click a peer node for details.</desc>
             {edges.map((edge) => {
               const from = nodes.find((n) => n.id === edge.from);
               const to = nodes.find((n) => n.id === edge.to);
@@ -271,34 +327,19 @@ export default function NetworkPeersPage() {
                     y2={to.y}
                     stroke="#334155"
                     strokeWidth="1.5"
-                    strokeDasharray={edge.bandwidth ? 'none' : '4 4'}
+                    strokeDasharray="4 4"
                   />
-                  <circle cx={(from.x + to.x) / 2} cy={(from.y + to.y) / 2} r="3" fill="#6366f1" opacity="0.6">
-                    <animate
-                      attributeName="cx"
-                      values={`${(from.x + to.x) / 2};${to.x};${(from.x + to.x) / 2}`}
-                      dur={`${2 + Math.random()}s`}
-                      repeatCount="indefinite"
-                    />
-                    <animate
-                      attributeName="cy"
-                      values={`${(from.y + to.y) / 2};${to.y};${(from.y + to.y) / 2}`}
-                      dur={`${2 + Math.random()}s`}
-                      repeatCount="indefinite"
-                    />
-                  </circle>
                 </g>
               );
             })}
 
-            {/* Nodes */}
             {nodes.map((node) => (
               <g
                 key={node.id}
                 className="cursor-pointer"
                 onClick={() => {
                   if (node.type === 'peer') {
-                    const peer = peers.find((p) => p.id === node.id);
+                    const peer = peers.find((p) => p.deviceId === node.id);
                     if (peer) handlePeerClick(peer);
                   }
                 }}
@@ -306,7 +347,7 @@ export default function NetworkPeersPage() {
                 tabIndex={node.type === 'peer' ? 0 : undefined}
                 onKeyDown={(e) => {
                   if (node.type === 'peer' && (e.key === 'Enter' || e.key === ' ')) {
-                    const peer = peers.find((p) => p.id === node.id);
+                    const peer = peers.find((p) => p.deviceId === node.id);
                     if (peer) handlePeerClick(peer);
                   }
                 }}
@@ -343,11 +384,10 @@ export default function NetworkPeersPage() {
           </svg>
         </div>
 
-        {/* Legend */}
         <div className="flex items-center gap-4 mt-2 text-xs text-slate-500">
           <div className="flex items-center gap-1">
             <div className="w-3 h-3 rounded-full border-2" style={{ borderColor: '#22c55e' }} />
-            <span>Online</span>
+            <span>Healthy</span>
           </div>
           <div className="flex items-center gap-1">
             <div className="w-3 h-3 rounded-full border-2" style={{ borderColor: '#eab308' }} />
@@ -361,7 +401,6 @@ export default function NetworkPeersPage() {
         </div>
       </div>
 
-      {/* Peer List */}
       <div className="rounded-xl border border-white/10 bg-white/5 p-4">
         <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
           <Wifi className="w-5 h-5 text-indigo-400" /> Peers ({peers.length})
@@ -370,18 +409,17 @@ export default function NetworkPeersPage() {
           <table className="w-full text-sm" role="table">
             <thead>
               <tr className="text-xs text-slate-500 border-b border-white/10">
-                <th className="text-left pb-2 font-medium" scope="col">Address</th>
+                <th className="text-left pb-2 font-medium" scope="col">Peer</th>
                 <th className="text-left pb-2 font-medium" scope="col">Protocol</th>
-                <th className="text-left pb-2 font-medium" scope="col">Latency</th>
                 <th className="text-left pb-2 font-medium" scope="col">Status</th>
-                <th className="text-left pb-2 font-medium" scope="col">Connected</th>
+                <th className="text-left pb-2 font-medium" scope="col">Last seen</th>
               </tr>
             </thead>
             <tbody>
               <AnimatePresence>
                 {peers.map((p) => (
                   <motion.tr
-                    key={p.id}
+                    key={p.deviceId}
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     className="border-b border-white/5 hover:bg-white/5 cursor-pointer"
@@ -395,30 +433,29 @@ export default function NetworkPeersPage() {
                     <td className="py-2 font-mono text-slate-300" role="cell">
                       <div className="flex items-center gap-1">
                         <Globe className="w-3 h-3 text-emerald-400" />
-                        {p.address}
+                        {p.label || p.email || p.address}
                       </div>
                     </td>
                     <td className="py-2 text-slate-400" role="cell">
-                      <span className="px-2 py-0.5 rounded bg-white/5 text-xs">{p.protocol}</span>
-                    </td>
-                    <td className="py-2 text-slate-400" role="cell">
-                      {p.latency ? `${p.latency}ms` : '—'}
+                      <span className="px-2 py-0.5 rounded bg-white/5 text-xs">{p.protocol || 'vantaos-rt'}</span>
                     </td>
                     <td className="py-2" role="cell">
                       <div className="flex items-center gap-1">
-                        <div className="w-2 h-2 rounded-full" style={{ background: '#22c55e' }} />
-                        <span className="text-xs text-emerald-400">Online</span>
+                        <div className="w-2 h-2 rounded-full" style={{ background: p.online ? '#22c55e' : '#ef4444' }} />
+                        <span className={`text-xs ${p.online ? 'text-emerald-400' : 'text-red-400'}`}>
+                          {p.online ? 'Online' : 'Offline'}
+                        </span>
                       </div>
                     </td>
                     <td className="py-2 text-slate-500 text-xs" role="cell">
-                      {new Date(p.connectedAt).toLocaleString()}
+                      {new Date(p.lastSeen).toLocaleString()}
                     </td>
                   </motion.tr>
                 ))}
               </AnimatePresence>
               {peers.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="py-8 text-center text-slate-500">No peers connected</td>
+                  <td colSpan={4} className="py-8 text-center text-slate-500">No peers online right now</td>
                 </tr>
               )}
             </tbody>
