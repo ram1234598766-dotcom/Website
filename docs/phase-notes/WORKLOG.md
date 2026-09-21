@@ -41,3 +41,17 @@ Chronological log of phases and significant work. One entry per phase, prefixed 
 - `wrangler.toml` `[vars]`: verified comment-only; no secrets committed.
 - Gate: lint 0 · vitest 1327/1327 (87 files) · test:rules 34/34 · build 0 · E2E 9/9 · wrangler dry-run 0 (6080.91 KiB / 1246.22 KiB gzip, 144 assets) · audit 0.
 - Report: docs/phase-notes/phase-2-report.md
+
+---
+
+## Phase 3 — Interface & beginner experience — 2026-09-21
+
+**Outcome:** green gate; quickstart verified end-to-end, setup wizard now configures a working Firebase. Branch `phase/3-beginner-experience`.
+
+- `.env.example`: Firestore story retired (there is no Firestore); optional-Firebase framing; the four required values named; `NEXT_PUBLIC_FIREBASE_DATABASE_URL` added; RTDB deployment section (`firebase deploy --only database`).
+- `src/lib/firebase.ts`: honours the optional `NEXT_PUBLIC_FIREBASE_DATABASE_URL` (`undefined` when unset, so demo mode and existing configs are unchanged).
+- `scripts/setup.sh`: previously asked only for an API key, leaving `isFirebaseConfigured()` false and hiding the failure as demo mode. Now collects the four required values with derived defaults, upserts through a `write_env` helper (no more `.env.local.bak` litter), seeds `.env.local` from the template, and exits cleanly on a non-tty stdin.
+- `README.md`: test counts 1317/86 → 1327/87; removed the self-contradicting stale `firebase:deploy` note; deduped the deploy row; added `NEXT_PUBLIC_FIREBASE_APP_ID` and marked `DATABASE_URL` optional.
+- `make quickstart` verified: deps + env detected, `Ready in 1979ms`, `GET / 200 in 3090ms`, probe HTTP 200 after 4s, port 3000 cleaned up.
+- Gate: lint 0 · vitest 1327/1327 (87 files) · test:rules 34/34 · build 0 · E2E 9/9 · wrangler dry-run 0 (6080.91 KiB / 1246.28 KiB gzip, 141 assets) · audit 0.
+- Report: docs/phase-notes/phase-3-report.md
