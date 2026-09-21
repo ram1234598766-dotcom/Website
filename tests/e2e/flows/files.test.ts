@@ -2,12 +2,8 @@ import { test, expect } from '@playwright/test';
 
 test.describe('File operations (IDE)', () => {
   test('create, edit, and delete a file', async ({ page }) => {
-    await page.goto('/');
-    await page.waitForSelector('text=VantaOS', { timeout: 15_000 });
-
-    // Navigate to IDE
-    await page.locator('nav').getByText('Cloud OS IDE').click();
-    await page.waitForTimeout(2000);
+    await page.goto('/ide');
+    await page.waitForSelector('text=VantaOS Cloud IDE', { timeout: 15_000 });
 
     // Sidebar should be visible
     await expect(page.locator('[data-testid="sidebar"]')).toBeVisible();

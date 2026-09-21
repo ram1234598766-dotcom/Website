@@ -32,8 +32,8 @@ const NotificationsPage = dynamic(() => import('../app/notifications/page'), { s
 const MessagingPage = dynamic(() => import('../app/messaging/page'), { ssr: false, loading: () => <div className="flex items-center justify-center h-64 text-slate-500">Loading Messaging…</div> });
 const EmailPage = dynamic(() => import('../app/email/page'), { ssr: false, loading: () => <div className="flex items-center justify-center h-64 text-slate-500">Loading Email…</div> });
 
-export default function App() {
-  const [currentView, setCurrentView] = useState<ViewState>('home');
+export default function App({ initialView = 'home' }: { initialView?: ViewState } = {}) {
+  const [currentView, setCurrentView] = useState<ViewState>(initialView);
   const [pluginTab, setPluginTab] = useState<'installed' | 'marketplace'>('installed');
 
   useEffect(() => {

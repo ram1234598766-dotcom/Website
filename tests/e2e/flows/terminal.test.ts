@@ -2,12 +2,8 @@ import { test, expect } from '@playwright/test';
 
 test.describe('Terminal', () => {
   test('executes js command', async ({ page }) => {
-    await page.goto('/');
-    await page.waitForSelector('text=VantaOS', { timeout: 15_000 });
-
-    // Navigate to IDE
-    await page.locator('nav').getByText('Cloud OS IDE').click();
-    await page.waitForTimeout(2000);
+    await page.goto('/ide');
+    await page.waitForSelector('text=VantaOS Cloud IDE', { timeout: 15_000 });
 
     // The terminal opens via the ActivityBar Terminal icon; open it
     await page
@@ -34,8 +30,8 @@ test.describe('Terminal', () => {
   });
 
   test('executes calc command via Omni-AI', async ({ page }) => {
-    await page.goto('/');
-    await page.waitForSelector('text=VantaOS', { timeout: 15_000 });
+    await page.goto('/ide');
+    await page.waitForSelector('text=Omni-AI', { timeout: 15_000 });
 
     // Navigate to Omni-AI for calc
     await page.locator('nav').getByText('Omni-AI').click();

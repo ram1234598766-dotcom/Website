@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 
 test.describe('Omni-AI chat', () => {
   test('sends and receives a message', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/ide');
     await page.waitForSelector('text=VantaOS', { timeout: 15_000 });
 
     // Navigate to Omni-AI

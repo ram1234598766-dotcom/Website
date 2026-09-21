@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 
 test.describe('Auth flow', () => {
   test('sign-in modal appears', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/ide');
     await page.waitForSelector('text=VantaOS', { timeout: 15_000 });
 
     // Click Sign In button in navigation
@@ -25,7 +25,7 @@ test.describe('Auth flow', () => {
   });
 
   test('sign-up modal switches to sign-up mode', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/ide');
     await page.waitForSelector('text=VantaOS', { timeout: 15_000 });
 
     // Click Sign Up button
