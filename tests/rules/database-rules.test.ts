@@ -360,4 +360,204 @@ describe('upvotes rules', () => {
     await assertSucceeds(db('bob').ref('upvotes').once('value'));
   });
 });
+
+/* ------------------------------------------------------------------ */
+/* mailboxes                                                           */
+/* ------------------------------------------------------------------ */
+
+function mail(overrides: Record<string, unknown> = {}) {
+  return {
+    from: 'alice@example.com',
+    from_uid: 'alice',
+    to: 'bob@example.com',
+    to_uid: 'bob',
+    subject: 'Hello',
+    content: 'How are you?',
+    category: 'inbox',
+    read: false,
+    starred: false,
+    timestamp: 1_700_000_000_000,
+    ...overrides,
+  };
+}
+
+describe('mailboxes rules', () => {
+  it('lets the sender write a sent copy into their own mailbox', async () => {
+    await assertSucceeds(
+      db('alice').ref('mailboxes/alice/messages/m1').set(
+        mail({ category: 'sent', read: true })
+      )
+    );
+  });
+
+  it('lets the sender deliver an inbox copy into the recipient mailbox', async () => {
+    await assertSucceeds(
+      db('alice').ref('mailboxes/bob/messages/m1').set(mail())
+    );
+  });
+
+  it('rejects an unauthenticated send', async () => {
+    await assertFails(db().ref('mailboxes/alice/messages/m1').set(mail()));
+  });
+
+  it('rejects a write that the caller is not a party to', async () => {
+    await assertFails(
+      db('mallory').ref('mailboxes/bob/messages/m1').set(mail())
+    );
+  });
+
+  it('rejects a message with an unknown category', async () => {
+    await assertFails(
+      db('alice').ref('mailboxes/alice/messages/m1').set(mail({ category: 'spam' }))
+    );
+  });
+
+  it('lets the recipient mark a message read', async () => {
+    await seed('mailboxes/bob/messages/m1', mail());
+    await assertSucceeds(
+      db('bob').ref('mailboxes/bob/messages/m1').update({ read: true })
+    );
+  });
+
+  it('lets a party delete a message but rejects a stranger delete', async () => {
+    await seed('mailboxes/bob/messages/m1', mail());
+    await assertFails(db('mallory').ref('mailboxes/bob/messages/m1').remove());
+    await assertSucceeds(db('alice').ref('mailboxes/bob/messages/m1').remove());
+  });
+
+  it('scopes mailbox reads to the owner', async () => {
+    await seed('mailboxes/bob/messages/m1', mail());
+    await assertSucceeds(db('bob').ref('mailboxes/bob/messages').once('value'));
+    await assertFails(db('mallory').ref('mailboxes/bob/messages').once('value'));
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* presence                                                           */
+/* ------------------------------------------------------------------ */
+
+function device(overrides: Record<string, unknown> = {}) {
+  return {
+    uid: 'alice',
+    email: 'alice@example.com',
+    label: 'My Laptop',
+    address: '10.0.0.4',
+    protocol: 'wss',
+    online: true,
+    lastSeen: 1_700_000_000_000,
+    ...overrides,
+  };
+}
+
+describe('presence rules', () => {
+  it('lets an authenticated user publish their own device', async () => {
+    await assertSucceeds(db('alice').ref('presence/dev1').set(device()));
+  });
+
+  it('rejects an anonymous publish', async () => {
+    await assertFails(db().ref('presence/dev1').set(device()));
+  });
+
+  it('rejects impersonating another uid', async () => {
+    await assertFails(db('mallory').ref('presence/dev1').set(device({ uid: 'alice' })));
+  });
+
+  it('shares presence with authenticated clients only', async () => {
+    await seed('presence/dev1', device());
+    await assertSucceeds(db('bob').ref('presence').once('value'));
+    await assertFails(db().ref('presence').once('value'));
+  });
+
+  it('lets the owner remove their device but rejects a stranger', async () => {
+    await seed('presence/dev1', device());
+    await assertFails(db('mallory').ref('presence/dev1').remove());
+    await assertSucceeds(db('alice').ref('presence/dev1').remove());
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* dms                                                                 */
+/* ------------------------------------------------------------------ */
+
+function dm(overrides: Record<string, unknown> = {}) {
+  return {
+    sender_id: 'alice',
+    recipient_id: 'bob',
+    content: 'Hi Bob',
+    timestamp: 1_700_000_000_000,
+    ...overrides,
+  };
+}
+
+describe('dms rules', () => {
+  it('lets the sender write their own inbox copy', async () => {
+    await assertSucceeds(db('alice').ref('dms/alice/inbox/bob/m1').set(dm()));
+  });
+
+  it('lets the sender deliver the recipient copy', async () => {
+    await assertSucceeds(db('alice').ref('dms/bob/inbox/alice/m1').set(dm()));
+  });
+
+  it('rejects an anonymous message', async () => {
+    await assertFails(db().ref('dms/alice/inbox/bob/m1').set(dm()));
+  });
+
+  it('rejects a message the caller is not a party to', async () => {
+    await assertFails(
+      db('mallory').ref('dms/bob/inbox/alice/m1').set(dm())
+    );
+  });
+
+  it('rejects an empty message body', async () => {
+    await assertFails(
+      db('alice').ref('dms/alice/inbox/bob/m1').set(dm({ content: '' }))
+    );
+  });
+
+  it('scopes dm reads to the owner and lets a party delete their copy', async () => {
+    await seed('dms/bob/inbox/alice/m1', dm());
+    await assertSucceeds(db('bob').ref('dms/bob/inbox').once('value'));
+    await assertFails(db('mallory').ref('dms/bob/inbox').once('value'));
+    await assertSucceeds(db('alice').ref('dms/bob/inbox/alice/m1').remove());
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* notifications                                                       */
+/* ------------------------------------------------------------------ */
+
+function appNotification(overrides: Record<string, unknown> = {}) {
+  return {
+    message: 'Deploy failed',
+    type: 'error',
+    source: 'vantaos/builder',
+    timestamp: 1_700_000_000_000,
+    ...overrides,
+  };
+}
+
+describe('notifications rules', () => {
+  it('lets the owner push a notification to their own feed', async () => {
+    await assertSucceeds(
+      db('alice').ref('notifications/alice/evt1').set(appNotification())
+    );
+  });
+
+  it('rejects pushing to another user feed', async () => {
+    await assertFails(
+      db('alice').ref('notifications/bob/evt1').set(appNotification())
+    );
+  });
+
+  it('rejects an anonymous notification', async () => {
+    await assertFails(db().ref('notifications/alice/evt1').set(appNotification()));
+  });
+
+  it('scopes notification reads to the owner and lets them clear the feed', async () => {
+    await seed('notifications/alice/evt1', appNotification());
+    await assertSucceeds(db('alice').ref('notifications/alice').once('value'));
+    await assertFails(db('mallory').ref('notifications/alice').once('value'));
+    await assertSucceeds(db('alice').ref('notifications/alice').remove());
+  });
+});
 }

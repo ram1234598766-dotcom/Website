@@ -29,6 +29,46 @@
         ".write": "auth != null && (data.exists() == false || data.child('user_id').val() === auth.uid)",
         ".validate": "newData.exists() == false ? true : newData.child('user_id').val() === auth.uid"
       }
+    },
+    "mailboxes": {
+      "$uid": {
+        ".read": "auth != null && $uid === auth.uid",
+        "messages": {
+          "$mid": {
+            ".write": "auth != null && ((newData.exists() == false && (data.child('to_uid').val() === auth.uid || data.child('from_uid').val() === auth.uid)) || (newData.exists() == true && (newData.child('from_uid').val() === auth.uid || newData.child('to_uid').val() === auth.uid)))",
+            ".validate": "newData.exists() == false ? true : (newData.hasChildren(['from','from_uid','to','to_uid','subject','content','category','timestamp']) && (newData.child('category').val() === 'inbox' || newData.child('category').val() === 'sent' || newData.child('category').val() === 'drafts') && newData.child('from_uid').isString() && newData.child('to_uid').isString() && newData.child('from').isString() && newData.child('to').isString() && newData.child('subject').isString() && newData.child('content').isString())"
+          }
+        }
+      }
+    },
+    "presence": {
+      ".read": "auth != null",
+      "$deviceId": {
+        ".write": "auth != null && (newData.exists() == false ? data.child('uid').val() === auth.uid : newData.child('uid').val() === auth.uid)",
+        ".validate": "newData.exists() == false ? true : (newData.hasChildren(['uid','email','label','address','protocol']) && newData.child('uid').val() === auth.uid && newData.child('email').isString() && newData.child('label').isString() && newData.child('address').isString() && newData.child('protocol').isString())"
+      }
+    },
+    "dms": {
+      "$uid": {
+        ".read": "auth != null && $uid === auth.uid",
+        "inbox": {
+          "$oppUid": {
+            "$msgId": {
+              ".write": "auth != null && ((newData.exists() == false && (data.child('sender_id').val() === auth.uid || data.child('recipient_id').val() === auth.uid)) || (newData.exists() == true && (newData.child('sender_id').val() === auth.uid || newData.child('recipient_id').val() === auth.uid)))",
+              ".validate": "newData.exists() == false ? true : (newData.hasChildren(['sender_id','recipient_id','content','timestamp']) && newData.child('sender_id').isString() && newData.child('recipient_id').isString() && newData.child('content').isString() && newData.child('content').val().length > 0 && newData.child('content').val().length <= 4000)"
+            }
+          }
+        }
+      }
+    },
+    "notifications": {
+      "$uid": {
+        ".read": "auth != null && $uid === auth.uid",
+        "$evtId": {
+          ".write": "auth != null && $uid === auth.uid",
+          ".validate": "newData.exists() == false ? true : (newData.hasChildren(['message','type','source','timestamp']) && newData.child('message').isString() && newData.child('type').isString() && newData.child('source').isString())"
+        }
+      }
     }
   }
 }

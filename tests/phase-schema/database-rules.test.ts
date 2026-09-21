@@ -23,7 +23,7 @@ describe('database.rules.json', () => {
 
   it('covers every top-level path used by the app', () => {
     const messages = (rules.rules as Record<string, unknown>);
-    for (const key of ['profiles', 'threads', 'replies', 'upvotes']) {
+    for (const key of ['profiles', 'threads', 'replies', 'upvotes', 'mailboxes', 'presence', 'dms', 'notifications']) {
       expect(messages[key]).toBeDefined();
     }
   });
@@ -46,7 +46,7 @@ describe('database.rules.json', () => {
   it('requires authentication for every write', () => {
     const messages = (rules.rules as Record<string, unknown>);
     const writes: unknown[] = [];
-    for (const key of ['profiles', 'threads', 'replies', 'upvotes']) {
+    for (const key of ['profiles', 'threads', 'replies', 'upvotes', 'mailboxes', 'presence', 'dms', 'notifications']) {
       const node = messages[key] as Record<string, unknown>;
       for (const [path, val] of Object.entries(node)) {
         if (typeof val === 'object' && val !== null) {
