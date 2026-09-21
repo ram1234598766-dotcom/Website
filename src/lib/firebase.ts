@@ -6,9 +6,10 @@
  * (drive.readonly + drive.file). Its Realtime Database instance backs the
  * Forum and Admin data tier (src/lib/firestore.ts).
  *
- * All NEXT_PUBLIC_FIREBASE_* values are inlined at build time (static export).
- * If no Firebase project is configured, isFirebaseConfigured() returns false
- * and the app falls back to the local demo auth (src/lib/demoAuth.ts).
+ * All NEXT_PUBLIC_FIREBASE_* values are inlined into the browser bundle at
+ * build time. If no Firebase project is configured, isFirebaseConfigured()
+ * returns false and the app falls back to the local demo auth
+ * (src/lib/demoAuth.ts).
  */
 
 import { initializeApp, getApps, type FirebaseApp } from 'firebase/app';
@@ -34,6 +35,7 @@ const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || '';
 const appId = process.env.NEXT_PUBLIC_FIREBASE_APP_ID || '';
 const storageBucket = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || '';
 const messagingSenderId = process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || '';
+const databaseURL = process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL || '';
 
 export function isFirebaseConfigured(): boolean {
   return !!(
@@ -63,6 +65,7 @@ export function getFirebaseApp(): FirebaseApp {
       appId,
       storageBucket: storageBucket || undefined,
       messagingSenderId: messagingSenderId || undefined,
+      databaseURL: databaseURL || undefined,
     });
   return app;
 }
