@@ -1,7 +1,7 @@
 ﻿# VantaOS API Documentation
 
-> **Verification date:** 2026-09-13 (source-verified against the audited codebase)
-> **Current as of:** 2026-09-14
+> **Verification date:** 2026-09-21 (source-verified against the audited codebase)
+> **Current as of:** 2026-09-21
 > **Status model:** ✅ verified (read from code + exercised by the test suites) · ⚠️ present-but-not-enabled · 🎯 target
 > **Ground truth:** This document is derived from executed tests and read source, not from README claims. References are module-level unless a `file:line` pair is explicitly cited below; no line numbers are invented.
 
@@ -16,7 +16,7 @@ VantaOS is a Next.js 15 **hybrid-rendered** app — static shell pages plus dyna
 - **Data tier = Firebase Realtime Database (RTDB), not Firestore.** The client module carrying a legacy name (`src/lib/firestore.ts`) exposes the RTDB data layer via `isFirestoreAvailable()` — a legacy alias. Nothing in the product writes application data to Firestore.
 - Security boundary: the client-only app has no application server authorizing reads/writes. The server-side authorization contract is the RTDB ruleset at `database.rules.json` (see Section 2).
 
-**Test / verification status (Sep 14, 2026):** Vitest **1047/1047** passing across **65 files**; Playwright **9 cases across 7 files**. CI runs lint, test, build, e2e, and an `npm audit` job (`--audit-level=high`; 0 vulnerabilities as of Sep 2026-09-14).
+**Test / verification status (Sep 21, 2026):** Vitest **1317/1317** passing across **86 files**; Playwright **9/9 cases passing**. CI runs lint, test, build, e2e, and an `npm audit` job (`--audit-level=high`; 0 vulnerabilities as of 2026-09-21). Baseline watch: `baseline-20260921`.
 
 **API surfaces at a glance:**
 
