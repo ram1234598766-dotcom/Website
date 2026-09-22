@@ -152,7 +152,7 @@ export async function createThread(input: {
 }): Promise<{ id: string | null; error: string | null }> {
   const user = getCurrentFireUser();
   if (!isFirestoreAvailable() || !user) {
-    return { id: null, error: 'Sign in to create a thread. Realtime Database requires a configured Firebase project.' };
+    return { id: null, error: 'Sign in to create a thread. Realtime Database requires a configured cloud project.' };
   }
   const username = user.displayName || (user.email ? user.email.split('@')[0] : 'Unknown');
   try {
@@ -180,7 +180,7 @@ export async function createReply(
 ): Promise<{ id: string | null; error: string | null }> {
   const user = getCurrentFireUser();
   if (!isFirestoreAvailable() || !user) {
-    return { id: null, error: 'Sign in to reply. Realtime Database requires a configured Firebase project.' };
+    return { id: null, error: 'Sign in to reply. Realtime Database requires a configured cloud project.' };
   }
   const username = user.displayName || (user.email ? user.email.split('@')[0] : 'Unknown');
   try {
@@ -212,7 +212,7 @@ export async function setUpvote(input: {
   const tId = input.threadId || '';
   const rId = input.replyId || '';
   if (!isFirestoreAvailable() || !user) {
-    return { upvoted: false, error: 'Sign in to upvote. Realtime Database requires a configured Firebase project.' };
+    return { upvoted: false, error: 'Sign in to upvote. Realtime Database requires a configured cloud project.' };
   }
   if (!tId && !rId) {
     return { upvoted: false, error: 'A thread or reply is required.' };
@@ -398,7 +398,7 @@ export async function sendMail(input: {
 }): Promise<{ id: string | null; error: string | null }> {
   const user = getCurrentFireUser();
   if (!isFirestoreAvailable() || !user) {
-    return { id: null, error: 'Sign in to send mail. Realtime Database requires a configured Firebase project.' };
+    return { id: null, error: 'Sign in to send mail. Realtime Database requires a configured cloud project.' };
   }
   if (!input.to_uid) {
     return { id: null, error: 'A recipient is required.' };
@@ -449,7 +449,7 @@ export async function saveDraftMail(input: {
 }): Promise<{ id: string | null; error: string | null }> {
   const user = getCurrentFireUser();
   if (!isFirestoreAvailable() || !user) {
-    return { id: null, error: 'Drafts require a configured Firebase project.' };
+    return { id: null, error: 'Drafts require a configured cloud project.' };
   }
   const payload = {
     from: user.email || 'you@vantaos.local',
@@ -619,7 +619,7 @@ export async function sendDirectMessage(input: {
 }): Promise<{ id: string | null; error: string | null }> {
   const user = getCurrentFireUser();
   if (!isFirestoreAvailable() || !user) {
-    return { id: null, error: 'Sign in to message. Realtime Database requires a configured Firebase project.' };
+    return { id: null, error: 'Sign in to message. Realtime Database requires a configured cloud project.' };
   }
   if (!input.to_uid) {
     return { id: null, error: 'A recipient is required.' };
@@ -688,7 +688,7 @@ export async function pushNotification(
 ): Promise<{ id: string | null; error: string | null }> {
   const user = getCurrentFireUser();
   if (!isFirestoreAvailable() || !uid || !user) {
-    return { id: null, error: 'Notifications require a configured Firebase project.' };
+    return { id: null, error: 'Notifications require a configured cloud project.' };
   }
   if (uid !== user.uid) {
     return { id: null, error: 'Cannot notify another user.' };

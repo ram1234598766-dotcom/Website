@@ -224,9 +224,9 @@ export default function DriveManager({ files, setFiles, activeFileId, setActiveF
         {!configured ? (
           <div className="text-center py-6">
             <HardDrive className="w-10 h-10 text-slate-500 mx-auto mb-3" />
-            <p className="text-sm text-slate-400 mb-2">Drive needs Firebase configured.</p>
+            <p className="text-sm text-slate-400 mb-2">Drive needs cloud credentials configured.</p>
             <p className="text-xs text-slate-500">
-              Add NEXT_PUBLIC_FIREBASE_* to your environment, enable the Google Drive API in Google Cloud, and rebuild.
+              Add your cloud credentials to the environment, enable the Google Drive API in Google Cloud, and rebuild.
             </p>
           </div>
         ) : !connected ? (

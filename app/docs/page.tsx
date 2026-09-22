@@ -26,7 +26,7 @@ VantaOS is a browser-based cloud IDE that runs entirely in your browser.
 - **xterm.js Terminal** — Sandboxed JavaScript execution
 - **Omni-AI** — Chat with cloud AI or run models locally
 - **WebModel Manager** — Browse and download HuggingFace models
-- **Google Drive** — Read-only integration with Firebase auth
+- **Google Drive** — Read-only integration with cloud sign-in
 - **GitHub** — Import repos and push changes
 
 ## Getting Started
@@ -88,7 +88,7 @@ The terminal runs code in a sandboxed Web Worker using \`SandboxRunner\` (\`new 
 - API routes are rate-limited (100 req/60s)
 - Terminal code runs in a sandboxed Web Worker
 - All secrets are stored as Cloudflare Worker env vars
-- Firebase RTDB rules are the security boundary for data access`,
+- Realtime Database security rules are the boundary for data access`,
   },
 ];
 

@@ -53,7 +53,7 @@ let app: FirebaseApp | null = null;
 export function getFirebaseApp(): FirebaseApp {
   if (app) return app;
   if (!isFirebaseConfigured()) {
-    throw new Error('Firebase is not configured. Set NEXT_PUBLIC_FIREBASE_* in your environment.');
+    throw new Error('Cloud data is not configured. Add cloud credentials to the environment.');
   }
   const existing = getApps()[0];
   app =
@@ -194,11 +194,11 @@ export function friendlyFirebaseError(err: any): string {
     'auth/user-disabled': 'This account has been disabled.',
     'auth/user-not-found': 'No account found with this email.',
     'auth/wrong-password': 'Invalid login credentials.',
-    'auth/operation-not-allowed': 'This sign-in method is not enabled in your Firebase project.',
+    'auth/operation-not-allowed': 'This sign-in method is not enabled for your project.',
     'auth/account-exists-with-different-credential':
       'An account already exists with this email using a different sign-in method.',
     'auth/unauthorized-domain':
-      'This domain isn\u2019t authorized for Firebase sign-in. Add it in Firebase console \u2192 Authentication \u2192 Authorized domains.',
+      'This domain isn\u2019t authorized for sign-in. Add it in your identity console \u2192 Authentication \u2192 Authorized domains.',
   };
   return map[code] || err?.message || 'An unexpected error occurred. Please try again.';
 }

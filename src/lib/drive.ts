@@ -66,7 +66,7 @@ export async function connectDrive(): Promise<void> {
 
 async function getToken(): Promise<string> {
   if (!isDriveConfigured()) {
-    throw new DriveError('Firebase is not configured. Set NEXT_PUBLIC_FIREBASE_* to use Drive.');
+    throw new DriveError('Cloud data is not configured. Add your cloud credentials to use Drive.');
   }
   if (!isDriveConnected()) {
     throw new DriveError('Google Drive is not connected. Connect it to continue.', 401);

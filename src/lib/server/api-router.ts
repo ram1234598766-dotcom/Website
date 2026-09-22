@@ -137,7 +137,7 @@ function isFirebaseConfigured(env: Env): boolean {
 function requireFirebaseConfig(env: Env, requestId: string): Response | null {
   if (isFirebaseConfigured(env)) return null;
   return json(
-    { error: 'Firebase is not configured', code: 'firebase_not_configured' },
+    { error: 'Cloud data is not configured', code: 'firebase_not_configured' },
     503,
     {},
     undefined,
@@ -381,14 +381,14 @@ async function handleGitHubRoutes(
     if (notConfigured) return notConfigured;
     const body = await readJson(request);
     if (!body?.firebaseToken) {
-      return json({ error: 'Missing firebaseToken.' }, 401, {}, undefined, requestId);
+      return json({ error: 'Missing account token.' }, 401, {}, undefined, requestId);
     }
     const claims = await verifyFirebaseIdToken(body.firebaseToken, {
       projectId: projectId(env),
       nowMs: Date.now(),
     });
     if (!claims) {
-      return json({ error: 'Unauthorized', message: 'Expired Firebase session.' }, 401, {}, undefined, requestId);
+      return json({ error: 'Unauthorized', message: 'Expired account session.' }, 401, {}, undefined, requestId);
     }
     const { url: authorizeUrl } = await service.startAuthorize(claims.uid);
     return json({ url: authorizeUrl }, 200, {}, undefined, requestId);
@@ -433,14 +433,14 @@ async function handleGitHubRoutes(
       if (notConfigured) return notConfigured;
       const body = await readJson(request);
     if (!body?.firebaseToken || !body?.accessToken) {
-      return json({ error: 'Missing firebaseToken or accessToken.' }, 400, {}, undefined, requestId);
+      return json({ error: 'Missing account token or access token.' }, 400, {}, undefined, requestId);
     }
     const claims = await verifyFirebaseIdToken(body.firebaseToken, {
       projectId: projectId(env),
       nowMs: Date.now(),
     });
     if (!claims) {
-      return json({ error: 'Unauthorized', message: 'Expired Firebase session.' }, 401, {}, undefined, requestId);
+      return json({ error: 'Unauthorized', message: 'Expired account session.' }, 401, {}, undefined, requestId);
     }
     try {
       const grant = await service.importToken(claims.uid, body.accessToken);
@@ -461,7 +461,7 @@ async function handleGitHubRoutes(
       nowMs: Date.now(),
     });
     if (!claims) {
-      return json({ error: 'Unauthorized', message: 'Expired Firebase session.' }, 401, {}, undefined, requestId);
+      return json({ error: 'Unauthorized', message: 'Expired account session.' }, 401, {}, undefined, requestId);
     }
     const grant = await service.createGrant(claims.uid);
     if (!grant) {

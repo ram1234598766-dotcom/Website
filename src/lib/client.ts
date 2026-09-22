@@ -242,7 +242,7 @@ function firebaseAuthValue(authProp: string) {
               const user = getCurrentFireUser();
               const firebaseToken = user ? await user.getIdToken() : null;
               if (!firebaseToken) {
-                return { data: null, error: { message: 'No active Firebase session to bind GitHub to.' } };
+                return { data: null, error: { message: 'No active cloud session to bind GitHub to.' } };
               }
               try {
                 await githubClient.importGitHubAccessToken(firebaseToken, accessToken);
@@ -360,7 +360,7 @@ function demoAuthValue(authProp: string) {
     case 'signInWithOAuth': {
       return async () => ({
         data: null,
-        error: { message: 'OAuth sign-in requires a configured Firebase project.' },
+        error: { message: 'OAuth sign-in requires a configured cloud account.' },
       });
     }
     case 'resetPasswordForEmail': {

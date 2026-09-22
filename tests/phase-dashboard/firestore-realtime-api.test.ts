@@ -412,24 +412,24 @@ describe("demo mode — no Firebase configured", () => {
     ).resolves.toEqual({
       id: null,
       error:
-        "Sign in to send mail. Realtime Database requires a configured Firebase project.",
+        "Sign in to send mail. Realtime Database requires a configured cloud project.",
     });
     await expect(rtdb.saveDraftMail({ subject: "s" })).resolves.toEqual({
       id: null,
-      error: "Drafts require a configured Firebase project.",
+      error: "Drafts require a configured cloud project.",
     });
     await expect(
       rtdb.sendDirectMessage({ to_uid: BOB_UID, content: "hi" }),
     ).resolves.toEqual({
       id: null,
       error:
-        "Sign in to message. Realtime Database requires a configured Firebase project.",
+        "Sign in to message. Realtime Database requires a configured cloud project.",
     });
     await expect(
       rtdb.pushNotification(ALICE_UID, { message: "x" }),
     ).resolves.toEqual({
       id: null,
-      error: "Notifications require a configured Firebase project.",
+      error: "Notifications require a configured cloud project.",
     });
   });
 });
@@ -448,20 +448,20 @@ describe("configured but signed out", () => {
     ).resolves.toEqual({
       id: null,
       error:
-        "Sign in to send mail. Realtime Database requires a configured Firebase project.",
+        "Sign in to send mail. Realtime Database requires a configured cloud project.",
     });
     await expect(
       rtdb.sendDirectMessage({ to_uid: BOB_UID, content: "hi" }),
     ).resolves.toEqual({
       id: null,
       error:
-        "Sign in to message. Realtime Database requires a configured Firebase project.",
+        "Sign in to message. Realtime Database requires a configured cloud project.",
     });
     await expect(
       rtdb.pushNotification(ALICE_UID, { message: "x" }),
     ).resolves.toEqual({
       id: null,
-      error: "Notifications require a configured Firebase project.",
+      error: "Notifications require a configured cloud project.",
     });
     expect(h.helpers.read("mailboxes")).toBeUndefined();
     expect(h.helpers.read("dms")).toBeUndefined();

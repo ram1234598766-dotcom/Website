@@ -42,7 +42,7 @@ describe('Firebase token verification gate', () => {
     it.each(TOKEN_ROUTES)('$path fails closed with 503, not 500', async ({ path, body }) => {
       const { status, body: resBody } = await post(path, {}, body);
       expect(status).toBe(503);
-      expect(resBody.error).toBe('Firebase is not configured');
+      expect(resBody.error).toBe('Cloud data is not configured');
       expect(resBody.code).toBe('firebase_not_configured');
     });
 

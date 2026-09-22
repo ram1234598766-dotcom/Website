@@ -64,7 +64,7 @@ export default function AuthForm({ initialMode = 'signin' }: AuthFormProps) {
         <>
           {!hasFirebase ? (
             <div className="mb-6 text-xs text-center text-amber-400/80 bg-amber-500/10 border border-amber-500/20 rounded-xl p-3">
-              OAuth sign-in (Google / GitHub) requires Firebase. Use email sign-up below in offline mode, or connect Firebase in your environment.
+              OAuth sign-in (Google / GitHub) requires a connected cloud account. Use email sign-up below in offline mode, or connect a cloud account in your environment.
             </div>
           ) : null}
           <div className="space-y-3 mb-6">
@@ -188,7 +188,7 @@ export default function AuthForm({ initialMode = 'signin' }: AuthFormProps) {
       {!hasFirebase && (
         <p className="mt-6 text-xs text-center text-slate-500">
           Running in offline mode — accounts are stored locally in this browser.
-          Connect Firebase for Google/GitHub sign-in and cloud accounts.
+          Connect a cloud account for Google/GitHub sign-in and cloud data.
         </p>
       )}
     </div>

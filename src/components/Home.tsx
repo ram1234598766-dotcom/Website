@@ -485,7 +485,7 @@ export default function Home({ setCurrentView, onSignIn, onSignUp }: HomeProps) 
             </p>
           </div>
           <div className="flex flex-wrap items-center justify-center gap-3">
-            {['React 19', 'TypeScript', 'Next.js', 'CodeMirror', 'Tailwind CSS', 'Motion', 'xterm.js', 'Firebase', 'Cloudflare'].map((tech, i) => (
+            {['React 19', 'TypeScript', 'Next.js', 'CodeMirror', 'Tailwind CSS', 'Motion', 'xterm.js', 'Realtime Database', 'Cloudflare'].map((tech, i) => (
               <motion.span
                 key={tech}
                 initial={{ opacity: 0, scale: 0.85 }}
@@ -544,7 +544,7 @@ export default function Home({ setCurrentView, onSignIn, onSignUp }: HomeProps) 
                 <li className="flex gap-2.5"><span className="text-indigo-400 font-bold mt-0.5">•</span> <span><strong className="text-white">Omni-AI Assistant</strong> — chat in-browser or via cloud providers (OpenRouter, Gemini, OpenAI).</span></li>
                 <li className="flex gap-2.5"><span className="text-indigo-400 font-bold mt-0.5">•</span> <span><strong className="text-white">GitHub Sync</strong> — clone a repo, edit, and push commits directly from the IDE using your GitHub token.</span></li>
                 <li className="flex gap-2.5"><span className="text-indigo-400 font-bold mt-0.5">•</span> <span><strong className="text-white">Model Manager</strong> — browse, download, and manage WebModel packages with verified sources, running entirely on your device.</span></li>
-                <li className="flex gap-2.5"><span className="text-indigo-400 font-bold mt-0.5">•</span> <span><strong className="text-white">Offline-first data</strong> — your workspace auto-saves to your browser, and demo accounts store locally when Firebase isn't connected.</span></li>
+                <li className="flex gap-2.5"><span className="text-indigo-400 font-bold mt-0.5">•</span> <span><strong className="text-white">Offline-first data</strong> — your workspace auto-saves to your browser, and demo accounts store locally when no cloud account is connected.</span></li>
               </ul>
             </motion.div>
 
@@ -558,7 +558,7 @@ export default function Home({ setCurrentView, onSignIn, onSignUp }: HomeProps) 
                 <li className="flex gap-2.5"><span className="text-emerald-400 font-bold mt-0.5">•</span> <span><strong className="text-white">TypeScript</strong> across the whole codebase.</span></li>
                 <li className="flex gap-2.5"><span className="text-emerald-400 font-bold mt-0.5">•</span> <span><strong className="text-white">CodeMirror 6</strong> — a fast, dependency-light editor core that ships in the bundle (no CDN, no ~3MB runtime).</span></li>
                 <li className="flex gap-2.5"><span className="text-emerald-400 font-bold mt-0.5">•</span> <span><strong className="text-white">xterm.js</strong> for the terminal with a virtual file system.</span></li>
-                <li className="flex gap-2.5"><span className="text-emerald-400 font-bold mt-0.5">•</span> <span><strong className="text-white">Firebase</strong> (optional) for real auth, forum, and admin data when configured.</span></li>
+                <li className="flex gap-2.5"><span className="text-emerald-400 font-bold mt-0.5">•</span> <span><strong className="text-white">Cloud accounts</strong> (optional) for real auth, forum, and admin data when configured.</span></li>
                 <li className="flex gap-2.5"><span className="text-emerald-400 font-bold mt-0.5">•</span> <span><strong className="text-white">Deployed on Cloudflare</strong> as a static export with a Workers proxy for AI calls.</span></li>
               </ul>
             </motion.div>
@@ -683,7 +683,7 @@ export default function Home({ setCurrentView, onSignIn, onSignUp }: HomeProps) 
                 <h3 className="text-lg font-bold text-white">GitHub sync</h3>
               </div>
               <div className="p-7 space-y-3.5 text-sm text-[#9499ad] leading-relaxed flex-1">
-                <p><strong className="text-white">Connect</strong> — open the IDE, click <strong className="text-white">GitHub</strong>, then <strong className="text-white">Connect GitHub</strong>. Use a fine-grained personal access token with repo access (or Firebase OAuth if configured).</p>
+                <p><strong className="text-white">Connect</strong> — open the IDE, click <strong className="text-white">GitHub</strong>, then <strong className="text-white">Connect GitHub</strong>. Use a fine-grained personal access token with repo access (or OAuth sign-in if configured).</p>
                 <p><strong className="text-white">Clone a repo</strong> — pick any repository from the list. Its files load into your workspace (up to 200 files).</p>
                 <p><strong className="text-white">Commit &amp; push</strong> — edit files, write a commit message, and click <strong className="text-white">Commit &amp; Push</strong> to push your changes to the branch.</p>
               </div>

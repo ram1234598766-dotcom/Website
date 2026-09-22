@@ -26,7 +26,7 @@ A browser workspace shipping: a file manager with tabs and split views, a CodeMi
 ## 3. Commands
   npm run dev          next dev
   npm run lint         tsc --noEmit        <- the type gate; there is no ESLint
-  npm test             vitest run          <- baseline 1403 tests / 93 files, green (verified 2026-09-22)
+  npm test             vitest run          <- baseline 1424 tests / 93 files, green (verified 2026-09-22)
   npm run build        next build + opennextjs-cloudflare build
   npm run cf-preview   npx wrangler dev
   npm run deploy       npx wrangler deploy  <- YOU MAY NEVER RUN THIS
@@ -151,7 +151,7 @@ Set `export CI=1` at the start of the session. (On Windows PowerShell, use `$env
 Verify tooling and project health before any feature work.
 ```
 npm run lint            # tsc --noEmit — must exit 0
-CI=1 npm test           # vitest run — baseline 1403 tests / 93 files, green
+CI=1 npm test           # vitest run — baseline 1424 tests / 93 files, green
 npm run build           # next build + opennextjs-cloudflare — must succeed
 npx wrangler deploy --dry-run   # deploy dry-run — must succeed
 npm audit --audit-level=high    # 0 vulnerabilities

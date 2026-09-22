@@ -30,20 +30,21 @@
 ## COMMANDS
 | Command | Result |
 |---|---|
-| `npx vitest run tests/phase5/no-hardcoded-ui-data.test.ts` | **20/20 passed**, 1 file, 2.17 s |
+| `npx vitest run tests/phase5/no-hardcoded-ui-data.test.ts` | **41/41 passed**, 1 file, 1.66 s (+21 vendor-neutral guards) |
 | `npm run lint` | **exit 0** (`tsc --noEmit`) |
-| `CI=1 npm test` | **1403/1403 passed, 93 files** (baseline 1383/92 + 20) |
-| (kill orphaned emulator on :9000) | killed PID 24876 |
+| `CI=1 npm test` | **1424/1424 passed, 93 files** |
+| (kill orphaned emulator on :9000) | killed emulator holding :9000 |
 | `CI=1 npm run test:rules` | **57/57 passed**, exit 0 |
 | `CI=1 npm run build` | **exit 0** - Next 15.5.25 + OpenNext 1.20.6; `Worker saved in .open-next\worker.js`; postbuild `fix-cache.mjs` ran |
 | `npx playwright test --config=tests/e2e/playwright.config.ts` | **9/9 passed**, 2.0 m |
-| `npx wrangler deploy --dry-run` | **exit 0** - 6586.90 KiB / gzip 1356.07 KiB, 146 asset files |
+| `npx wrangler deploy --dry-run` | **exit 0** - 6586.88 KiB / gzip 1360.78 KiB, 146 asset files |
 | `CI=1 npm audit --audit-level=high` | **0 vulnerabilities** (exit 0) |
 
 ## METRICS
-- Tests: **1383/92 -> 1403/93** (new `no-hardcoded-ui-data.test.ts`, +20).
+- Tests: **1383/92 -> 1424/93** (new `no-hardcoded-ui-data.test.ts`, +20 then +21 vendor-neutral guards via the user-facing Firebase scrub).
 - Forbidden visitor-visible literals in `app/<page>/page.tsx`: **10 -> 0** (per the `FORBIDDEN_LITERALS` table).
-- Client bundles in `app/`: no page that shipped only-copy edits or removed dead socket code changed its chunk; `First Load JS shared by all` **104 kB** before and after.
+- "Firebase" in user-facing strings (docs page, API bodies, component copy, thrown auth/drive errors): **scrubbed to vendor-neutral wording**; internal identifiers (`hasFirebase`, `FirebaseUser`, `firestore.ts`, env vars, `code: 'firebase_not_configured'`) intentionally unchanged.
+- Client bundles in `app/`: no page that shipped only-copy edits changed its chunk; `First Load JS shared by all` **104 kB** before and after.
 
 ## RISKS
 - **Do not re-add a WS client to dashboard/network** until a real `/api/status/stream` (or Durable Object + Edge socket) exists; the named test now fails on `new WebSocket(` in any page.

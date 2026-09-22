@@ -55,7 +55,7 @@ export async function GET(request: Request): Promise<NextResponse> {
   };
 
   const tips = [
-    hasFirebase ? null : 'Configure Firebase for user accounts and file persistence',
+    hasFirebase ? null : 'Connect cloud accounts for authentication and file persistence',
     hasGemini ? null : 'Set GEMINI_API_KEY for Omni-AI cloud assistance',
     hasGithub ? null : 'Configure GitHub OAuth for repo import/push',
   ].filter(Boolean);

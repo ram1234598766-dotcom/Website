@@ -10,8 +10,8 @@ function checkFirebase(): { status: 'healthy' | 'degraded' | 'unhealthy'; detail
     !!process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ||
     (!!process.env.NEXT_PUBLIC_FIREBASE_API_KEY &&
       !!process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL);
-  if (!configured) return { status: 'degraded', detail: 'Firebase not configured — running in demo mode' };
-  return { status: 'healthy', detail: 'Firebase connected' };
+  if (!configured) return { status: 'degraded', detail: 'Cloud account not configured — running in demo mode' };
+  return { status: 'healthy', detail: 'Cloud account connected' };
 }
 
 function checkAI(): { status: 'healthy' | 'degraded' | 'unhealthy'; detail: string } {
