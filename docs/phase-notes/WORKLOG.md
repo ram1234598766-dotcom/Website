@@ -96,3 +96,4 @@ Chronological log of phases and significant work. One entry per phase, prefixed 
 - Confirmed no mock/hardcoded data remains: dashboard/network/security/status/settings/email/messaging/notifications all read real endpoints, localStorage, or RTDB streams.
 - Gate: lint 0 · vitest 1424/1424 (93 files; +21 guards vs 1403) · test:rules 57/57 (emulator on :9000 killed first) · build 0 (First Load JS 104 kB) · E2E 9/9 · wrangler dry-run 0 (6586.88 KiB / gzip 1360.78 KiB, 146 assets) · audit 0. No packages changed.
 - Report: docs/phase-notes/phase-5-report.md
+- Deployed: fast-forwarded main to `6c49ebc`, pushed (`93c31bc..6c49ebc main -> main`), `npm run deploy` -> https://website.vasudevaya.workers.dev (Version ID `078b6209-30b7-4f5a-8be6-19fc059bf723`, 21 new assets, startup 23 ms).
