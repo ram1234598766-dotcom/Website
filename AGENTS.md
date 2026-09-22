@@ -9,7 +9,8 @@ A browser workspace shipping: a file manager with tabs and split views, a CodeMi
 - Next.js ^15.1.0, React ^19.0.1, TypeScript ~5.8.2, Tailwind v4 (@tailwindcss/postcss)
 - Deployed as one Cloudflare Worker.
     "build":     "next build && npx opennextjs-cloudflare build --skipNextBuild"
-  Worker entry: worker.ts. Config: wrangler.toml.
+  "postbuild":  "node scripts/fix-cache.mjs"   (injects immutable Cache-Control on /_next/static/*)
+  Worker entry: worker.ts (verified wrangler.toml `main`). Config: wrangler.toml.
 - Editor: @codemirror/{state,view,language,commands,search,autocomplete,merge} 6.x +
   lang packs (cpp, css, go, html, java, javascript, json, markdown, php, python, rust,
   sql, xml, yaml) + @lezer/highlight.
@@ -25,7 +26,7 @@ A browser workspace shipping: a file manager with tabs and split views, a CodeMi
 ## 3. Commands
   npm run dev          next dev
   npm run lint         tsc --noEmit        <- the type gate; there is no ESLint
-  npm test             vitest run          <- baseline ~1317 tests / 86 files, green
+  npm test             vitest run          <- baseline 1383 tests / 92 files, green (verified 2026-09-22)
   npm run build        next build + opennextjs-cloudflare build
   npm run cf-preview   npx wrangler dev
   npm run deploy       npx wrangler deploy  <- YOU MAY NEVER RUN THIS
@@ -150,11 +151,12 @@ Set `export CI=1` at the start of the session. (On Windows PowerShell, use `$env
 Verify tooling and project health before any feature work.
 ```
 npm run lint            # tsc --noEmit — must exit 0
-CI=1 npm test           # vitest run — baseline ~1317 tests / 86 files, green
+CI=1 npm test           # vitest run — baseline 1383 tests / 92 files, green
 npm run build           # next build + opennextjs-cloudflare — must succeed
 npx wrangler deploy --dry-run   # deploy dry-run — must succeed
 npm audit --audit-level=high    # 0 vulnerabilities
 ```
+Gate beyond the baseline (Phase 0 deliverable): `npx playwright test --config=tests/e2e/playwright.config.ts`
 
 ### Phase 1 — Correctness & performance (homepage first)
 Homepage must render static SSR HTML with no spinner gate. Lighthouse Performance 100/100. Verify `file:line` for every claim.
