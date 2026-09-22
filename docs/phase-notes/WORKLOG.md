@@ -82,3 +82,16 @@ Chronological log of phases and significant work. One entry per phase, prefixed 
 - Fresh-clone timing measured: `git clone` 1.4 s -> `npm ci` 60.45 s (513 packages) -> `npm run dev` `Ready in 5.9 s`, first `GET / 200` at 16.78 s. Cold total ~78.6 s, so the plan's "< 60 s" holds only warm; the clone had no `.env.local`, confirming demo-mode first-run.
 - Gate (each a single command): lint 0 -> vitest 1343/1343 (90 files) -> test:rules 34/34 -> build 0 (First Load JS 104 kB) -> E2E 9/9 -> wrangler dry-run 0 (6083.06 KiB / 1246.36 KiB gzip, 141 assets) -> audit 0. An orphaned `java.exe` held 9000 before test:rules; killed (PID 1408).
 - Report: docs/phase-notes/phase-2b-report.md
+
+---
+
+## Phase 5 - Full graphical interface: scrub + gate - 2026-09-22
+
+**Outcome:** green gate; no phantom WebSocket or visitor-visible Firebase string remains in the app pages, contract pinned by a 20-case named test. Branch `phase/5-graphical-interface`. Not pushed, not deployed.
+
+- Removed the phantom WS layer: `app/dashboard` and `app/network` each created a dead `new WebSocket('wss://website.vasudevaya.workers.dev/api/status/stream')` even though no `/api/status/stream` route exists server-side. Deleted the socket blocks, `wsRef`/`wsConnected`, `useRef` imports, and network's "WS Live / Polling" indicator; both pages now poll `/api/status` only (10 s / 15 s) with a single `clearInterval` cleanup.
+- Scrubbed visitor-visible Firebase identifiers out of page copy without touching internals (type names `FirebaseUser`, imports, `svc-firebase` topology id, and `serviceHealth` keys stay): security "Recent Auth Events" block (was printing project id `website-6e8b1`, `website-6e8b1.firebaseapp.com`, `/__/auth/handler`) -> "Security Configuration" (Shield icon); settings provider -> "Cloud account" and "Connected (cloud)"; status "Connected (Firebase)" -> "Connected (cloud)"; email "Firebase · {uid}" -> "Cloud · {uid}" + banner; messaging/notifications/network demo banners -> "cloud account" / "signed-in cloud account"; network topology label -> "Cloud".
+- `tests/phase5/no-hardcoded-ui-data.test.ts` (new, 20 cases): scans every `app/<page>/page.tsx` for ten forbidden literals, asserts each screen is wired to its real data source, and checks `app/api/**` has no mock/seed fixtures.
+- Confirmed no mock/hardcoded data remains: dashboard/network/security/status/settings/email/messaging/notifications all read real endpoints, localStorage, or RTDB streams.
+- Gate: lint 0 · vitest 1403/1403 (93 files; +20 vs 1383/92) · test:rules 57/57 (orphan emulator on :9000 killed, PID 24876) · build 0 (First Load JS 104 kB) · E2E 9/9 · wrangler dry-run 0 (6586.90 KiB / gzip 1356.07 KiB, 146 assets) · audit 0. No packages changed.
+- Report: docs/phase-notes/phase-5-report.md
