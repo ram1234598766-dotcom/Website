@@ -188,6 +188,7 @@ export async function demoAuth(): Promise<{
     signOut: () => Promise<void>;
     getSession: () => Promise<{ data: { session: DemoUser | null }, error: string | null }>;
     onAuthStateChange: (callback: (event: string, user: DemoUser | null) => void) => { data: { subscription: { unsubscribe: () => void } } };
+    oauthSignIn: (provider: 'google' | 'github') => Promise<{ error: string | null; user: DemoUser | null }>;
     resetPasswordForEmail: (email: string) => Promise<{ error: string | null; resetToken?: string }>;
     validateResetToken: (token: string) => Promise<{ valid: boolean; email?: string }>;
   }
@@ -282,6 +283,32 @@ export async function demoAuth(): Promise<{
             },
           },
         };
+      },
+
+      async oauthSignIn(provider: 'google' | 'github') {
+        const users = getUsers();
+        const providerLabel = provider === 'google' ? 'google' : 'github';
+        const email = `${providerLabel}.demo@vantaos.local`;
+        const existing = users.find(u => u.email === email);
+        const user: StoredUser = existing ?? {
+          id: generateId(),
+          email,
+          username: `${providerLabel}-user`,
+          passwordHash: '',
+          createdAt: new Date().toISOString(),
+        };
+        if (!existing) {
+          users.push(user);
+          saveUsers(users);
+        }
+        setSession({
+          id: user.id,
+          email: user.email,
+          username: user.username,
+          createdAt: user.createdAt,
+          role: user.role,
+        });
+        return { error: null, user: { ...user, passwordHash: undefined } as unknown as DemoUser };
       },
 
       async resetPasswordForEmail(email: string) {

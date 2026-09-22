@@ -62,16 +62,11 @@ export default function AuthForm({ initialMode = 'signin' }: AuthFormProps) {
 
       {!isForgotPassword ? (
         <>
-          {!hasFirebase ? (
-            <div className="mb-6 text-xs text-center text-amber-400/80 bg-amber-500/10 border border-amber-500/20 rounded-xl p-3">
-              OAuth sign-in (Google / GitHub) requires a connected cloud account. Use email sign-up below in offline mode, or connect a cloud account in your environment.
-            </div>
-          ) : null}
           <div className="space-y-3 mb-6">
             <button
               type="button"
               onClick={() => handleOAuth('google')}
-              disabled={isAuthBusy || !hasFirebase}
+              disabled={isAuthBusy}
               aria-busy={loadingProvider === 'google'}
               className="vanta-btn vanta-btn-ghost vanta-oauth-btn vanta-oauth-google w-full py-3 disabled:opacity-50 disabled:cursor-not-allowed"
             >
@@ -85,7 +80,7 @@ export default function AuthForm({ initialMode = 'signin' }: AuthFormProps) {
             <button
               type="button"
               onClick={() => handleOAuth('github')}
-              disabled={isAuthBusy || !hasFirebase}
+              disabled={isAuthBusy}
               aria-busy={loadingProvider === 'github'}
               className="vanta-btn vanta-btn-ghost vanta-oauth-btn vanta-oauth-github w-full py-3 disabled:opacity-50 disabled:cursor-not-allowed"
             >
@@ -187,8 +182,7 @@ export default function AuthForm({ initialMode = 'signin' }: AuthFormProps) {
 
       {!hasFirebase && (
         <p className="mt-6 text-xs text-center text-slate-500">
-          Running in offline mode — accounts are stored locally in this browser.
-          Connect a cloud account for Google/GitHub sign-in and cloud data.
+          Running in offline mode — Google / GitHub sign-in creates a local account in this browser.
         </p>
       )}
     </div>

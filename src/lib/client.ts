@@ -358,10 +358,12 @@ function demoAuthValue(authProp: string) {
       return demoGetSession;
     }
     case 'signInWithOAuth': {
-      return async () => ({
-        data: null,
-        error: { message: 'OAuth sign-in requires a configured cloud account.' },
-      });
+      return async ({ provider }: any) => {
+        const demo = await getDemoAuth();
+        const result = await demo.auth.oauthSignIn(provider === 'google' ? 'google' : 'github');
+        if (result.error) return { data: null, error: { message: result.error } };
+        return { data: { provider, url: null }, error: null };
+      };
     }
     case 'resetPasswordForEmail': {
       return async ({ email }: any) => {
