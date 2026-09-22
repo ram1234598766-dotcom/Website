@@ -108,7 +108,7 @@ export default function NotificationsPage() {
 
       {!configured && (
         <div role="status" className="mb-4 rounded-lg bg-amber-900/20 border border-amber-800/40 p-4 text-amber-200 text-sm">
-          Running in demo mode. Configure a Firebase project to persist a personal notification feed.
+          Running in demo mode. Configure a cloud account to persist a personal notification feed.
         </div>
       )}
       {configured && !user && (

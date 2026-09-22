@@ -65,7 +65,7 @@ export default function StatusPage() {
       <p style={{ color: '#64748b' }}>{data.status === 'ok' ? '✓ All systems operational' : '⚠ Issue detected'} — v{data.version}</p>
       <p style={{ fontSize: 14, color: '#94a3b8' }}>{new Date(data.timestamp).toLocaleString()}</p>
       <p style={{ marginTop: 16 }}>
-        Mode: <strong>{data.mode === 'connected' ? '🔗 Connected (Firebase)' : '💻 Demo (local)'}</strong>
+        Mode: <strong>{data.mode === 'connected' ? '🔗 Connected (cloud)' : '💻 Demo (local)'}</strong>
       </p>
 
       <h2 style={{ marginTop: 32, fontSize: 18 }}>Services</h2>

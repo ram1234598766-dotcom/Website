@@ -202,7 +202,7 @@ export default function EmailPage() {
 
       {!configured && (
         <div role="status" className="mb-4 rounded-lg bg-amber-900/20 border border-amber-800/40 p-4 text-amber-200 text-sm">
-          Running in demo mode. Configure a Firebase project to use the live per-user mailbox.
+          Running in demo mode. Configure a cloud account to use the live per-user mailbox.
         </div>
       )}
       {configured && !user && (
@@ -228,7 +228,7 @@ export default function EmailPage() {
                 <div className="w-2 h-2 rounded-full shrink-0 bg-green-500" />
                 <div className="min-w-0">
                   <div className="text-sm text-white truncate">{user.email || user.uid}</div>
-                  <div className="text-xs text-slate-500">Firebase · {user.uid.slice(0, 8)}</div>
+                  <div className="text-xs text-slate-500">Cloud · {user.uid.slice(0, 8)}</div>
                 </div>
               </div>
             ) : (

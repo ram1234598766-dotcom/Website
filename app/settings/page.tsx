@@ -175,12 +175,12 @@ export default function SettingsPage() {
               <div className="flex items-center justify-between py-3 border-b border-white/5">
                 <span className="text-sm text-slate-300">Provider</span>
                 <span className="text-sm text-slate-400 flex items-center gap-2">
-                  <Globe className="w-4 h-4" /> Firebase (website-6e8b1)
+                  <Globe className="w-4 h-4" /> Cloud account
                 </span>
               </div>
               <div className="flex items-center justify-between py-3 border-b border-white/5">
                 <span className="text-sm text-slate-300">Mode</span>
-                <span className="text-sm text-slate-400">Demo (local) / Connected (Firebase)</span>
+                <span className="text-sm text-slate-400">Demo (local) / Connected (cloud)</span>
               </div>
               <button className="px-4 py-2 bg-red-900/30 text-red-400 text-sm rounded-lg hover:bg-red-900/50 transition-colors">
                 Sign Out

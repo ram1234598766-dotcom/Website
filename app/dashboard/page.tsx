@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { motion } from 'motion/react';
 import {
   Activity, Cpu, HardDrive, MemoryStick, Globe, Zap,
@@ -78,7 +78,6 @@ export default function DashboardPage() {
   const [models, setModels] = useState<ModelManifest[]>([]);
   const [peers, setPeers] = useState<PeerInfo[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const wsRef = useRef<WebSocket | null>(null);
 
   const fetchData = useCallback(async () => {
     try {
@@ -108,21 +107,7 @@ export default function DashboardPage() {
     fetchData();
     const interval = setInterval(fetchData, 10000);
 
-    try {
-      const ws = new WebSocket('wss://website.vasudevaya.workers.dev/api/status/stream');
-      ws.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          if (data.status) setStatus(data);
-        } catch { /* ignore */ }
-      };
-      wsRef.current = ws;
-    } catch { /* WS not available */ }
-
-    return () => {
-      clearInterval(interval);
-      wsRef.current?.close();
-    };
+    return () => clearInterval(interval);
   }, [fetchData]);
 
   if (error && !status) {

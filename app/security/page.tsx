@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { motion } from 'motion/react';
 import {
-  Shield, Lock, Key, Globe, Users, AlertTriangle, CheckCircle2,
+  Shield, Lock, Key, Globe, AlertTriangle, CheckCircle2,
   XCircle, RefreshCw, ExternalLink,
 } from 'lucide-react';
 
@@ -96,7 +96,7 @@ export default function SecurityPage() {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
         {[
           {
-            label: 'Firebase Auth',
+            label: 'Cloud Auth',
             icon: Lock,
             connected: health?.services?.firebase?.status === 'healthy' || health?.services?.firebase?.status === 'degraded',
             detail: health?.services?.firebase?.detail || 'Checking...',
@@ -188,15 +188,12 @@ export default function SecurityPage() {
         </div>
       </div>
 
-      {/* Auth Events Log */}
+      {/* Security Configuration */}
       <div className="rounded-xl border border-white/10 bg-white/5 p-4 mt-6">
         <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-          <Users className="w-5 h-5 text-indigo-400" /> Recent Auth Events
+          <Shield className="w-5 h-5 text-indigo-400" /> Security Configuration
         </h2>
         <div className="text-sm text-slate-400 space-y-1">
-          <p>• Firebase project: <span className="font-mono text-slate-300">website-6e8b1</span></p>
-          <p>• Auth domain: <span className="font-mono text-slate-300">website-6e8b1.firebaseapp.com</span></p>
-          <p>• GitHub OAuth redirect: <span className="font-mono text-slate-300">https://website-6e8b1.firebaseapp.com/__/auth/handler</span></p>
           <p>• Grant type: Worker-issued JWT (15-min expiry)</p>
           <p>• Rate limit: 20 req/60s + 200/day per IP for server-key Gemini</p>
         </div>

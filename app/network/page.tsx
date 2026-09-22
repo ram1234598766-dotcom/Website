@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Activity, Server, Wifi, Globe, Zap, RefreshCw, Clock,
@@ -109,7 +109,7 @@ function buildTopology(
 
   const svc = status?.serviceHealth ?? {};
   const services: { id: string; label: string; status: string; x: number; y: number }[] = [
-    { id: 'svc-firebase', label: 'Firebase', status: svc.firebase?.status, x: 120, y: 80 },
+    { id: 'svc-firebase', label: 'Cloud', status: svc.firebase?.status, x: 120, y: 80 },
     { id: 'svc-gemini', label: 'Gemini', status: svc.gemini?.status, x: 480, y: 80 },
     { id: 'svc-github', label: 'GitHub', status: svc.github?.status, x: 120, y: 420 },
     { id: 'svc-database', label: 'Database', status: svc.database?.status, x: 480, y: 420 },
@@ -132,8 +132,6 @@ export default function NetworkPeersPage() {
   const [status, setStatus] = useState<StatusPayload | null>(null);
   const [latency, setLatency] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [wsConnected, setWsConnected] = useState(false);
-  const wsRef = useRef<WebSocket | null>(null);
   const { show } = useToast();
 
   useEffect(() => {
@@ -173,25 +171,7 @@ export default function NetworkPeersPage() {
     fetchStatus();
     const interval = setInterval(fetchStatus, 15000);
 
-    try {
-      const ws = new WebSocket('wss://website.vasudevaya.workers.dev/api/status/stream');
-      ws.onopen = () => setWsConnected(true);
-      ws.onclose = () => setWsConnected(false);
-      ws.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          if (data?.status?.uptimeSeconds != null) {
-            setStatus((prev) => prev ? { ...prev, uptimeSeconds: data.status.uptimeSeconds } : prev);
-          }
-        } catch { /* ignore */ }
-      };
-      wsRef.current = ws;
-    } catch { /* WS not available */ }
-
-    return () => {
-      clearInterval(interval);
-      wsRef.current?.close();
-    };
+    return () => clearInterval(interval);
   }, [fetchStatus]);
 
   const netStatus: NetworkStatus | null = useMemo(() => {
@@ -247,12 +227,6 @@ export default function NetworkPeersPage() {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 text-sm">
-            <div
-              className={`w-2 h-2 rounded-full ${wsConnected ? 'bg-green-500' : 'bg-red-500'}`}
-            />
-            <span className="text-slate-400">{wsConnected ? 'WS Live' : 'Polling'}</span>
-          </div>
           <button onClick={() => fetchStatus()} aria-label="Refresh status" className="p-2 text-slate-400 hover:text-white hover:bg-white/5 rounded-lg">
             <RefreshCw className="w-4 h-4" />
           </button>
@@ -261,7 +235,7 @@ export default function NetworkPeersPage() {
 
       {(status?.mode === 'demo' || !configured) && (
         <div role="status" className="mb-4 rounded-lg bg-amber-900/20 border border-amber-800/40 p-4 text-amber-200 text-sm">
-          Supported services are reporting partial health because some integrations are not configured. Peers require a signed-in Firebase account.
+          Supported services are reporting partial health because some integrations are not configured. Peers require a signed-in cloud account.
         </div>
       )}
       {configured && !user && (
